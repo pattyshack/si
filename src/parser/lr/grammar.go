@@ -63,6 +63,12 @@ type RegisterReferenceReducer interface {
 	ToRegisterReference(Percent_ *TokenValue, Identifier_ *TokenValue) (*ast.RegisterReference, error)
 }
 
+type IdentifierReducer interface {
+
+	// 45:2: identifier -> string: ...
+	StringToIdentifier(StringLiteral_ *TokenValue) (*TokenValue, error)
+}
+
 type ImmediateReducer interface {
 	// 48:2: immediate -> INTEGER_LITERAL: ...
 	IntegerLiteralToImmediate(IntegerLiteral_ *TokenValue) (ast.Value, error)
@@ -175,6 +181,7 @@ type Reducer interface {
 	GlobalLabelReducer
 	LocalLabelReducer
 	RegisterReferenceReducer
+	IdentifierReducer
 	ImmediateReducer
 	TypedRegisterDefinitionReducer
 	RegisterDefinitionReducer
@@ -537,7 +544,7 @@ const (
 	_ReduceToLocalLabel                                = _ReduceType(12)
 	_ReduceToRegisterReference                         = _ReduceType(13)
 	_ReduceIdentifierToIdentifier                      = _ReduceType(14)
-	_ReduceStringLiteralToIdentifier                   = _ReduceType(15)
+	_ReduceStringToIdentifier                          = _ReduceType(15)
 	_ReduceIntegerLiteralToImmediate                   = _ReduceType(16)
 	_ReduceFloatLiteralToImmediate                     = _ReduceType(17)
 	_ReduceToTypedRegisterDefinition                   = _ReduceType(18)
@@ -604,8 +611,8 @@ func (i _ReduceType) String() string {
 		return "ToRegisterReference"
 	case _ReduceIdentifierToIdentifier:
 		return "IdentifierToIdentifier"
-	case _ReduceStringLiteralToIdentifier:
-		return "StringLiteralToIdentifier"
+	case _ReduceStringToIdentifier:
+		return "StringToIdentifier"
 	case _ReduceIntegerLiteralToImmediate:
 		return "IntegerLiteralToImmediate"
 	case _ReduceFloatLiteralToImmediate:
@@ -1154,13 +1161,11 @@ func (act *_Action) ReduceSymbol(
 		//line grammar.lr:44:4
 		symbol.Value = args[0].Value
 		err = nil
-	case _ReduceStringLiteralToIdentifier:
+	case _ReduceStringToIdentifier:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = IdentifierType
-		//line grammar.lr:45:4
-		symbol.Value = args[0].Value
-		err = nil
+		symbol.Value, err = reducer.StringToIdentifier(args[0].Value)
 	case _ReduceIntegerLiteralToImmediate:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
@@ -1412,7 +1417,7 @@ func (_ActionTableType) Get(
 	case _State3:
 		switch symbolId {
 		case StringLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceStringLiteralToIdentifier}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceStringToIdentifier}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceIdentifierToIdentifier}, true
 		case IdentifierType:
@@ -1460,7 +1465,7 @@ func (_ActionTableType) Get(
 	case _State7:
 		switch symbolId {
 		case StringLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceStringLiteralToIdentifier}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceStringToIdentifier}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceIdentifierToIdentifier}, true
 		case IdentifierType:
@@ -1490,7 +1495,7 @@ func (_ActionTableType) Get(
 	case _State10:
 		switch symbolId {
 		case StringLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceStringLiteralToIdentifier}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceStringToIdentifier}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceIdentifierToIdentifier}, true
 		case IdentifierType:

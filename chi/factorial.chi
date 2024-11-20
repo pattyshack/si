@@ -31,10 +31,10 @@ define func @tail_factorial_helper(
 define func @loop_factorial(%i I32) I32 {
   %acc = 1
 :loop
-  jlt :"ret", %i, 2
+  jlt :"non-identifier-return-label!!!", %i, 2
   %acc = mul %i, %acc
   %i = sub %i, 1
   jmp :loop
-:"ret"
+:"non-identifier-return-label!!!"
   ret %acc
 }

@@ -42,7 +42,7 @@ register_reference<RegisterReference> -> PERCENT identifier
 
 identifier<Value> ->
   = IDENTIFIER |
-  = STRING_LITERAL
+  string: STRING_LITERAL
 
 immediate<OpValue> ->
   INTEGER_LITERAL |

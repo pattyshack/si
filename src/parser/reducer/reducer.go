@@ -172,3 +172,13 @@ func (Reducer) FloatLiteralToImmediate(
 		IsFloat:     true,
 	}, nil
 }
+
+func (Reducer) StringToIdentifier(
+	token *lr.TokenValue,
+) (
+	*lr.TokenValue,
+	error,
+) {
+	token.Value = parseutil.Unescape(token.Value[1 : len(token.Value)-1])
+	return token, nil
+}
