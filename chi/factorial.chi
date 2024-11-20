@@ -1,0 +1,40 @@
+// recursive factorial
+// multi-line comment
+define func @recursive_factorial(%i I32) I32 {
+  jlt :base, %i, 2
+  %s = sub %i, 1
+  %r = call @recursive_factorial(%s)
+  %x = mul %i, %r
+  ret %x
+:base
+  ret 1
+}
+
+/* tail recursive factorial */
+define func @tail_factorial(%i I32) I32 {
+  %r = call @tail_factorial_helper(%i, 1)
+  ret %r
+}
+
+define func @tail_factorial_helper(
+  %i I32,
+  %acc I32,
+) I32 {
+  jlt :base, %i, 2
+  %acc = mul %acc, %i
+  %i = sub %i, 1
+  %acc = call @tail_factorial_helper(%i, %acc)
+:base
+  ret %acc
+}
+
+define func @loop_factorial(%i I32) I32 {
+  %acc = 1
+:loop
+  jlt :"ret", %i, 2
+  %acc = mul %i, %acc
+  %i = sub %i, 1
+  jmp :loop
+:"ret"
+  ret %acc
+}

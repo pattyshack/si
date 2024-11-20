@@ -1,0 +1,139 @@
+%token<Value> INTEGER_LITERAL FLOAT_LITERAL STRING_LITERAL
+%token<Value> IDENTIFIER
+
+%token<Value> LPAREN RPAREN LBRACE RBRACE COMMA COLON AT PERCENT EQUAL
+
+%token<Value> DEFINE DECLARE
+%token<Value> FUNC
+
+// NOTE: we'll parse each line individually, then fold statements/rbrace into
+// appropriate definitions.
+%start line
+
+line<Line> ->
+  = declaration |
+  = definition |
+  = rbrace |
+  = local_label |
+  = operation_instruction |
+  = control_flow_instruction
+
+declaration<Line> ->
+  func: DECLARE FUNC global_label LPAREN types RPAREN type |
+  data: DECLARE global_label type
+
+
+// NOTE: for simplicity, a function must always return a type (XXX: maybe
+// support unit struct)
+definition<Line> ->
+  func: DEFINE FUNC global_label LPAREN parameters RPAREN type LBRACE
+
+rbrace<Line> -> RBRACE
+
+//
+// Labels, registers, and immediate
+//
+
+global_label<GlobalLabelReference> -> AT identifier
+
+local_label<LocalLabel> -> COLON identifier
+
+register_reference<RegisterReference> -> PERCENT identifier
+
+identifier<Value> ->
+  = IDENTIFIER |
+  = STRING_LITERAL
+
+immediate<OpValue> ->
+  INTEGER_LITERAL |
+  FLOAT_LITERAL
+
+typed_register_definition<RegisterDefinition> -> register_reference type
+
+register_definition<RegisterDefinition> ->
+  = typed_register_definition |
+  inferred: register_reference
+
+value<OpValue> ->
+  = register_reference |
+  = global_label |
+  = immediate
+
+//
+// Lists
+//
+
+parameters<Parameters> ->
+  = proper_parameters |
+  improper: proper_parameters COMMA |
+  nil:
+
+proper_parameters<Parameters> ->
+  add: proper_parameters COMMA typed_register_definition |
+  new: typed_register_definition
+
+arguments<Arguments> ->
+  = proper_arguments |
+  improper: proper_arguments COMMA |
+  nil:
+
+proper_arguments<Arguments> ->
+  add: proper_arguments COMMA value |
+  new: value
+
+types<Types> ->
+  = proper_types |
+  improper: proper_types COMMA |
+  nil:
+
+proper_types<Types> ->
+  add: proper_types COMMA type |
+  new: type
+
+//
+// operationFunction statements
+//
+
+operation_instruction<Instruction> ->
+  assign: register_definition EQUAL value |
+  unary: register_definition EQUAL IDENTIFIER value |
+  binary: register_definition EQUAL IDENTIFIER value COMMA value |
+  call: register_definition EQUAL IDENTIFIER value LPAREN arguments RPAREN
+
+control_flow_instruction<Instruction> ->
+  unconditional: IDENTIFIER local_label |
+  conditional: IDENTIFIER local_label COMMA value COMMA value |
+  terminate: IDENTIFIER proper_arguments
+
+//
+// Type
+//
+
+// TODO
+type<Type> ->
+  = number_type |
+  = func_type
+
+number_type<Type> -> IDENTIFIER
+
+func_type<Type> -> FUNC LPAREN types RPAREN type
+
+%%lang_specs{
+go:
+  package: lr
+  value_types:
+    Value: "*TokenValue"
+    Count: "*TokenCount"
+    Types: "[]github.com/pattyshack/chickadee/ast.Type"
+    Type: "github.com/pattyshack/chickadee/ast.Type"
+    Line: "github.com/pattyshack/chickadee/ast.Line"
+    GlobalLabelReference: "*github.com/pattyshack/chickadee/ast.GlobalLabelReference"
+    LocalLabel: "ParsedLocalLabel"
+    Instruction: "github.com/pattyshack/chickadee/ast.Instruction"
+    Arguments: "[]github.com/pattyshack/chickadee/ast.Value"
+    Parameters: "[]*github.com/pattyshack/chickadee/ast.RegisterDefinition"
+    RegisterDefinition: "*github.com/pattyshack/chickadee/ast.RegisterDefinition"
+    RegisterReference: "*github.com/pattyshack/chickadee/ast.RegisterReference"
+    OpValue: "github.com/pattyshack/chickadee/ast.Value"
+}%%
+
