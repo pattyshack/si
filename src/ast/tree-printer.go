@@ -178,8 +178,22 @@ func (printer *treePrinter) Enter(n Node) {
 		}
 		printer.push(labels...)
 	case *Block:
+		parents := []string{}
+		for _, parent := range node.Parents {
+			parents = append(parents, parent.Label)
+		}
+
+		children := []string{}
+		for _, child := range node.Children {
+			children = append(children, child.Label)
+		}
+
 		printer.list(
-			fmt.Sprintf("[Block: Label=%s", node.Label),
+			fmt.Sprintf(
+				"[Block: Label=%s Parents: %v Children: %v",
+				node.Label,
+				parents,
+				children),
 			"Instruction",
 			len(node.Instructions))
 

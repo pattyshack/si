@@ -21,7 +21,7 @@ type Jump struct {
 
 	Kind JumpKind
 
-	Label LocalLabel
+	Label string
 }
 
 var _ Instruction = &Jump{}
@@ -58,7 +58,7 @@ type ConditionalJump struct {
 
 	Kind ConditionalJumpKind
 
-	Label LocalLabel
+	Label string
 	Src1  Value
 	Src2  Value
 }

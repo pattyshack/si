@@ -2,8 +2,6 @@ package lr
 
 import (
 	"github.com/pattyshack/gt/parseutil"
-
-	"github.com/pattyshack/chickadee/ast"
 )
 
 type Token = parseutil.Token[SymbolId]
@@ -24,7 +22,7 @@ const (
 
 type ParsedLocalLabel struct {
 	parseutil.StartEndPos
-	ast.LocalLabel
+	Label string
 }
 
 func (ParsedLocalLabel) IsLine() {}

@@ -17,7 +17,7 @@ func (Reducer) UnconditionalToControlFlowInstruction(
 	return &ast.Jump{
 		StartEndPos: parseutil.NewStartEndPos(op.Loc(), label.End()),
 		Kind:        ast.JumpKind(op.Value),
-		Label:       label.LocalLabel,
+		Label:       label.Label,
 	}, nil
 }
 
@@ -37,7 +37,7 @@ func (Reducer) ConditionalToControlFlowInstruction(
 		Kind:        ast.ConditionalJumpKind(op.Value),
 		Src1:        src1,
 		Src2:        src2,
-		Label:       label.LocalLabel,
+		Label:       label.Label,
 	}, nil
 }
 

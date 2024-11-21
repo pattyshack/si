@@ -97,7 +97,7 @@ func (parser *parser) parse() []ast.SourceEntry {
 			} else {
 				currentBlock = &ast.Block{
 					StartEndPos: stmt.StartEndPos,
-					Label:       stmt.LocalLabel,
+					Label:       stmt.Label,
 				}
 				currentFuncDef.Blocks = append(currentFuncDef.Blocks, currentBlock)
 				currentFuncDef.EndPos = stmt.End()

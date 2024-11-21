@@ -90,10 +90,6 @@ func (ref *GlobalLabelReference) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-// :-prefixed block label.  Note that the ':' prefix is not part of the name
-// and is only used by the parser.
-type LocalLabel string
-
 // %-prefixed local register variable definition.  Note that the '%' prefix is
 // not part of the name and is only used by the parser.
 type RegisterDefinition struct {

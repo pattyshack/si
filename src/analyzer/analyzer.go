@@ -11,7 +11,10 @@ func Analyze(source []ast.SourceEntry, emitter *parseutil.Emitter) {
 		{
 			ValidateAstSyntax(emitter),
 		},
+		{
+			InitializeControlFlowGraph(emitter),
+		},
 	}
 
-	Process(source, passes, nil)
+	Process(source, passes, func() bool { return emitter.HasErrors() })
 }

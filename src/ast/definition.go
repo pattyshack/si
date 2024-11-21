@@ -79,28 +79,13 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	if len(def.Blocks) == 0 {
 		emitter.Emit(def.Loc(), "function definition must have at least one block")
 	}
-
-	lastBlock := def.Blocks[len(def.Blocks)-1]
-	// Note: block with no instruction is also invalid, but is checked by
-	// Block.Validate
-	if len(lastBlock.Instructions) > 0 {
-		lastInstruction := lastBlock.Instructions[len(lastBlock.Instructions)-1]
-		_, ok := lastInstruction.(ControlFlowInstruction)
-		if !ok {
-			// There's no next block to fallthrough to
-			emitter.Emit(
-				lastInstruction.Loc(),
-				"the last instruction in function definition must be a "+
-					"control flow instruction")
-		}
-	}
 }
 
 // A straight-line / basic block
 type Block struct {
 	parseutil.StartEndPos
 
-	Label LocalLabel
+	Label string
 
 	// NOTE: only the last instruction can be a control flow instruction.  All
 	// other instructions must be operation instructions.  If no control flow
@@ -110,6 +95,7 @@ type Block struct {
 
 	// internal
 
+	// Populated by ControlFlowGraphInitializer.
 	Parents  []*Block
 	Children []*Block
 

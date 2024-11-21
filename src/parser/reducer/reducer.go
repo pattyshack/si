@@ -132,7 +132,7 @@ func (Reducer) ToLocalLabel(
 ) {
 	return lr.ParsedLocalLabel{
 		StartEndPos: parseutil.NewStartEndPos(pound.StartPos, identifier.EndPos),
-		LocalLabel:  ast.LocalLabel(identifier.Value),
+		Label:       identifier.Value,
 	}, nil
 }
 
