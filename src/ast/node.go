@@ -14,6 +14,10 @@ type Visitor interface {
 	Exit(Node)
 }
 
+type Validator interface {
+	Validate(*parseutil.Emitter)
+}
+
 type Line interface { // used only by the parser
 	IsLine()
 }
@@ -64,19 +68,26 @@ func (sourceEntry) isSourceEntry() {}
 
 // @-prefixed label for various definitions/declarations.  Note that the '@'
 // prefix is not part of the name and is only used by the parser.
-type GlobalLabel string
-
 type GlobalLabelReference struct {
 	parseutil.StartEndPos
 
-	Label GlobalLabel
+	Label string
 }
+
+var _ Node = &GlobalLabelReference{}
+var _ Validator = &GlobalLabelReference{}
 
 func (GlobalLabelReference) isValue() {}
 
 func (ref *GlobalLabelReference) Walk(visitor Visitor) {
 	visitor.Enter(ref)
 	visitor.Exit(ref)
+}
+
+func (ref *GlobalLabelReference) Validate(emitter *parseutil.Emitter) {
+	if ref.Label == "" {
+		emitter.Emit(ref.Loc(), "empty global label name")
+	}
 }
 
 // :-prefixed block label.  Note that the ':' prefix is not part of the name
@@ -95,12 +106,21 @@ type RegisterDefinition struct {
 	DefUses map[*RegisterReference]struct{} // internal. Set by ssa construction
 }
 
+var _ Node = &RegisterDefinition{}
+var _ Validator = &RegisterDefinition{}
+
 func (def *RegisterDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
 	if def.Type != nil {
 		def.Type.Walk(visitor)
 	}
 	visitor.Exit(def)
+}
+
+func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
+	if def.Name == "" {
+		emitter.Emit(def.Loc(), "empty register definition name")
+	}
 }
 
 // Register, global label, or immediate
@@ -119,6 +139,9 @@ type RegisterReference struct {
 	UseDef *RegisterDefinition // internal. Set by ssa construction
 }
 
+var _ Node = &RegisterReference{}
+var _ Validator = &RegisterReference{}
+
 func (RegisterReference) isValue() {}
 
 func (ref *RegisterReference) Walk(visitor Visitor) {
@@ -126,16 +149,34 @@ func (ref *RegisterReference) Walk(visitor Visitor) {
 	visitor.Exit(ref)
 }
 
-type Immediate struct {
-	parseutil.StartEndPos
-
-	Value   string
-	IsFloat bool // false if int
+func (ref *RegisterReference) Validate(emitter *parseutil.Emitter) {
+	if ref.Name == "" {
+		emitter.Emit(ref.Loc(), "empty register reference name")
+	}
 }
 
-func (Immediate) isValue() {}
+type IntImmediate struct {
+	parseutil.StartEndPos
 
-func (imm *Immediate) Walk(visitor Visitor) {
+	Value int64
+}
+
+func (IntImmediate) isValue() {}
+
+func (imm *IntImmediate) Walk(visitor Visitor) {
+	visitor.Enter(imm)
+	visitor.Exit(imm)
+}
+
+type FloatImmediate struct {
+	parseutil.StartEndPos
+
+	Value float64
+}
+
+func (FloatImmediate) isValue() {}
+
+func (imm *FloatImmediate) Walk(visitor Visitor) {
 	visitor.Enter(imm)
 	visitor.Exit(imm)
 }

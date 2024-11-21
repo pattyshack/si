@@ -69,108 +69,110 @@ type IdentifierReducer interface {
 	StringToIdentifier(StringLiteral_ *TokenValue) (*TokenValue, error)
 }
 
-type ImmediateReducer interface {
-	// 48:2: immediate -> INTEGER_LITERAL: ...
-	IntegerLiteralToImmediate(IntegerLiteral_ *TokenValue) (ast.Value, error)
+type IntImmediateReducer interface {
+	// 51:26: int_immediate -> ...
+	ToIntImmediate(IntegerLiteral_ *TokenValue) (ast.Value, error)
+}
 
-	// 49:2: immediate -> FLOAT_LITERAL: ...
-	FloatLiteralToImmediate(FloatLiteral_ *TokenValue) (ast.Value, error)
+type FloatImmediateReducer interface {
+	// 53:28: float_immediate -> ...
+	ToFloatImmediate(FloatLiteral_ *TokenValue) (ast.Value, error)
 }
 
 type TypedRegisterDefinitionReducer interface {
-	// 51:49: typed_register_definition -> ...
+	// 55:49: typed_register_definition -> ...
 	ToTypedRegisterDefinition(RegisterReference_ *ast.RegisterReference, Type_ ast.Type) (*ast.RegisterDefinition, error)
 }
 
 type RegisterDefinitionReducer interface {
 
-	// 55:2: register_definition -> inferred: ...
+	// 59:2: register_definition -> inferred: ...
 	InferredToRegisterDefinition(RegisterReference_ *ast.RegisterReference) (*ast.RegisterDefinition, error)
 }
 
 type ParametersReducer interface {
 
-	// 68:2: parameters -> improper: ...
+	// 72:2: parameters -> improper: ...
 	ImproperToParameters(ProperParameters_ []*ast.RegisterDefinition, Comma_ *TokenValue) ([]*ast.RegisterDefinition, error)
 
-	// 69:2: parameters -> nil: ...
+	// 73:2: parameters -> nil: ...
 	NilToParameters() ([]*ast.RegisterDefinition, error)
 }
 
 type ProperParametersReducer interface {
-	// 72:2: proper_parameters -> add: ...
+	// 76:2: proper_parameters -> add: ...
 	AddToProperParameters(ProperParameters_ []*ast.RegisterDefinition, Comma_ *TokenValue, TypedRegisterDefinition_ *ast.RegisterDefinition) ([]*ast.RegisterDefinition, error)
 
-	// 73:2: proper_parameters -> new: ...
+	// 77:2: proper_parameters -> new: ...
 	NewToProperParameters(TypedRegisterDefinition_ *ast.RegisterDefinition) ([]*ast.RegisterDefinition, error)
 }
 
 type ArgumentsReducer interface {
 
-	// 77:2: arguments -> improper: ...
+	// 81:2: arguments -> improper: ...
 	ImproperToArguments(ProperArguments_ []ast.Value, Comma_ *TokenValue) ([]ast.Value, error)
 
-	// 78:2: arguments -> nil: ...
+	// 82:2: arguments -> nil: ...
 	NilToArguments() ([]ast.Value, error)
 }
 
 type ProperArgumentsReducer interface {
-	// 81:2: proper_arguments -> add: ...
+	// 85:2: proper_arguments -> add: ...
 	AddToProperArguments(ProperArguments_ []ast.Value, Comma_ *TokenValue, Value_ ast.Value) ([]ast.Value, error)
 
-	// 82:2: proper_arguments -> new: ...
+	// 86:2: proper_arguments -> new: ...
 	NewToProperArguments(Value_ ast.Value) ([]ast.Value, error)
 }
 
 type TypesReducer interface {
 
-	// 86:2: types -> improper: ...
+	// 90:2: types -> improper: ...
 	ImproperToTypes(ProperTypes_ []ast.Type, Comma_ *TokenValue) ([]ast.Type, error)
 
-	// 87:2: types -> nil: ...
+	// 91:2: types -> nil: ...
 	NilToTypes() ([]ast.Type, error)
 }
 
 type ProperTypesReducer interface {
-	// 90:2: proper_types -> add: ...
+	// 94:2: proper_types -> add: ...
 	AddToProperTypes(ProperTypes_ []ast.Type, Comma_ *TokenValue, Type_ ast.Type) ([]ast.Type, error)
 
-	// 91:2: proper_types -> new: ...
+	// 95:2: proper_types -> new: ...
 	NewToProperTypes(Type_ ast.Type) ([]ast.Type, error)
 }
 
 type OperationInstructionReducer interface {
-	// 98:2: operation_instruction -> assign: ...
+	// 102:2: operation_instruction -> assign: ...
 	AssignToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Value_ ast.Value) (ast.Instruction, error)
 
-	// 99:2: operation_instruction -> unary: ...
+	// 103:2: operation_instruction -> unary: ...
 	UnaryToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value) (ast.Instruction, error)
 
-	// 100:2: operation_instruction -> binary: ...
+	// 104:2: operation_instruction -> binary: ...
 	BinaryToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value, Comma_ *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
-	// 101:2: operation_instruction -> call: ...
+	// 105:2: operation_instruction -> call: ...
 	CallToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value, Lparen_ *TokenValue, Arguments_ []ast.Value, Rparen_ *TokenValue) (ast.Instruction, error)
 }
 
 type ControlFlowInstructionReducer interface {
-	// 104:2: control_flow_instruction -> unconditional: ...
+	// 108:2: control_flow_instruction -> unconditional: ...
 	UnconditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel) (ast.Instruction, error)
 
-	// 105:2: control_flow_instruction -> conditional: ...
+	// 109:2: control_flow_instruction -> conditional: ...
 	ConditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel, Comma_ *TokenValue, Value_ ast.Value, Comma_2 *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
-	// 106:2: control_flow_instruction -> terminate: ...
+	// 110:2: control_flow_instruction -> terminate: ...
 	TerminateToControlFlowInstruction(Identifier_ *TokenValue, ProperArguments_ []ast.Value) (ast.Instruction, error)
 }
 
 type NumberTypeReducer interface {
-	// 117:21: number_type -> ...
+	// 121:21: number_type -> ...
 	ToNumberType(Identifier_ *TokenValue) (ast.Type, error)
 }
 
 type FuncTypeReducer interface {
-	// 119:19: func_type -> ...
+	// 123:19: func_type -> ...
 	ToFuncType(Func_ *TokenValue, Lparen_ *TokenValue, Types_ []ast.Type, Rparen_ *TokenValue, Type_ ast.Type) (ast.Type, error)
 }
 
@@ -182,7 +184,8 @@ type Reducer interface {
 	LocalLabelReducer
 	RegisterReferenceReducer
 	IdentifierReducer
-	ImmediateReducer
+	IntImmediateReducer
+	FloatImmediateReducer
 	TypedRegisterDefinitionReducer
 	RegisterDefinitionReducer
 	ParametersReducer
@@ -440,6 +443,10 @@ func (i SymbolId) String() string {
 		return "identifier"
 	case ImmediateType:
 		return "immediate"
+	case IntImmediateType:
+		return "int_immediate"
+	case FloatImmediateType:
+		return "float_immediate"
 	case TypedRegisterDefinitionType:
 		return "typed_register_definition"
 	case RegisterDefinitionType:
@@ -486,20 +493,22 @@ const (
 	RegisterReferenceType       = SymbolId(278)
 	IdentifierType              = SymbolId(279)
 	ImmediateType               = SymbolId(280)
-	TypedRegisterDefinitionType = SymbolId(281)
-	RegisterDefinitionType      = SymbolId(282)
-	ValueType                   = SymbolId(283)
-	ParametersType              = SymbolId(284)
-	ProperParametersType        = SymbolId(285)
-	ArgumentsType               = SymbolId(286)
-	ProperArgumentsType         = SymbolId(287)
-	TypesType                   = SymbolId(288)
-	ProperTypesType             = SymbolId(289)
-	OperationInstructionType    = SymbolId(290)
-	ControlFlowInstructionType  = SymbolId(291)
-	TypeType                    = SymbolId(292)
-	NumberTypeType              = SymbolId(293)
-	FuncTypeType                = SymbolId(294)
+	IntImmediateType            = SymbolId(281)
+	FloatImmediateType          = SymbolId(282)
+	TypedRegisterDefinitionType = SymbolId(283)
+	RegisterDefinitionType      = SymbolId(284)
+	ValueType                   = SymbolId(285)
+	ParametersType              = SymbolId(286)
+	ProperParametersType        = SymbolId(287)
+	ArgumentsType               = SymbolId(288)
+	ProperArgumentsType         = SymbolId(289)
+	TypesType                   = SymbolId(290)
+	ProperTypesType             = SymbolId(291)
+	OperationInstructionType    = SymbolId(292)
+	ControlFlowInstructionType  = SymbolId(293)
+	TypeType                    = SymbolId(294)
+	NumberTypeType              = SymbolId(295)
+	FuncTypeType                = SymbolId(296)
 )
 
 type _ActionType int
@@ -545,40 +554,42 @@ const (
 	_ReduceToRegisterReference                         = _ReduceType(13)
 	_ReduceIdentifierToIdentifier                      = _ReduceType(14)
 	_ReduceStringToIdentifier                          = _ReduceType(15)
-	_ReduceIntegerLiteralToImmediate                   = _ReduceType(16)
-	_ReduceFloatLiteralToImmediate                     = _ReduceType(17)
-	_ReduceToTypedRegisterDefinition                   = _ReduceType(18)
-	_ReduceTypedRegisterDefinitionToRegisterDefinition = _ReduceType(19)
-	_ReduceInferredToRegisterDefinition                = _ReduceType(20)
-	_ReduceRegisterReferenceToValue                    = _ReduceType(21)
-	_ReduceGlobalLabelToValue                          = _ReduceType(22)
-	_ReduceImmediateToValue                            = _ReduceType(23)
-	_ReduceProperParametersToParameters                = _ReduceType(24)
-	_ReduceImproperToParameters                        = _ReduceType(25)
-	_ReduceNilToParameters                             = _ReduceType(26)
-	_ReduceAddToProperParameters                       = _ReduceType(27)
-	_ReduceNewToProperParameters                       = _ReduceType(28)
-	_ReduceProperArgumentsToArguments                  = _ReduceType(29)
-	_ReduceImproperToArguments                         = _ReduceType(30)
-	_ReduceNilToArguments                              = _ReduceType(31)
-	_ReduceAddToProperArguments                        = _ReduceType(32)
-	_ReduceNewToProperArguments                        = _ReduceType(33)
-	_ReduceProperTypesToTypes                          = _ReduceType(34)
-	_ReduceImproperToTypes                             = _ReduceType(35)
-	_ReduceNilToTypes                                  = _ReduceType(36)
-	_ReduceAddToProperTypes                            = _ReduceType(37)
-	_ReduceNewToProperTypes                            = _ReduceType(38)
-	_ReduceAssignToOperationInstruction                = _ReduceType(39)
-	_ReduceUnaryToOperationInstruction                 = _ReduceType(40)
-	_ReduceBinaryToOperationInstruction                = _ReduceType(41)
-	_ReduceCallToOperationInstruction                  = _ReduceType(42)
-	_ReduceUnconditionalToControlFlowInstruction       = _ReduceType(43)
-	_ReduceConditionalToControlFlowInstruction         = _ReduceType(44)
-	_ReduceTerminateToControlFlowInstruction           = _ReduceType(45)
-	_ReduceNumberTypeToType                            = _ReduceType(46)
-	_ReduceFuncTypeToType                              = _ReduceType(47)
-	_ReduceToNumberType                                = _ReduceType(48)
-	_ReduceToFuncType                                  = _ReduceType(49)
+	_ReduceIntImmediateToImmediate                     = _ReduceType(16)
+	_ReduceFloatImmediateToImmediate                   = _ReduceType(17)
+	_ReduceToIntImmediate                              = _ReduceType(18)
+	_ReduceToFloatImmediate                            = _ReduceType(19)
+	_ReduceToTypedRegisterDefinition                   = _ReduceType(20)
+	_ReduceTypedRegisterDefinitionToRegisterDefinition = _ReduceType(21)
+	_ReduceInferredToRegisterDefinition                = _ReduceType(22)
+	_ReduceRegisterReferenceToValue                    = _ReduceType(23)
+	_ReduceGlobalLabelToValue                          = _ReduceType(24)
+	_ReduceImmediateToValue                            = _ReduceType(25)
+	_ReduceProperParametersToParameters                = _ReduceType(26)
+	_ReduceImproperToParameters                        = _ReduceType(27)
+	_ReduceNilToParameters                             = _ReduceType(28)
+	_ReduceAddToProperParameters                       = _ReduceType(29)
+	_ReduceNewToProperParameters                       = _ReduceType(30)
+	_ReduceProperArgumentsToArguments                  = _ReduceType(31)
+	_ReduceImproperToArguments                         = _ReduceType(32)
+	_ReduceNilToArguments                              = _ReduceType(33)
+	_ReduceAddToProperArguments                        = _ReduceType(34)
+	_ReduceNewToProperArguments                        = _ReduceType(35)
+	_ReduceProperTypesToTypes                          = _ReduceType(36)
+	_ReduceImproperToTypes                             = _ReduceType(37)
+	_ReduceNilToTypes                                  = _ReduceType(38)
+	_ReduceAddToProperTypes                            = _ReduceType(39)
+	_ReduceNewToProperTypes                            = _ReduceType(40)
+	_ReduceAssignToOperationInstruction                = _ReduceType(41)
+	_ReduceUnaryToOperationInstruction                 = _ReduceType(42)
+	_ReduceBinaryToOperationInstruction                = _ReduceType(43)
+	_ReduceCallToOperationInstruction                  = _ReduceType(44)
+	_ReduceUnconditionalToControlFlowInstruction       = _ReduceType(45)
+	_ReduceConditionalToControlFlowInstruction         = _ReduceType(46)
+	_ReduceTerminateToControlFlowInstruction           = _ReduceType(47)
+	_ReduceNumberTypeToType                            = _ReduceType(48)
+	_ReduceFuncTypeToType                              = _ReduceType(49)
+	_ReduceToNumberType                                = _ReduceType(50)
+	_ReduceToFuncType                                  = _ReduceType(51)
 )
 
 func (i _ReduceType) String() string {
@@ -613,10 +624,14 @@ func (i _ReduceType) String() string {
 		return "IdentifierToIdentifier"
 	case _ReduceStringToIdentifier:
 		return "StringToIdentifier"
-	case _ReduceIntegerLiteralToImmediate:
-		return "IntegerLiteralToImmediate"
-	case _ReduceFloatLiteralToImmediate:
-		return "FloatLiteralToImmediate"
+	case _ReduceIntImmediateToImmediate:
+		return "IntImmediateToImmediate"
+	case _ReduceFloatImmediateToImmediate:
+		return "FloatImmediateToImmediate"
+	case _ReduceToIntImmediate:
+		return "ToIntImmediate"
+	case _ReduceToFloatImmediate:
+		return "ToFloatImmediate"
 	case _ReduceToTypedRegisterDefinition:
 		return "ToTypedRegisterDefinition"
 	case _ReduceTypedRegisterDefinitionToRegisterDefinition:
@@ -829,7 +844,7 @@ func (s *Symbol) StartEnd() parseutil.StartEndPos {
 		if ok {
 			return loc.StartEnd()
 		}
-	case ImmediateType, ValueType:
+	case ImmediateType, IntImmediateType, FloatImmediateType, ValueType:
 		loc, ok := interface{}(s.OpValue).(locator)
 		if ok {
 			return loc.StartEnd()
@@ -896,7 +911,7 @@ func (s *Symbol) Loc() parseutil.Location {
 		if ok {
 			return loc.Loc()
 		}
-	case ImmediateType, ValueType:
+	case ImmediateType, IntImmediateType, FloatImmediateType, ValueType:
 		loc, ok := interface{}(s.OpValue).(locator)
 		if ok {
 			return loc.Loc()
@@ -963,7 +978,7 @@ func (s *Symbol) End() parseutil.Location {
 		if ok {
 			return loc.End()
 		}
-	case ImmediateType, ValueType:
+	case ImmediateType, IntImmediateType, FloatImmediateType, ValueType:
 		loc, ok := interface{}(s.OpValue).(locator)
 		if ok {
 			return loc.End()
@@ -1166,16 +1181,30 @@ func (act *_Action) ReduceSymbol(
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = IdentifierType
 		symbol.Value, err = reducer.StringToIdentifier(args[0].Value)
-	case _ReduceIntegerLiteralToImmediate:
+	case _ReduceIntImmediateToImmediate:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ImmediateType
-		symbol.OpValue, err = reducer.IntegerLiteralToImmediate(args[0].Value)
-	case _ReduceFloatLiteralToImmediate:
+		//line grammar.lr:48:4
+		symbol.OpValue = args[0].OpValue
+		err = nil
+	case _ReduceFloatImmediateToImmediate:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ImmediateType
-		symbol.OpValue, err = reducer.FloatLiteralToImmediate(args[0].Value)
+		//line grammar.lr:49:4
+		symbol.OpValue = args[0].OpValue
+		err = nil
+	case _ReduceToIntImmediate:
+		args := stack[len(stack)-1:]
+		stack = stack[:len(stack)-1]
+		symbol.SymbolId_ = IntImmediateType
+		symbol.OpValue, err = reducer.ToIntImmediate(args[0].Value)
+	case _ReduceToFloatImmediate:
+		args := stack[len(stack)-1:]
+		stack = stack[:len(stack)-1]
+		symbol.SymbolId_ = FloatImmediateType
+		symbol.OpValue, err = reducer.ToFloatImmediate(args[0].Value)
 	case _ReduceToTypedRegisterDefinition:
 		args := stack[len(stack)-2:]
 		stack = stack[:len(stack)-2]
@@ -1185,7 +1214,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = RegisterDefinitionType
-		//line grammar.lr:54:4
+		//line grammar.lr:58:4
 		symbol.RegisterDefinition = args[0].RegisterDefinition
 		err = nil
 	case _ReduceInferredToRegisterDefinition:
@@ -1197,28 +1226,28 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:58:4
+		//line grammar.lr:62:4
 		symbol.OpValue = args[0].RegisterReference
 		err = nil
 	case _ReduceGlobalLabelToValue:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:59:4
+		//line grammar.lr:63:4
 		symbol.OpValue = args[0].GlobalLabelReference
 		err = nil
 	case _ReduceImmediateToValue:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:60:4
+		//line grammar.lr:64:4
 		symbol.OpValue = args[0].OpValue
 		err = nil
 	case _ReduceProperParametersToParameters:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ParametersType
-		//line grammar.lr:67:4
+		//line grammar.lr:71:4
 		symbol.Parameters = args[0].Parameters
 		err = nil
 	case _ReduceImproperToParameters:
@@ -1243,7 +1272,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ArgumentsType
-		//line grammar.lr:76:4
+		//line grammar.lr:80:4
 		symbol.Arguments = args[0].Arguments
 		err = nil
 	case _ReduceImproperToArguments:
@@ -1268,7 +1297,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypesType
-		//line grammar.lr:85:4
+		//line grammar.lr:89:4
 		symbol.Types = args[0].Types
 		err = nil
 	case _ReduceImproperToTypes:
@@ -1328,14 +1357,14 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypeType
-		//line grammar.lr:114:4
+		//line grammar.lr:118:4
 		symbol.Type = args[0].Type
 		err = nil
 	case _ReduceFuncTypeToType:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypeType
-		//line grammar.lr:115:4
+		//line grammar.lr:119:4
 		symbol.Type = args[0].Type
 		err = nil
 	case _ReduceToNumberType:
@@ -1450,15 +1479,19 @@ func (_ActionTableType) Get(
 		case ProperArgumentsType:
 			return _Action{_ShiftAction, _State15, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperArguments}, true
 		}
@@ -1553,15 +1586,19 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State7, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAssignToOperationInstruction}, true
 		}
@@ -1589,15 +1626,19 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAction, _State26, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		}
 	case _State21:
 		switch symbolId {
@@ -1606,15 +1647,19 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State7, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperArguments}, true
 		}
@@ -1627,15 +1672,19 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAction, _State27, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		}
 	case _State23:
 		switch symbolId {
@@ -1759,15 +1808,19 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State7, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceConditionalToControlFlowInstruction}, true
 		}
@@ -1778,15 +1831,19 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State7, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceBinaryToOperationInstruction}, true
 		}
@@ -1801,15 +1858,19 @@ func (_ActionTableType) Get(
 		case ProperArgumentsType:
 			return _Action{_ShiftAction, _State43, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperArguments}, true
 
@@ -1908,15 +1969,19 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State7, 0}, true
 		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntegerLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatLiteralToImmediate}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
 		case GlobalLabelType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
 		case RegisterReferenceType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
 		case ImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperArguments}, true
 
@@ -2009,11 +2074,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [proper_arguments]
     Goto:
       COLON -> State 3
@@ -2139,11 +2206,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [operation_instruction]
     Goto:
       IDENTIFIER -> State 22
@@ -2186,11 +2255,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
     Goto:
       AT -> State 10
       PERCENT -> State 7
@@ -2202,11 +2273,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [proper_arguments]
     Goto:
       AT -> State 10
@@ -2220,11 +2293,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
     Goto:
       AT -> State 10
       PERCENT -> State 7
@@ -2369,11 +2444,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [control_flow_instruction]
     Goto:
       AT -> State 10
@@ -2385,11 +2462,13 @@ Parser Debug States:
     Reduce:
       (nil)
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [operation_instruction]
     Goto:
       AT -> State 10
@@ -2401,11 +2480,13 @@ Parser Debug States:
     Reduce:
       * -> [arguments]
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [proper_arguments]
     Goto:
       AT -> State 10
@@ -2517,11 +2598,13 @@ Parser Debug States:
     Reduce:
       * -> [arguments]
     ShiftAndReduce:
-      INTEGER_LITERAL -> [immediate]
-      FLOAT_LITERAL -> [immediate]
+      INTEGER_LITERAL -> [int_immediate]
+      FLOAT_LITERAL -> [float_immediate]
       global_label -> [value]
       register_reference -> [value]
       immediate -> [value]
+      int_immediate -> [immediate]
+      float_immediate -> [immediate]
       value -> [proper_arguments]
     Goto:
       AT -> State 10
@@ -2530,10 +2613,10 @@ Parser Debug States:
 Number of states: 45
 Number of shift actions: 77
 Number of reduce actions: 15
-Number of shift-and-reduce actions: 108
+Number of shift-and-reduce actions: 126
 Number of shift/reduce conflicts: 0
 Number of reduce/reduce conflicts: 0
-Number of unoptimized states: 168
-Number of unoptimized shift actions: 266
-Number of unoptimized reduce actions: 176
+Number of unoptimized states: 178
+Number of unoptimized shift actions: 284
+Number of unoptimized reduce actions: 194
 */

@@ -25,10 +25,20 @@ type Jump struct {
 }
 
 var _ Instruction = &Jump{}
+var _ Validator = &Jump{}
 
 func (jump *Jump) Walk(visitor Visitor) {
 	visitor.Enter(jump)
 	visitor.Exit(jump)
+}
+
+func (jump *Jump) Validate(emitter *parseutil.Emitter) {
+	if jump.Kind != Jmp {
+		emitter.Emit(
+			jump.Loc(),
+			"unexpected unconditional jump kind (%s)",
+			jump.Kind)
+	}
 }
 
 type ConditionalJumpKind string
@@ -54,12 +64,21 @@ type ConditionalJump struct {
 }
 
 var _ Instruction = &ConditionalJump{}
+var _ Validator = &ConditionalJump{}
 
 func (jump *ConditionalJump) Walk(visitor Visitor) {
 	visitor.Enter(jump)
 	jump.Src1.Walk(visitor)
 	jump.Src2.Walk(visitor)
 	visitor.Exit(jump)
+}
+
+func (jump *ConditionalJump) Validate(emitter *parseutil.Emitter) {
+	switch jump.Kind {
+	case Jeq, Jne, Jlt, Jge: // ok
+	default:
+		emitter.Emit(jump.Loc(), "unexpected conditional jump kind (%s)", jump.Kind)
+	}
 }
 
 type TerminateKind string
@@ -84,6 +103,7 @@ type Terminate struct {
 }
 
 var _ Instruction = &Terminate{}
+var _ Validator = &Terminate{}
 
 func (term *Terminate) Walk(visitor Visitor) {
 	visitor.Enter(term)
@@ -91,4 +111,12 @@ func (term *Terminate) Walk(visitor Visitor) {
 		src.Walk(visitor)
 	}
 	visitor.Exit(term)
+}
+
+func (term *Terminate) Validate(emitter *parseutil.Emitter) {
+	switch term.Kind {
+	case Ret, Exit: // ok
+	default:
+		emitter.Emit(term.Loc(), "unexpected terminate kind (%s)", term.Kind)
+	}
 }

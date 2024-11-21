@@ -29,10 +29,19 @@ type NumberType struct {
 }
 
 var _ Type = NumberType{}
+var _ Validator = NumberType{}
 
 func (numType NumberType) Walk(visitor Visitor) {
 	visitor.Enter(numType)
 	visitor.Exit(numType)
+}
+
+func (numType NumberType) Validate(emitter *parseutil.Emitter) {
+	switch numType.Kind {
+	case I8, I16, I32, I64, U8, U16, U32, U64, F32, F64: // ok
+	default:
+		emitter.Emit(numType.Loc(), "unexpected number type (%s)", numType.Kind)
+	}
 }
 
 type FunctionType struct {

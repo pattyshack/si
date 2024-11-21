@@ -1,6 +1,8 @@
 package reducer
 
 import (
+	"strconv"
+
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/ast"
@@ -117,7 +119,7 @@ func (Reducer) ToGlobalLabel(
 ) {
 	return &ast.GlobalLabelReference{
 		StartEndPos: parseutil.NewStartEndPos(at.StartPos, identifier.EndPos),
-		Label:       ast.GlobalLabel(identifier.Value),
+		Label:       identifier.Value,
 	}, nil
 }
 
@@ -147,29 +149,45 @@ func (Reducer) ToRegisterReference(
 	}, nil
 }
 
-func (Reducer) IntegerLiteralToImmediate(
+func (Reducer) ToIntImmediate(
 	token *lr.TokenValue,
 ) (
 	ast.Value,
 	error,
 ) {
-	return &ast.Immediate{
+	value, err := strconv.ParseInt(token.Value, 0, 64)
+	if err != nil {
+		return nil, parseutil.NewLocationError(
+			token.Loc(),
+			"failed to parse int (%s): %w",
+			token.Value,
+			err)
+	}
+
+	return &ast.IntImmediate{
 		StartEndPos: token.StartEndPos,
-		Value:       token.Value,
-		IsFloat:     false,
+		Value:       value,
 	}, nil
 }
 
-func (Reducer) FloatLiteralToImmediate(
+func (Reducer) ToFloatImmediate(
 	token *lr.TokenValue,
 ) (
 	ast.Value,
 	error,
 ) {
-	return &ast.Immediate{
+	value, err := strconv.ParseFloat(token.Value, 64)
+	if err != nil {
+		return nil, parseutil.NewLocationError(
+			token.Loc(),
+			"failed to parse float (%s): %w",
+			token.Value,
+			err)
+	}
+
+	return &ast.FloatImmediate{
 		StartEndPos: token.StartEndPos,
-		Value:       token.Value,
-		IsFloat:     true,
+		Value:       value,
 	}, nil
 }
 

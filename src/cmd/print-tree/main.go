@@ -6,6 +6,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/parser"
 )
@@ -27,6 +28,8 @@ func main() {
 				fileName,
 				content),
 			emitter)
+
+		analyzer.Analyze(entries, emitter)
 
 		for idx, entry := range entries {
 			fmt.Printf("Entry %d:\n", idx)

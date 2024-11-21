@@ -121,8 +121,10 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[RegisterReference: Name=%s]", node.Name)
 	case *GlobalLabelReference:
 		printer.write("[GlobalLabelReference: Label=%s]", node.Label)
-	case *Immediate:
-		printer.write("[Immediate: Value=%s, IsFloat=%v]", node.Value, node.IsFloat)
+	case *IntImmediate:
+		printer.write("[IntImmediate: Value=%d]", node.Value)
+	case *FloatImmediate:
+		printer.write("[FloatImmediate: Value=%e]", node.Value)
 
 	case *AssignOperation:
 		printer.write("[AssignOperation:")

@@ -42,12 +42,21 @@ type UnaryOperation struct {
 }
 
 var _ Instruction = &UnaryOperation{}
+var _ Validator = &UnaryOperation{}
 
 func (unary *UnaryOperation) Walk(visitor Visitor) {
 	visitor.Enter(unary)
 	unary.Dest.Walk(visitor)
 	unary.Src.Walk(visitor)
 	visitor.Exit(unary)
+}
+
+func (unary *UnaryOperation) Validate(emitter *parseutil.Emitter) {
+	switch unary.Kind {
+	case Neg, Not: // ok
+	default:
+		emitter.Emit(unary.Loc(), "unexpected unary operation (%s)", unary.Kind)
+	}
 }
 
 type BinaryOperationKind string
@@ -81,6 +90,9 @@ type BinaryOperation struct {
 	Src2 Value
 }
 
+var _ Instruction = &BinaryOperation{}
+var _ Validator = &BinaryOperation{}
+
 func (binary *BinaryOperation) Walk(visitor Visitor) {
 	visitor.Enter(binary)
 	binary.Dest.Walk(visitor)
@@ -89,7 +101,13 @@ func (binary *BinaryOperation) Walk(visitor Visitor) {
 	visitor.Exit(binary)
 }
 
-var _ Instruction = &BinaryOperation{}
+func (binary *BinaryOperation) Validate(emitter *parseutil.Emitter) {
+	switch binary.Kind {
+	case Add, Sub, Mul, Div, Rem, Xor, Or, And, Shl, Shr, Slt: // ok
+	default:
+		emitter.Emit(binary.Loc(), "unexpected binary operation (%s)", binary.Kind)
+	}
+}
 
 type FuncCallKind string
 
@@ -115,6 +133,7 @@ type FuncCall struct {
 }
 
 var _ Instruction = &FuncCall{}
+var _ Validator = &FuncCall{}
 
 func (call *FuncCall) Walk(visitor Visitor) {
 	visitor.Enter(call)
@@ -124,4 +143,12 @@ func (call *FuncCall) Walk(visitor Visitor) {
 		src.Walk(visitor)
 	}
 	visitor.Exit(call)
+}
+
+func (call *FuncCall) Validate(emitter *parseutil.Emitter) {
+	switch call.Kind {
+	case Call, SysCall: // ok
+	default:
+		emitter.Emit(call.Loc(), "unexpected call operation (%s)", call.Kind)
+	}
 }

@@ -45,8 +45,12 @@ identifier<Value> ->
   string: STRING_LITERAL
 
 immediate<OpValue> ->
-  INTEGER_LITERAL |
-  FLOAT_LITERAL
+  = int_immediate |
+  = float_immediate
+
+int_immediate<OpValue> -> INTEGER_LITERAL
+
+float_immediate<OpValue> -> FLOAT_LITERAL
 
 typed_register_definition<RegisterDefinition> -> register_reference type
 
