@@ -2,7 +2,6 @@ package analyzer
 
 import (
 	"strconv"
-	"sync"
 
 	"github.com/pattyshack/gt/parseutil"
 
@@ -15,34 +14,20 @@ type controlFlowGraphInitializer struct {
 
 func InitializeControlFlowGraph(
 	emitter *parseutil.Emitter,
-) Pass[[]ast.SourceEntry] {
+) Pass[ast.SourceEntry] {
 	return &controlFlowGraphInitializer{
 		Emitter: emitter,
 	}
 }
 
 func (initializer *controlFlowGraphInitializer) Process(
-	source []ast.SourceEntry,
+	entry ast.SourceEntry,
 ) {
-	wg := sync.WaitGroup{}
-	for _, entry := range source {
-		funcDef, ok := entry.(*ast.FuncDefinition)
-		if !ok {
-			continue
-		}
-
-		wg.Add(1)
-		func(def *ast.FuncDefinition) {
-			initializer.process(def)
-			wg.Done()
-		}(funcDef)
+	def, ok := entry.(*ast.FuncDefinition)
+	if !ok {
+		return
 	}
-	wg.Wait()
-}
 
-func (initializer *controlFlowGraphInitializer) process(
-	def *ast.FuncDefinition,
-) {
 	labelled := map[string]*ast.Block{}
 	names := map[string]struct{}{}
 	for _, block := range def.Blocks {
@@ -98,7 +83,9 @@ func (initializer *controlFlowGraphInitializer) process(
 		child.Parents = append(child.Parents, block)
 	}
 
-	// Add labels for debugging purpose
+	initializer.checkForUnreachableBlocks(def)
+
+	// Add labels for internal debugging purpose
 	idx := 0
 	for _, block := range def.Blocks {
 		if block.Label != "" {
@@ -114,6 +101,39 @@ func (initializer *controlFlowGraphInitializer) process(
 				block.Label = label
 				break
 			}
+		}
+	}
+}
+
+func (initializer *controlFlowGraphInitializer) checkForUnreachableBlocks(
+	def *ast.FuncDefinition,
+) {
+	reachable := map[*ast.Block]struct{}{
+		def.Blocks[0]: struct{}{},
+	}
+
+	queue := []*ast.Block{def.Blocks[0]}
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+
+		for _, child := range node.Children {
+			_, ok := reachable[child]
+			if !ok {
+				reachable[child] = struct{}{}
+				queue = append(queue, child)
+			}
+		}
+	}
+
+	for _, block := range def.Blocks {
+		_, ok := reachable[block]
+		if !ok {
+			label := ""
+			if block.Label != "" {
+				label = " (" + block.Label + ")"
+			}
+			initializer.Emit(block.Loc(), "block%s not reachable", label)
 		}
 	}
 }

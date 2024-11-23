@@ -11,21 +11,25 @@ type astSyntaxValidator struct {
 }
 
 func ValidateAstSyntax(emitter *parseutil.Emitter) Pass[[]ast.SourceEntry] {
-	return &astSyntaxValidator{
+	return astSyntaxValidator{
 		Emitter: emitter,
 	}
 }
 
-func (validator *astSyntaxValidator) Process(list []ast.SourceEntry) {
-	ParallelWalk(list, func(ast.SourceEntry) ast.Visitor { return validator })
+func (validator astSyntaxValidator) Process(entries []ast.SourceEntry) {
+	ParallelProcess(
+		entries,
+		func(ast.SourceEntry) func(ast.SourceEntry) {
+			return func(entry ast.SourceEntry) { entry.Walk(validator) }
+		})
 }
 
-func (validator *astSyntaxValidator) Enter(node ast.Node) {
+func (validator astSyntaxValidator) Enter(node ast.Node) {
 	validatable, ok := node.(ast.Validator)
 	if ok {
 		validatable.Validate(validator.Emitter)
 	}
 }
 
-func (validator *astSyntaxValidator) Exit(node ast.Node) {
+func (validator astSyntaxValidator) Exit(node ast.Node) {
 }

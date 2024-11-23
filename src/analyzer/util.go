@@ -33,20 +33,17 @@ func Process[T any](
 	}
 }
 
-func ParallelWalk[Node ast.Node](
+func ParallelProcess[Node ast.Node](
 	list []Node,
-	newVisitor func(Node) ast.Visitor,
+	newProcessor func(Node) func(Node),
 ) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(list))
-
-	for _, n := range list {
-		v := newVisitor(n)
-		go func(node Node, visitor ast.Visitor) {
-			node.Walk(visitor)
+	for _, item := range list {
+		go func(process func(Node), node Node) {
+			process(node)
 			wg.Done()
-		}(n, v)
+		}(newProcessor(item), item)
 	}
-
 	wg.Wait()
 }

@@ -6,15 +6,29 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-func Analyze(source []ast.SourceEntry, emitter *parseutil.Emitter) {
+func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
 	passes := [][]Pass[[]ast.SourceEntry]{
 		{
 			ValidateAstSyntax(emitter),
 		},
-		{
-			InitializeControlFlowGraph(emitter),
-		},
 	}
 
-	Process(source, passes, func() bool { return emitter.HasErrors() })
+	Process(sources, passes, nil)
+	if emitter.HasErrors() {
+		return
+	}
+
+	// TODO collect definitions / declarations before parallel process
+
+	ParallelProcess(
+		sources,
+		func(ast.SourceEntry) func(ast.SourceEntry) {
+			passes := [][]Pass[ast.SourceEntry]{
+				{InitializeControlFlowGraph(emitter)},
+			}
+
+			return func(entry ast.SourceEntry) {
+				Process(entry, passes, nil)
+			}
+		})
 }
