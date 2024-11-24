@@ -193,19 +193,17 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.push(labels...)
 	case *Block:
 		labels := []string{}
+		for i := 0; i < len(node.Phis); i++ {
+			labels = append(labels, fmt.Sprintf("Phi%d=", i))
+		}
 		for i, _ := range node.Instructions {
-			labels = append(labels, fmt.Sprintf("Instruction%d", i))
+			labels = append(labels, fmt.Sprintf("Instruction%d=", i))
 		}
 
 		printer.write("[Block: Label=%s Loc=%s", node.Label, node.Loc())
 		printer.push(labels...)
-		printer.write("\n%sPhi:", printer.indent)
-		for name, phi := range node.Phis {
-			printer.write("\n%s  %s:", printer.indent, name)
-			for block, ref := range phi.Srcs {
-				printer.write("\n%s    %s: %s", printer.indent, block.Label, ref.Loc())
-			}
-		}
+	case *Phi:
+		printer.list("[Phi:", "Src", len(node.Srcs), "Dest=")
 
 	default:
 		printer.write("unhandled node: %v", n)
@@ -239,6 +237,8 @@ func (printer *treePrinter) Exit(n Node) {
 	case *FuncDefinition:
 		printer.endNode()
 	case *Block:
+		printer.endNode()
+	case *Phi:
 		printer.endNode()
 	}
 }

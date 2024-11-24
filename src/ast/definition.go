@@ -84,6 +84,9 @@ func (Block) isNode() {}
 
 func (block *Block) Walk(visitor Visitor) {
 	visitor.Enter(block)
+	for _, phi := range block.Phis {
+		phi.Walk(visitor)
+	}
 	for _, instruction := range block.Instructions {
 		instruction.Walk(visitor)
 	}
