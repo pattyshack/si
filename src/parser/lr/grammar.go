@@ -154,7 +154,7 @@ type ControlFlowInstructionReducer interface {
 	ConditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel, Comma_ *TokenValue, Value_ ast.Value, Comma_2 *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
 	// 105:2: control_flow_instruction -> terminal: ...
-	TerminalToControlFlowInstruction(Identifier_ *TokenValue, ProperArguments_ []ast.Value) (ast.Instruction, error)
+	TerminalToControlFlowInstruction(Identifier_ *TokenValue, Value_ ast.Value) (ast.Instruction, error)
 }
 
 type NumberTypeReducer interface {
@@ -224,37 +224,35 @@ func ExpectedTerminals(id _StateId) []SymbolId {
 		return []SymbolId{AtToken}
 	case _State10:
 		return []SymbolId{StringLiteralToken, IdentifierToken}
-	case _State13:
+	case _State12:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, IdentifierToken, AtToken, PercentToken}
+	case _State13:
+		return []SymbolId{LparenToken}
 	case _State14:
 		return []SymbolId{LparenToken}
 	case _State15:
-		return []SymbolId{LparenToken}
+		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State16:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State17:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State18:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State21:
+	case _State19:
 		return []SymbolId{CommaToken}
-	case _State24:
+	case _State22:
+		return []SymbolId{RparenToken}
+	case _State23:
 		return []SymbolId{RparenToken}
 	case _State25:
-		return []SymbolId{RparenToken}
-	case _State27:
 		return []SymbolId{IdentifierToken, FuncToken}
-	case _State28:
+	case _State26:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State29:
+	case _State27:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State32:
+	case _State30:
+		return []SymbolId{IdentifierToken, FuncToken}
+	case _State31:
 		return []SymbolId{IdentifierToken, FuncToken}
 	case _State33:
-		return []SymbolId{IdentifierToken, FuncToken}
-	case _State35:
 		return []SymbolId{RparenToken}
-	case _State37:
+	case _State35:
 		return []SymbolId{LbraceToken}
 	}
 
@@ -708,8 +706,6 @@ const (
 	_State34 = _StateId(34)
 	_State35 = _StateId(35)
 	_State36 = _StateId(36)
-	_State37 = _StateId(37)
-	_State38 = _StateId(38)
 )
 
 type Symbol struct {
@@ -1292,7 +1288,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-2:]
 		stack = stack[:len(stack)-2]
 		symbol.SymbolId_ = ControlFlowInstructionType
-		symbol.Instruction, err = reducer.TerminalToControlFlowInstruction(args[0].Value, args[1].Arguments)
+		symbol.Instruction, err = reducer.TerminalToControlFlowInstruction(args[0].Value, args[1].OpValue)
 	case _ReduceNumberTypeToType:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
@@ -1403,8 +1399,6 @@ func (_ActionTableType) Get(
 			return _Action{_ShiftAction, _State6, 0}, true
 		case LocalLabelType:
 			return _Action{_ShiftAction, _State11, 0}, true
-		case ProperArgumentsType:
-			return _Action{_ShiftAction, _State12, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1420,7 +1414,7 @@ func (_ActionTableType) Get(
 		case FloatImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		case ValueType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperArguments}, true
+			return _Action{_ShiftAndReduceAction, 0, _ReduceTerminalToControlFlowInstruction}, true
 		}
 	case _State6:
 		switch symbolId {
@@ -1434,12 +1428,12 @@ func (_ActionTableType) Get(
 	case _State7:
 		switch symbolId {
 		case EqualToken:
-			return _Action{_ShiftAction, _State13, 0}, true
+			return _Action{_ShiftAction, _State12, 0}, true
 		}
 	case _State8:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1457,7 +1451,7 @@ func (_ActionTableType) Get(
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case GlobalLabelType:
-			return _Action{_ShiftAction, _State15, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		}
 	case _State10:
 		switch symbolId {
@@ -1471,23 +1465,15 @@ func (_ActionTableType) Get(
 	case _State11:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State16, 0}, true
+			return _Action{_ShiftAction, _State15, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceUnconditionalToControlFlowInstruction}, true
 		}
 	case _State12:
 		switch symbolId {
-		case CommaToken:
-			return _Action{_ShiftAction, _State17, 0}, true
-
-		default:
-			return _Action{_ReduceAction, 0, _ReduceTerminalToControlFlowInstruction}, true
-		}
-	case _State13:
-		switch symbolId {
 		case IdentifierToken:
-			return _Action{_ShiftAction, _State18, 0}, true
+			return _Action{_ShiftAction, _State16, 0}, true
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
@@ -1509,15 +1495,38 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAssignToOperationInstruction}, true
 		}
+	case _State13:
+		switch symbolId {
+		case LparenToken:
+			return _Action{_ShiftAction, _State17, 0}, true
+		}
 	case _State14:
 		switch symbolId {
 		case LparenToken:
-			return _Action{_ShiftAction, _State19, 0}, true
+			return _Action{_ShiftAction, _State18, 0}, true
 		}
 	case _State15:
 		switch symbolId {
-		case LparenToken:
-			return _Action{_ShiftAction, _State20, 0}, true
+		case AtToken:
+			return _Action{_ShiftAction, _State10, 0}, true
+		case PercentToken:
+			return _Action{_ShiftAction, _State6, 0}, true
+		case ValueType:
+			return _Action{_ShiftAction, _State19, 0}, true
+		case IntegerLiteralToken:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
+		case FloatLiteralToken:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
+		case GlobalLabelType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
+		case RegisterReferenceType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
+		case ImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
+		case IntImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
+		case FloatImmediateType:
+			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		}
 	case _State16:
 		switch symbolId {
@@ -1526,7 +1535,7 @@ func (_ActionTableType) Get(
 		case PercentToken:
 			return _Action{_ShiftAction, _State6, 0}, true
 		case ValueType:
-			return _Action{_ShiftAction, _State21, 0}, true
+			return _Action{_ShiftAction, _State20, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1544,58 +1553,12 @@ func (_ActionTableType) Get(
 		}
 	case _State17:
 		switch symbolId {
-		case AtToken:
-			return _Action{_ShiftAction, _State10, 0}, true
-		case PercentToken:
-			return _Action{_ShiftAction, _State6, 0}, true
-		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
-		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
-		case GlobalLabelType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
-		case RegisterReferenceType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
-		case ImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
-		case IntImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
-		case FloatImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
-		case ValueType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperArguments}, true
-		}
-	case _State18:
-		switch symbolId {
-		case AtToken:
-			return _Action{_ShiftAction, _State10, 0}, true
-		case PercentToken:
-			return _Action{_ShiftAction, _State6, 0}, true
-		case ValueType:
-			return _Action{_ShiftAction, _State22, 0}, true
-		case IntegerLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
-		case FloatLiteralToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToFloatImmediate}, true
-		case GlobalLabelType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceGlobalLabelToValue}, true
-		case RegisterReferenceType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceRegisterReferenceToValue}, true
-		case ImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceImmediateToValue}, true
-		case IntImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceIntImmediateToImmediate}, true
-		case FloatImmediateType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
-		}
-	case _State19:
-		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case TypesType:
-			return _Action{_ShiftAction, _State24, 0}, true
+			return _Action{_ShiftAction, _State22, 0}, true
 		case ProperTypesType:
-			return _Action{_ShiftAction, _State23, 0}, true
+			return _Action{_ShiftAction, _State21, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1608,67 +1571,67 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToTypes}, true
 		}
-	case _State20:
+	case _State18:
 		switch symbolId {
 		case PercentToken:
 			return _Action{_ShiftAction, _State6, 0}, true
 		case RegisterReferenceType:
-			return _Action{_ShiftAction, _State27, 0}, true
-		case ParametersType:
 			return _Action{_ShiftAction, _State25, 0}, true
+		case ParametersType:
+			return _Action{_ShiftAction, _State23, 0}, true
 		case ProperParametersType:
-			return _Action{_ShiftAction, _State26, 0}, true
+			return _Action{_ShiftAction, _State24, 0}, true
 		case TypedRegisterDefinitionType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperParameters}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToParameters}, true
 		}
-	case _State21:
+	case _State19:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State28, 0}, true
+			return _Action{_ShiftAction, _State26, 0}, true
 		}
-	case _State22:
+	case _State20:
 		switch symbolId {
 		case LparenToken:
-			return _Action{_ShiftAction, _State30, 0}, true
+			return _Action{_ShiftAction, _State28, 0}, true
 		case CommaToken:
-			return _Action{_ShiftAction, _State29, 0}, true
+			return _Action{_ShiftAction, _State27, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceUnaryToOperationInstruction}, true
 		}
-	case _State23:
+	case _State21:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State31, 0}, true
+			return _Action{_ShiftAction, _State29, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperTypesToTypes}, true
 		}
+	case _State22:
+		switch symbolId {
+		case RparenToken:
+			return _Action{_ShiftAction, _State30, 0}, true
+		}
+	case _State23:
+		switch symbolId {
+		case RparenToken:
+			return _Action{_ShiftAction, _State31, 0}, true
+		}
 	case _State24:
 		switch symbolId {
-		case RparenToken:
-			return _Action{_ShiftAction, _State32, 0}, true
-		}
-	case _State25:
-		switch symbolId {
-		case RparenToken:
-			return _Action{_ShiftAction, _State33, 0}, true
-		}
-	case _State26:
-		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State34, 0}, true
+			return _Action{_ShiftAction, _State32, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperParametersToParameters}, true
 		}
-	case _State27:
+	case _State25:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1678,7 +1641,7 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State28:
+	case _State26:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
@@ -1701,7 +1664,7 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceConditionalToControlFlowInstruction}, true
 		}
-	case _State29:
+	case _State27:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
@@ -1724,16 +1687,16 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceBinaryToOperationInstruction}, true
 		}
-	case _State30:
+	case _State28:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
 			return _Action{_ShiftAction, _State6, 0}, true
 		case ArgumentsType:
-			return _Action{_ShiftAction, _State35, 0}, true
+			return _Action{_ShiftAction, _State33, 0}, true
 		case ProperArgumentsType:
-			return _Action{_ShiftAction, _State36, 0}, true
+			return _Action{_ShiftAction, _State34, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1754,10 +1717,10 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToArguments}, true
 		}
-	case _State31:
+	case _State29:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1770,10 +1733,10 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceImproperToTypes}, true
 		}
-	case _State32:
+	case _State30:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1783,12 +1746,12 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State33:
+	case _State31:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		case TypeType:
-			return _Action{_ShiftAction, _State37, 0}, true
+			return _Action{_ShiftAction, _State35, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case NumberTypeType:
@@ -1796,37 +1759,37 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State34:
+	case _State32:
 		switch symbolId {
 		case PercentToken:
 			return _Action{_ShiftAction, _State6, 0}, true
 		case RegisterReferenceType:
-			return _Action{_ShiftAction, _State27, 0}, true
+			return _Action{_ShiftAction, _State25, 0}, true
 		case TypedRegisterDefinitionType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperParameters}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceImproperToParameters}, true
 		}
-	case _State35:
+	case _State33:
 		switch symbolId {
 		case RparenToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceCallToOperationInstruction}, true
 		}
-	case _State36:
+	case _State34:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State38, 0}, true
+			return _Action{_ShiftAction, _State36, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperArgumentsToArguments}, true
 		}
-	case _State37:
+	case _State35:
 		switch symbolId {
 		case LbraceToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncToDefinition}, true
 		}
-	case _State38:
+	case _State36:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
@@ -1919,7 +1882,7 @@ Parser Debug States:
     Kernel Items:
       control_flow_instruction: IDENTIFIER.local_label
       control_flow_instruction: IDENTIFIER.local_label COMMA value COMMA value
-      control_flow_instruction: IDENTIFIER.proper_arguments
+      control_flow_instruction: IDENTIFIER.value
     Reduce:
       (nil)
     ShiftAndReduce:
@@ -1930,13 +1893,12 @@ Parser Debug States:
       immediate -> [value]
       int_immediate -> [immediate]
       float_immediate -> [immediate]
-      value -> [proper_arguments]
+      value -> [control_flow_instruction]
     Goto:
       COLON -> State 3
       AT -> State 10
       PERCENT -> State 6
       local_label -> State 11
-      proper_arguments -> State 12
 
   State 6:
     Kernel Items:
@@ -1961,7 +1923,7 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      EQUAL -> State 13
+      EQUAL -> State 12
 
   State 8:
     Kernel Items:
@@ -1975,7 +1937,7 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
+      FUNC -> State 13
 
   State 9:
     Kernel Items:
@@ -1986,7 +1948,7 @@ Parser Debug States:
       (nil)
     Goto:
       AT -> State 10
-      global_label -> State 15
+      global_label -> State 14
 
   State 10:
     Kernel Items:
@@ -2009,20 +1971,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 16
+      COMMA -> State 15
 
   State 12:
-    Kernel Items:
-      proper_arguments: proper_arguments.COMMA value
-      control_flow_instruction: IDENTIFIER proper_arguments., *
-    Reduce:
-      * -> [control_flow_instruction]
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      COMMA -> State 17
-
-  State 13:
     Kernel Items:
       operation_instruction: register_definition EQUAL.value
       operation_instruction: register_definition EQUAL.IDENTIFIER value
@@ -2040,11 +1991,11 @@ Parser Debug States:
       float_immediate -> [immediate]
       value -> [operation_instruction]
     Goto:
-      IDENTIFIER -> State 18
+      IDENTIFIER -> State 16
       AT -> State 10
       PERCENT -> State 6
 
-  State 14:
+  State 13:
     Kernel Items:
       func_type: FUNC.LPAREN types RPAREN type
     Reduce:
@@ -2052,9 +2003,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 19
+      LPAREN -> State 17
 
-  State 15:
+  State 14:
     Kernel Items:
       definition: DEFINE FUNC global_label.LPAREN parameters RPAREN type LBRACE
     Reduce:
@@ -2062,9 +2013,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 20
+      LPAREN -> State 18
 
-  State 16:
+  State 15:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA.value COMMA value
     Reduce:
@@ -2080,27 +2031,9 @@ Parser Debug States:
     Goto:
       AT -> State 10
       PERCENT -> State 6
-      value -> State 21
+      value -> State 19
 
-  State 17:
-    Kernel Items:
-      proper_arguments: proper_arguments COMMA.value
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      INTEGER_LITERAL -> [int_immediate]
-      FLOAT_LITERAL -> [float_immediate]
-      global_label -> [value]
-      register_reference -> [value]
-      immediate -> [value]
-      int_immediate -> [immediate]
-      float_immediate -> [immediate]
-      value -> [proper_arguments]
-    Goto:
-      AT -> State 10
-      PERCENT -> State 6
-
-  State 18:
+  State 16:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER.value
       operation_instruction: register_definition EQUAL IDENTIFIER.value COMMA value
@@ -2118,9 +2051,9 @@ Parser Debug States:
     Goto:
       AT -> State 10
       PERCENT -> State 6
-      value -> State 22
+      value -> State 20
 
-  State 19:
+  State 17:
     Kernel Items:
       func_type: FUNC LPAREN.types RPAREN type
     Reduce:
@@ -2131,11 +2064,11 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
-      types -> State 24
-      proper_types -> State 23
+      FUNC -> State 13
+      types -> State 22
+      proper_types -> State 21
 
-  State 20:
+  State 18:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN.parameters RPAREN type LBRACE
     Reduce:
@@ -2144,11 +2077,11 @@ Parser Debug States:
       typed_register_definition -> [proper_parameters]
     Goto:
       PERCENT -> State 6
-      register_reference -> State 27
-      parameters -> State 25
-      proper_parameters -> State 26
+      register_reference -> State 25
+      parameters -> State 23
+      proper_parameters -> State 24
 
-  State 21:
+  State 19:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA value.COMMA value
     Reduce:
@@ -2156,9 +2089,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 28
+      COMMA -> State 26
 
-  State 22:
+  State 20:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value., *
       operation_instruction: register_definition EQUAL IDENTIFIER value.COMMA value
@@ -2168,10 +2101,10 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 30
-      COMMA -> State 29
+      LPAREN -> State 28
+      COMMA -> State 27
 
-  State 23:
+  State 21:
     Kernel Items:
       types: proper_types., *
       types: proper_types.COMMA
@@ -2181,9 +2114,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 31
+      COMMA -> State 29
 
-  State 24:
+  State 22:
     Kernel Items:
       func_type: FUNC LPAREN types.RPAREN type
     Reduce:
@@ -2191,9 +2124,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      RPAREN -> State 32
+      RPAREN -> State 30
 
-  State 25:
+  State 23:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters.RPAREN type LBRACE
     Reduce:
@@ -2201,9 +2134,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      RPAREN -> State 33
+      RPAREN -> State 31
 
-  State 26:
+  State 24:
     Kernel Items:
       parameters: proper_parameters., *
       parameters: proper_parameters.COMMA
@@ -2213,9 +2146,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 34
+      COMMA -> State 32
 
-  State 27:
+  State 25:
     Kernel Items:
       typed_register_definition: register_reference.type
     Reduce:
@@ -2226,9 +2159,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
+      FUNC -> State 13
 
-  State 28:
+  State 26:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA value COMMA.value
     Reduce:
@@ -2246,7 +2179,7 @@ Parser Debug States:
       AT -> State 10
       PERCENT -> State 6
 
-  State 29:
+  State 27:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value COMMA.value
     Reduce:
@@ -2264,7 +2197,7 @@ Parser Debug States:
       AT -> State 10
       PERCENT -> State 6
 
-  State 30:
+  State 28:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value LPAREN.arguments RPAREN
     Reduce:
@@ -2281,10 +2214,10 @@ Parser Debug States:
     Goto:
       AT -> State 10
       PERCENT -> State 6
-      arguments -> State 35
-      proper_arguments -> State 36
+      arguments -> State 33
+      proper_arguments -> State 34
 
-  State 31:
+  State 29:
     Kernel Items:
       types: proper_types COMMA., *
       proper_types: proper_types COMMA.type
@@ -2296,9 +2229,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
+      FUNC -> State 13
 
-  State 32:
+  State 30:
     Kernel Items:
       func_type: FUNC LPAREN types RPAREN.type
     Reduce:
@@ -2309,9 +2242,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
+      FUNC -> State 13
 
-  State 33:
+  State 31:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters RPAREN.type LBRACE
     Reduce:
@@ -2321,10 +2254,10 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 14
-      type -> State 37
+      FUNC -> State 13
+      type -> State 35
 
-  State 34:
+  State 32:
     Kernel Items:
       parameters: proper_parameters COMMA., *
       proper_parameters: proper_parameters COMMA.typed_register_definition
@@ -2334,9 +2267,9 @@ Parser Debug States:
       typed_register_definition -> [proper_parameters]
     Goto:
       PERCENT -> State 6
-      register_reference -> State 27
+      register_reference -> State 25
 
-  State 35:
+  State 33:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value LPAREN arguments.RPAREN
     Reduce:
@@ -2346,7 +2279,7 @@ Parser Debug States:
     Goto:
       (nil)
 
-  State 36:
+  State 34:
     Kernel Items:
       arguments: proper_arguments., *
       arguments: proper_arguments.COMMA
@@ -2356,9 +2289,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 38
+      COMMA -> State 36
 
-  State 37:
+  State 35:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters RPAREN type.LBRACE
     Reduce:
@@ -2368,7 +2301,7 @@ Parser Debug States:
     Goto:
       (nil)
 
-  State 38:
+  State 36:
     Kernel Items:
       arguments: proper_arguments COMMA., *
       proper_arguments: proper_arguments COMMA.value
@@ -2387,13 +2320,13 @@ Parser Debug States:
       AT -> State 10
       PERCENT -> State 6
 
-Number of states: 38
-Number of shift actions: 64
-Number of reduce actions: 14
-Number of shift-and-reduce actions: 113
+Number of states: 36
+Number of shift actions: 60
+Number of reduce actions: 13
+Number of shift-and-reduce actions: 105
 Number of shift/reduce conflicts: 0
 Number of reduce/reduce conflicts: 0
-Number of unoptimized states: 158
-Number of unoptimized shift actions: 241
-Number of unoptimized reduce actions: 183
+Number of unoptimized states: 144
+Number of unoptimized shift actions: 223
+Number of unoptimized reduce actions: 161
 */

@@ -102,7 +102,7 @@ operation_instruction<Instruction> ->
 control_flow_instruction<Instruction> ->
   unconditional: IDENTIFIER local_label |
   conditional: IDENTIFIER local_label COMMA value COMMA value |
-  terminal: IDENTIFIER proper_arguments
+  terminal: IDENTIFIER value
 
 //
 // Type

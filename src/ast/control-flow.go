@@ -88,7 +88,7 @@ const (
 	Exit = TerminalKind("exit")
 )
 
-// Exit instruction of the form: <op> [<src>]+
+// Exit instruction of the form: <op> <src>
 //
 // Note: this translates into a syscall instruction, but we've special cased
 // exit since it has semantic meaning in the control flow graph.
@@ -99,7 +99,7 @@ type Terminal struct {
 
 	Kind TerminalKind
 
-	Srcs []Value
+	Src Value
 }
 
 var _ Instruction = &Terminal{}
@@ -107,9 +107,7 @@ var _ Validator = &Terminal{}
 
 func (term *Terminal) Walk(visitor Visitor) {
 	visitor.Enter(term)
-	for _, src := range term.Srcs {
-		src.Walk(visitor)
-	}
+	term.Src.Walk(visitor)
 	visitor.Exit(term)
 }
 

@@ -25,14 +25,24 @@ type Line interface { // used only by the parser
 type Instruction interface {
 	Node
 	Line
-	isInstruction()
+
+	ParentBlock() *Block
+	SetParentBlock(*Block)
 }
 
 type instruction struct {
+	Parent *Block
 }
 
-func (instruction) IsLine()        {}
-func (instruction) isInstruction() {}
+func (instruction) IsLine() {}
+
+func (ins *instruction) ParentBlock() *Block {
+	return ins.Parent
+}
+
+func (ins *instruction) SetParentBlock(block *Block) {
+	ins.Parent = block
+}
 
 type ControlFlowInstruction interface {
 	Instruction

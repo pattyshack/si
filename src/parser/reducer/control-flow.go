@@ -43,14 +43,14 @@ func (Reducer) ConditionalToControlFlowInstruction(
 
 func (Reducer) TerminalToControlFlowInstruction(
 	op *lr.TokenValue,
-	args []ast.Value,
+	src ast.Value,
 ) (
 	ast.Instruction,
 	error,
 ) {
 	return &ast.Terminal{
-		StartEndPos: parseutil.NewStartEndPos(op.Loc(), args[len(args)-1].End()),
+		StartEndPos: parseutil.NewStartEndPos(op.Loc(), src.End()),
 		Kind:        ast.TerminalKind(op.Value),
-		Srcs:        args,
+		Src:         src,
 	}, nil
 }
