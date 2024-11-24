@@ -15,6 +15,14 @@ type AssignOperation struct {
 
 var _ Instruction = &AssignOperation{}
 
+func (assign *AssignOperation) Sources() []Value {
+	return []Value{assign.Src}
+}
+
+func (assign *AssignOperation) Destination() *RegisterDefinition {
+	return assign.Dest
+}
+
 func (assign *AssignOperation) Walk(visitor Visitor) {
 	visitor.Enter(assign)
 	assign.Dest.Walk(visitor)
@@ -43,6 +51,14 @@ type UnaryOperation struct {
 
 var _ Instruction = &UnaryOperation{}
 var _ Validator = &UnaryOperation{}
+
+func (unary *UnaryOperation) Sources() []Value {
+	return []Value{unary.Src}
+}
+
+func (unary *UnaryOperation) Destination() *RegisterDefinition {
+	return unary.Dest
+}
 
 func (unary *UnaryOperation) Walk(visitor Visitor) {
 	visitor.Enter(unary)
@@ -93,6 +109,14 @@ type BinaryOperation struct {
 var _ Instruction = &BinaryOperation{}
 var _ Validator = &BinaryOperation{}
 
+func (binary *BinaryOperation) Sources() []Value {
+	return []Value{binary.Src1, binary.Src2}
+}
+
+func (binary *BinaryOperation) Destination() *RegisterDefinition {
+	return binary.Dest
+}
+
 func (binary *BinaryOperation) Walk(visitor Visitor) {
 	visitor.Enter(binary)
 	binary.Dest.Walk(visitor)
@@ -134,6 +158,14 @@ type FuncCall struct {
 
 var _ Instruction = &FuncCall{}
 var _ Validator = &FuncCall{}
+
+func (call *FuncCall) Sources() []Value {
+	return call.Srcs
+}
+
+func (call *FuncCall) Destination() *RegisterDefinition {
+	return call.Dest
+}
 
 func (call *FuncCall) Walk(visitor Visitor) {
 	visitor.Enter(call)

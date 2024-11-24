@@ -28,9 +28,13 @@ type Instruction interface {
 
 	ParentBlock() *Block
 	SetParentBlock(*Block)
+
+	Sources() []Value                 // empty if there are no src dependencies
+	Destination() *RegisterDefinition // nil if instruction has no destination
 }
 
 type instruction struct {
+	// Internal (set during ssa construction)
 	Parent *Block
 }
 
@@ -42,6 +46,14 @@ func (ins *instruction) ParentBlock() *Block {
 
 func (ins *instruction) SetParentBlock(block *Block) {
 	ins.Parent = block
+}
+
+func (instruction) Sources() []Value {
+	return nil
+}
+
+func (instruction) Destination() *RegisterDefinition {
+	return nil
 }
 
 type ControlFlowInstruction interface {
@@ -109,7 +121,9 @@ type RegisterDefinition struct {
 
 	Type Type // optional. Type is check/inferred during type checking
 
-	DefUses map[*RegisterReference]struct{} // internal. Set by ssa construction
+	// Internal (set during ssa construction)
+	Parent  Instruction // nil for phi and func parameters
+	DefUses map[*RegisterReference]struct{}
 }
 
 var _ Node = &RegisterDefinition{}
@@ -142,7 +156,9 @@ type RegisterReference struct {
 
 	Name string // require
 
-	UseDef *RegisterDefinition // internal. Set by ssa construction
+	// Internal (set during ssa construction)
+	Parent Instruction // nil for phi
+	UseDef *RegisterDefinition
 }
 
 var _ Node = &RegisterReference{}

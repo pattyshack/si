@@ -56,6 +56,15 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
+// For internal use only
+type Phi struct {
+	Dest *RegisterDefinition
+
+	// Value is usually a register reference, but could be constant after
+	// optimization.
+	Srcs map[*Block]Value
+}
+
 // A straight-line / basic block
 type Block struct {
 	parseutil.StartEndPos
@@ -74,7 +83,10 @@ type Block struct {
 	Parents  []*Block
 	Children []*Block
 
-	// TODO phi functions
+	Phis map[string]*Phi
+
+	LiveIn  map[string]*RegisterDefinition
+	LiveOut map[string]*RegisterDefinition
 }
 
 var _ Node = &Block{}

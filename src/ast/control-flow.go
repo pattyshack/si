@@ -66,6 +66,10 @@ type ConditionalJump struct {
 var _ Instruction = &ConditionalJump{}
 var _ Validator = &ConditionalJump{}
 
+func (jump *ConditionalJump) Sources() []Value {
+	return []Value{jump.Src1, jump.Src2}
+}
+
 func (jump *ConditionalJump) Walk(visitor Visitor) {
 	visitor.Enter(jump)
 	jump.Src1.Walk(visitor)
@@ -104,6 +108,10 @@ type Terminal struct {
 
 var _ Instruction = &Terminal{}
 var _ Validator = &Terminal{}
+
+func (term *Terminal) Sources() []Value {
+	return []Value{term.Src}
+}
 
 func (term *Terminal) Walk(visitor Visitor) {
 	visitor.Enter(term)

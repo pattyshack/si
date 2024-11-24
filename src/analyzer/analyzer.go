@@ -7,28 +7,42 @@ import (
 )
 
 func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
-	passes := [][]Pass[[]ast.SourceEntry]{
-		{
-			ValidateAstSyntax(emitter),
-		},
-	}
+	collector := NewSignatureCollector(emitter)
 
-	Process(sources, passes, nil)
+	Process(
+		sources,
+		[][]Pass[[]ast.SourceEntry]{
+			{
+				ValidateAstSyntax(emitter),
+				collector,
+			},
+		},
+		nil)
 	if emitter.HasErrors() {
 		return
 	}
 
-	// TODO collect definitions / declarations before parallel process
+	signatures := collector.Signatures()
 
+	entryEmitters := []*parseutil.Emitter{}
 	ParallelProcess(
 		sources,
 		func(ast.SourceEntry) func(ast.SourceEntry) {
+			entryEmitter := &parseutil.Emitter{}
+			entryEmitters = append(entryEmitters, entryEmitter)
+
 			passes := [][]Pass[ast.SourceEntry]{
-				{InitializeControlFlowGraph(emitter)},
+				{InitializeControlFlowGraph(entryEmitter)},
+				{ConstructSSA(entryEmitter)},
+				{CheckTypes(entryEmitter, signatures)},
 			}
 
 			return func(entry ast.SourceEntry) {
 				Process(entry, passes, nil)
 			}
 		})
+
+	for _, entryEmitter := range entryEmitters {
+		emitter.EmitErrors(entryEmitter.Errors()...)
+	}
 }

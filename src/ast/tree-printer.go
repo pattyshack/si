@@ -111,14 +111,33 @@ func (printer *treePrinter) Enter(n Node) {
 
 	switch node := n.(type) {
 	case *RegisterDefinition:
+		printer.write("[RegisterDefinition: Name=%s Loc=%s", node.Name, node.Loc())
 		if node.Type != nil {
-			printer.write("[RegisterDefinition: Name=%s", node.Name)
 			printer.push("Type=")
 		} else {
-			printer.write("[RegisterDefinition: Name=%s]", node.Name)
+			printer.push()
+		}
+		printer.write("\n%sDefUses:", printer.indent)
+		for ref, _ := range node.DefUses {
+			parent := "(ins)"
+			if ref.Parent == nil {
+				parent = "(phi)"
+			}
+			printer.write("\n%s  %s: %s", printer.indent, parent, ref.Loc())
 		}
 	case *RegisterReference:
-		printer.write("[RegisterReference: Name=%s]", node.Name)
+		printer.write("[RegisterReference: Name=%s Loc=%s", node.Name, node.Loc())
+		printer.push()
+		label := "(nil)"
+		if node.UseDef != nil {
+			if node.UseDef.Parent != nil {
+				label = "(ins) "
+			} else {
+				label = "(phi) "
+			}
+			label += node.UseDef.Loc().String()
+		}
+		printer.write("\n%sUseDef: %s", printer.indent, label)
 	case *GlobalLabelReference:
 		printer.write("[GlobalLabelReference: Label=%s]", node.Label)
 	case *IntImmediate:
@@ -173,24 +192,29 @@ func (printer *treePrinter) Enter(n Node) {
 		}
 		printer.push(labels...)
 	case *Block:
-		parents := []string{}
-		for _, parent := range node.Parents {
-			parents = append(parents, parent.Label)
+		labels := []string{}
+		for i, _ := range node.Instructions {
+			labels = append(labels, fmt.Sprintf("Instruction%d", i))
 		}
 
-		children := []string{}
-		for _, child := range node.Children {
-			children = append(children, child.Label)
+		printer.write("[Block: Label=%s Loc=%s", node.Label, node.Loc())
+		printer.push(labels...)
+		printer.write("\n%sPhi:", printer.indent)
+		for name, phi := range node.Phis {
+			printer.write("\n%s  %s:", printer.indent, name)
+			for block, ref := range phi.Srcs {
+				printer.write("\n%s    %s: %s", printer.indent, block.Label, ref.Loc())
+			}
 		}
 
-		printer.list(
-			fmt.Sprintf(
-				"[Block: Label=%s Parents: %v Children: %v",
-				node.Label,
-				parents,
-				children),
-			"Instruction",
-			len(node.Instructions))
+		printer.write("\n%sLiveIn:", printer.indent)
+		for name, def := range node.LiveIn {
+			printer.write("\n%s  %s: %s", printer.indent, name, def.Loc())
+		}
+		printer.write("\n%sLiveOut:", printer.indent)
+		for name, def := range node.LiveOut {
+			printer.write("\n%s  %s: %s", printer.indent, name, def.Loc())
+		}
 
 	default:
 		printer.write("unhandled node: %v", n)
@@ -200,9 +224,9 @@ func (printer *treePrinter) Enter(n Node) {
 func (printer *treePrinter) Exit(n Node) {
 	switch node := n.(type) {
 	case *RegisterDefinition:
-		if node.Type != nil {
-			printer.endNode()
-		}
+		printer.endNode()
+	case *RegisterReference:
+		printer.endNode()
 
 	case *AssignOperation:
 		printer.endNode()
@@ -224,6 +248,6 @@ func (printer *treePrinter) Exit(n Node) {
 	case *FuncDefinition:
 		printer.endNode()
 	case *Block:
-		printer.endList(len(node.Instructions))
+		printer.endNode()
 	}
 }
