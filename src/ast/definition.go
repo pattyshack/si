@@ -56,15 +56,6 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-// For internal use only
-type Phi struct {
-	Dest *RegisterDefinition
-
-	// Value is usually a register reference, but could be constant after
-	// optimization.
-	Srcs map[*Block]Value
-}
-
 // A straight-line / basic block
 type Block struct {
 	parseutil.StartEndPos
@@ -84,9 +75,6 @@ type Block struct {
 	Children []*Block
 
 	Phis map[string]*Phi
-
-	LiveIn  map[string]*RegisterDefinition
-	LiveOut map[string]*RegisterDefinition
 }
 
 var _ Node = &Block{}
@@ -116,4 +104,64 @@ func (block *Block) Validate(emitter *parseutil.Emitter) {
 				"control flow instruction must be the last instruction in the block")
 		}
 	}
+}
+
+func (block *Block) AddToPhis(parent *Block, def *RegisterDefinition) {
+	if block.Phis == nil {
+		block.Phis = map[string]*Phi{}
+	}
+
+	phi, ok := block.Phis[def.Name]
+	if !ok {
+		phi = &Phi{
+			Dest: &RegisterDefinition{
+				StartEndPos: parseutil.NewStartEndPos(block.Loc(), block.Loc()),
+				Name:        def.Name,
+			},
+			Srcs: map[*Block]Value{},
+		}
+		block.Phis[def.Name] = phi
+	}
+
+	phi.Add(parent, def)
+}
+
+// For internal use only
+type Phi struct {
+	instruction
+
+	parseutil.StartEndPos
+
+	Dest *RegisterDefinition
+
+	// Value is usually a register reference, but could be constant after
+	// optimization.
+	Srcs map[*Block]Value
+}
+
+func (phi *Phi) Walk(visitor Visitor) {
+	visitor.Enter(phi)
+	phi.Dest.Walk(visitor)
+	for _, src := range phi.Srcs {
+		src.Walk(visitor)
+	}
+	visitor.Exit(phi)
+}
+
+func (phi *Phi) Sources() []Value {
+	result := make([]Value, 0, len(phi.Srcs))
+	for _, src := range phi.Srcs {
+		result = append(result, src)
+	}
+	return result
+}
+
+func (phi *Phi) Destination() *RegisterDefinition {
+	return phi.Dest
+}
+
+func (phi *Phi) Add(parent *Block, def *RegisterDefinition) {
+	ref := def.NewRef(phi.StartEnd())
+	ref.SetParent(phi)
+	phi.Srcs[parent] = ref
 }

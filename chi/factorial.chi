@@ -48,6 +48,7 @@ define func @loop_factorial2(%i I32) I32 {
 define func @loop_factorial2_helper(%i I32, %acc I32) I32 {
 :loop
   jlt :end, %i, 2
+:body
   %acc = mul %i, %acc
   %i = sub %i, 1
   jmp :loop

@@ -207,15 +207,6 @@ func (printer *treePrinter) Enter(n Node) {
 			}
 		}
 
-		printer.write("\n%sLiveIn:", printer.indent)
-		for name, def := range node.LiveIn {
-			printer.write("\n%s  %s: %s", printer.indent, name, def.Loc())
-		}
-		printer.write("\n%sLiveOut:", printer.indent)
-		for name, def := range node.LiveOut {
-			printer.write("\n%s  %s: %s", printer.indent, name, def.Loc())
-		}
-
 	default:
 		printer.write("unhandled node: %v", n)
 	}

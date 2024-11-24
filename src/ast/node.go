@@ -88,9 +88,79 @@ type sourceEntry struct {
 func (sourceEntry) IsLine()        {}
 func (sourceEntry) isSourceEntry() {}
 
+// %-prefixed local register variable definition.  Note that the '%' prefix is
+// not part of the name and is only used by the parser.
+type RegisterDefinition struct {
+	parseutil.StartEndPos
+
+	Name string // require
+
+	Type Type // optional. Type is check/inferred during type checking
+
+	// Internal (set during ssa construction)
+	Parent        Instruction // nil for phi and func parameters
+	DefUses       map[*RegisterReference]struct{}
+	LiveInOutUses map[*Block]struct{}
+}
+
+var _ Node = &RegisterDefinition{}
+var _ Validator = &RegisterDefinition{}
+
+func (def *RegisterDefinition) Walk(visitor Visitor) {
+	visitor.Enter(def)
+	if def.Type != nil {
+		def.Type.Walk(visitor)
+	}
+	visitor.Exit(def)
+}
+
+func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
+	if def.Name == "" {
+		emitter.Emit(def.Loc(), "empty register definition name")
+	}
+}
+
+func (def *RegisterDefinition) AddRef(ref *RegisterReference) {
+	if def.DefUses == nil {
+		def.DefUses = map[*RegisterReference]struct{}{}
+	}
+
+	def.DefUses[ref] = struct{}{}
+	ref.UseDef = def
+}
+
+func (def *RegisterDefinition) NewRef(
+	pos parseutil.StartEndPos,
+) *RegisterReference {
+	ref := &RegisterReference{
+		StartEndPos: pos,
+		Name:        def.Name,
+	}
+	def.AddRef(ref)
+	return ref
+}
+
+// Register, global label, or immediate
+type Value interface {
+	Node
+	isValue()
+
+	SetParent(Instruction)
+}
+
+type value struct {
+	// Internal (set during ssa construction)
+	Parent Instruction
+}
+
+func (val *value) SetParent(ins Instruction) {
+	val.Parent = ins
+}
+
 // @-prefixed label for various definitions/declarations.  Note that the '@'
 // prefix is not part of the name and is only used by the parser.
 type GlobalLabelReference struct {
+	value
 	parseutil.StartEndPos
 
 	Label string
@@ -112,52 +182,15 @@ func (ref *GlobalLabelReference) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-// %-prefixed local register variable definition.  Note that the '%' prefix is
-// not part of the name and is only used by the parser.
-type RegisterDefinition struct {
-	parseutil.StartEndPos
-
-	Name string // require
-
-	Type Type // optional. Type is check/inferred during type checking
-
-	// Internal (set during ssa construction)
-	Parent  Instruction // nil for phi and func parameters
-	DefUses map[*RegisterReference]struct{}
-}
-
-var _ Node = &RegisterDefinition{}
-var _ Validator = &RegisterDefinition{}
-
-func (def *RegisterDefinition) Walk(visitor Visitor) {
-	visitor.Enter(def)
-	if def.Type != nil {
-		def.Type.Walk(visitor)
-	}
-	visitor.Exit(def)
-}
-
-func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
-	if def.Name == "" {
-		emitter.Emit(def.Loc(), "empty register definition name")
-	}
-}
-
-// Register, global label, or immediate
-type Value interface {
-	Node
-	isValue()
-}
-
 // %-prefixed local register variable reference.  Note that the '%' prefix is
 // not part of the name and is only used by the parser.
 type RegisterReference struct {
+	value
 	parseutil.StartEndPos
 
 	Name string // require
 
 	// Internal (set during ssa construction)
-	Parent Instruction // nil for phi
 	UseDef *RegisterDefinition
 }
 
@@ -178,6 +211,7 @@ func (ref *RegisterReference) Validate(emitter *parseutil.Emitter) {
 }
 
 type IntImmediate struct {
+	value
 	parseutil.StartEndPos
 
 	Value int64
@@ -191,6 +225,7 @@ func (imm *IntImmediate) Walk(visitor Visitor) {
 }
 
 type FloatImmediate struct {
+	value
 	parseutil.StartEndPos
 
 	Value float64

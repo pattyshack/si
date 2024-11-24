@@ -8,11 +8,14 @@ import (
 
 type ssaConstructor struct {
 	*parseutil.Emitter
+
+	liveOuts map[*ast.Block]map[string]*ast.RegisterDefinition
 }
 
 func ConstructSSA(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
 	return &ssaConstructor{
-		Emitter: emitter,
+		Emitter:  emitter,
+		liveOuts: map[*ast.Block]map[string]*ast.RegisterDefinition{},
 	}
 }
 
@@ -22,11 +25,11 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	defs := map[string]*ast.RegisterDefinition{}
+	initLiveIn := map[string]*ast.RegisterDefinition{}
 	for _, param := range funcDef.Parameters {
-		defs[param.Name] = param
+		initLiveIn[param.Name] = param
 	}
-	funcDef.Blocks[0].LiveIn = defs
+	constructor.liveOuts[funcDef.Blocks[0]] = initLiveIn
 
 	processed := map[*ast.Block]struct{}{}
 	queue := []*ast.Block{funcDef.Blocks[0]}
@@ -39,8 +42,8 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 			continue
 		}
 
-		constructor.processBlock(block)
-		constructor.updateChildrenPhis(block)
+		liveOut := constructor.processBlock(block)
+		constructor.populateChildrenPhis(block, liveOut)
 
 		for _, child := range block.Children {
 			queue = append(queue, child)
@@ -70,29 +73,27 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 	// TODO prune to minimal ssa form
 }
 
-func (constructor *ssaConstructor) processBlock(block *ast.Block) {
-	if block.LiveIn == nil { // i.e., have multiple parents
-		liveIn := map[string]*ast.RegisterDefinition{}
+func (constructor *ssaConstructor) processBlock(
+	block *ast.Block,
+) map[string]*ast.RegisterDefinition {
+	liveOut, ok := constructor.liveOuts[block]
+	if !ok {
+		liveOut = map[string]*ast.RegisterDefinition{}
 		for name, phi := range block.Phis {
-			liveIn[name] = phi.Dest
+			liveOut[name] = phi.Dest
 		}
-		block.LiveIn = liveIn
-	}
-
-	liveOut := map[string]*ast.RegisterDefinition{}
-	for name, def := range block.LiveIn {
-		liveOut[name] = def
 	}
 
 	for _, inst := range block.Instructions {
 		inst.SetParentBlock(block)
 		for _, src := range inst.Sources() {
+			src.SetParent(inst)
+
 			ref, ok := src.(*ast.RegisterReference)
 			if !ok {
 				continue
 			}
 
-			ref.Parent = inst
 			def, ok := liveOut[ref.Name]
 			if !ok {
 				constructor.Emit(
@@ -102,12 +103,7 @@ func (constructor *ssaConstructor) processBlock(block *ast.Block) {
 				continue
 			}
 
-			if def.DefUses == nil {
-				def.DefUses = map[*ast.RegisterReference]struct{}{}
-			}
-
-			def.DefUses[ref] = struct{}{}
-			ref.UseDef = def
+			def.AddRef(ref)
 		}
 
 		dest := inst.Destination()
@@ -119,49 +115,26 @@ func (constructor *ssaConstructor) processBlock(block *ast.Block) {
 		liveOut[dest.Name] = dest
 	}
 
-	if len(block.Children) != 0 { // nothing is live after terminal
-		block.LiveOut = liveOut
-	}
+	return liveOut
 }
 
-func (constructor *ssaConstructor) updateChildrenPhis(block *ast.Block) {
+func (constructor *ssaConstructor) populateChildrenPhis(
+	block *ast.Block,
+	liveOut map[string]*ast.RegisterDefinition,
+) {
 	for _, child := range block.Children {
 		if len(child.Parents) == 1 {
 			// Skip populating phis since there won't be any left after pruning
-			child.LiveIn = block.LiveOut
+			liveIn := make(map[string]*ast.RegisterDefinition, len(liveOut))
+			for name, def := range liveOut {
+				liveIn[name] = def
+			}
+			constructor.liveOuts[child] = liveIn
 			continue
 		}
 
-		if child.Phis == nil {
-			child.Phis = map[string]*ast.Phi{}
-		}
-
-		for _, def := range block.LiveOut {
-			pos := parseutil.NewStartEndPos(child.Loc(), child.Loc())
-			phi, ok := child.Phis[def.Name]
-			if !ok {
-				phi = &ast.Phi{
-					Dest: &ast.RegisterDefinition{
-						StartEndPos: pos,
-						Name:        def.Name,
-					},
-					Srcs: map[*ast.Block]ast.Value{},
-				}
-				child.Phis[def.Name] = phi
-			}
-
-			ref := &ast.RegisterReference{
-				StartEndPos: pos,
-				Name:        def.Name,
-				UseDef:      def,
-			}
-
-			if def.DefUses == nil {
-				def.DefUses = map[*ast.RegisterReference]struct{}{}
-			}
-
-			def.DefUses[ref] = struct{}{}
-			phi.Srcs[block] = ref
+		for _, def := range liveOut {
+			child.AddToPhis(block, def)
 		}
 	}
 }
