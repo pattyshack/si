@@ -40,6 +40,20 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	if len(def.Blocks) == 0 {
 		emitter.Emit(def.Loc(), "function definition must have at least one block")
 	}
+
+	names := map[string]*RegisterDefinition{}
+	for _, param := range def.Parameters {
+		prev, ok := names[param.Name]
+		if ok {
+			emitter.Emit(
+				param.Loc(),
+				"parameter (%s) previously defined at (%s)",
+				param.Name,
+				prev.Loc().ShortString())
+		} else {
+			names[param.Name] = param
+		}
+	}
 }
 
 // A straight-line / basic block
