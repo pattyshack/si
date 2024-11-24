@@ -38,3 +38,19 @@ define func @loop_factorial(%i I32) I32 {
 :"non-identifier-return-label!!!"
   ret %acc
 }
+
+define func @loop_factorial2(%i I32) I32 {
+  %acc = 1
+  %val = call @loop_factorial2_helper(%i, %acc)
+  ret %val
+}
+
+define func @loop_factorial2_helper(%i I32, %acc I32) I32 {
+:loop
+  jlt :end, %i, 2
+  %acc = mul %i, %acc
+  %i = sub %i, 1
+  jmp :loop
+:end
+  ret %acc
+}

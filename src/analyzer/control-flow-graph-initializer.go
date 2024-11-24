@@ -83,6 +83,19 @@ func (initializer *controlFlowGraphInitializer) Process(
 		child.Parents = append(child.Parents, block)
 	}
 
+	// Insert a pseudo entry block if the real entry block is also a loop header.
+	if len(def.Blocks[0].Parents) != 0 {
+		realBlock := def.Blocks[0]
+
+		entryBlock := &ast.Block{
+			StartEndPos: parseutil.NewStartEndPos(realBlock.Loc(), realBlock.Loc()),
+			Children:    []*ast.Block{realBlock},
+		}
+		realBlock.Parents = append([]*ast.Block{entryBlock}, realBlock.Parents...)
+
+		def.Blocks = append([]*ast.Block{entryBlock}, def.Blocks...)
+	}
+
 	initializer.checkForUnreachableBlocks(def)
 
 	// Add labels for internal debugging purpose
