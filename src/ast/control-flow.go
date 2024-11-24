@@ -27,6 +27,18 @@ type Jump struct {
 var _ Instruction = &Jump{}
 var _ Validator = &Jump{}
 
+func (Jump) replaceSource(Value, Value) {
+	panic("should never happen")
+}
+
+func (Jump) Sources() []Value {
+	return nil
+}
+
+func (Jump) Destination() *RegisterDefinition {
+	return nil
+}
+
 func (jump *Jump) Walk(visitor Visitor) {
 	visitor.Enter(jump)
 	visitor.Exit(jump)
@@ -66,8 +78,28 @@ type ConditionalJump struct {
 var _ Instruction = &ConditionalJump{}
 var _ Validator = &ConditionalJump{}
 
+func (jump *ConditionalJump) replaceSource(oldSrc Value, newSrc Value) {
+	replaceCount := 0
+	if jump.Src1 == oldSrc {
+		jump.Src1 = newSrc
+		replaceCount++
+	}
+	if jump.Src2 == oldSrc {
+		jump.Src2 = newSrc
+		replaceCount++
+	}
+
+	if replaceCount != 1 {
+		panic("should never happen")
+	}
+}
+
 func (jump *ConditionalJump) Sources() []Value {
 	return []Value{jump.Src1, jump.Src2}
+}
+
+func (ConditionalJump) Destination() *RegisterDefinition {
+	return nil
 }
 
 func (jump *ConditionalJump) Walk(visitor Visitor) {
@@ -109,8 +141,20 @@ type Terminal struct {
 var _ Instruction = &Terminal{}
 var _ Validator = &Terminal{}
 
+func (term *Terminal) replaceSource(oldSrc Value, newSrc Value) {
+	if term.Src != oldSrc {
+		panic("should never happen")
+	}
+
+	term.Src = newSrc
+}
+
 func (term *Terminal) Sources() []Value {
 	return []Value{term.Src}
+}
+
+func (Terminal) Destination() *RegisterDefinition {
+	return nil
 }
 
 func (term *Terminal) Walk(visitor Visitor) {

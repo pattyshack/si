@@ -70,7 +70,7 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		}
 	}
 
-	// TODO prune to minimal ssa form
+	constructor.prunePhis(funcDef.Blocks)
 }
 
 func (constructor *ssaConstructor) processBlock(
@@ -136,5 +136,60 @@ func (constructor *ssaConstructor) populateChildrenPhis(
 		for _, def := range liveOut {
 			child.AddToPhis(block, def)
 		}
+	}
+}
+
+func (constructor *ssaConstructor) prunePhis(blocks []*ast.Block) {
+	toCheck := map[*ast.Phi]struct{}{}
+	for _, block := range blocks {
+		for _, phi := range block.Phis {
+			toCheck[phi] = struct{}{}
+		}
+	}
+
+	for len(toCheck) > 0 {
+		// "pop" the first toCheck item
+
+		var phi *ast.Phi
+		for p, _ := range toCheck {
+			phi = p
+			break
+		}
+		delete(toCheck, phi)
+
+		// For xi = phi(x1, ... xn), if all x1 ..., xn are either xi or xj, replace
+		// xi with xj and delete phi
+
+		var value ast.Value
+		definitions := map[interface{}]struct{}{}
+		for _, src := range phi.Srcs {
+			def := src.Definition()
+
+			regDef, ok := def.(*ast.RegisterDefinition)
+			if ok && regDef == phi.Dest { // ignore self reference
+				continue
+			}
+
+			definitions[def] = struct{}{}
+			value = src
+		}
+
+		if len(definitions) == 0 {
+			panic("should never happen")
+		}
+
+		if len(definitions) != 1 {
+			continue
+		}
+
+		for ref, _ := range phi.Dest.DefUses {
+			otherPhi, ok := ref.Parent.(*ast.Phi)
+			if ok && otherPhi != phi {
+				// Removing the current phi may enable us to remove the otherPhi
+				toCheck[otherPhi] = struct{}{}
+			}
+		}
+		phi.Dest.ReplaceReferencesWith(value)
+		phi.Discard()
 	}
 }

@@ -116,13 +116,16 @@ func (block *Block) AddToPhis(parent *Block, def *RegisterDefinition) {
 
 	phi, ok := block.Phis[def.Name]
 	if !ok {
+		pos := parseutil.NewStartEndPos(block.Loc(), block.Loc())
 		phi = &Phi{
+			StartEndPos: pos,
 			Dest: &RegisterDefinition{
-				StartEndPos: parseutil.NewStartEndPos(block.Loc(), block.Loc()),
+				StartEndPos: pos,
 				Name:        def.Name,
 			},
 			Srcs: map[*Block]Value{},
 		}
+		phi.Parent = block
 		block.Phis[def.Name] = phi
 	}
 
@@ -142,6 +145,8 @@ type Phi struct {
 	Srcs map[*Block]Value
 }
 
+var _ Instruction = &Phi{}
+
 func (phi *Phi) Walk(visitor Visitor) {
 	visitor.Enter(phi)
 	phi.Dest.Walk(visitor)
@@ -149,6 +154,20 @@ func (phi *Phi) Walk(visitor Visitor) {
 		src.Walk(visitor)
 	}
 	visitor.Exit(phi)
+}
+
+func (phi *Phi) replaceSource(oldVal Value, newVal Value) {
+	replaceCount := 0
+	for block, src := range phi.Srcs {
+		if src == oldVal {
+			phi.Srcs[block] = newVal
+			replaceCount++
+		}
+	}
+
+	if replaceCount != 1 {
+		panic("should never happen")
+	}
 }
 
 func (phi *Phi) Sources() []Value {
@@ -167,4 +186,11 @@ func (phi *Phi) Add(parent *Block, def *RegisterDefinition) {
 	ref := def.NewRef(phi.StartEnd())
 	ref.SetParent(phi)
 	phi.Srcs[parent] = ref
+}
+
+func (phi *Phi) Discard() {
+	delete(phi.Parent.Phis, phi.Dest.Name)
+	for _, src := range phi.Srcs {
+		src.Discard()
+	}
 }

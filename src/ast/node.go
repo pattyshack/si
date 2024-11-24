@@ -29,6 +29,9 @@ type Instruction interface {
 	ParentBlock() *Block
 	SetParentBlock(*Block)
 
+	// NOTE: caller is responsible for copying newSrc and discarding oldSrc.
+	replaceSource(oldSrc Value, newSrc Value)
+
 	Sources() []Value                 // empty if there are no src dependencies
 	Destination() *RegisterDefinition // nil if instruction has no destination
 }
@@ -46,14 +49,6 @@ func (ins *instruction) ParentBlock() *Block {
 
 func (ins *instruction) SetParentBlock(block *Block) {
 	ins.Parent = block
-}
-
-func (instruction) Sources() []Value {
-	return nil
-}
-
-func (instruction) Destination() *RegisterDefinition {
-	return nil
 }
 
 type ControlFlowInstruction interface {
@@ -98,13 +93,18 @@ type RegisterDefinition struct {
 	Type Type // optional. Type is check/inferred during type checking
 
 	// Internal (set during ssa construction)
-	Parent        Instruction // nil for phi and func parameters
-	DefUses       map[*RegisterReference]struct{}
-	LiveInOutUses map[*Block]struct{}
+	Parent  Instruction // nil for phi and func parameters
+	DefUses map[*RegisterReference]struct{}
 }
 
 var _ Node = &RegisterDefinition{}
 var _ Validator = &RegisterDefinition{}
+
+func (def *RegisterDefinition) ReplaceReferencesWith(value Value) {
+	for ref, _ := range def.DefUses {
+		ref.ReplaceWith(value)
+	}
+}
 
 func (def *RegisterDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
@@ -145,12 +145,30 @@ type Value interface {
 	Node
 	isValue()
 
+	// What this reference refers to.  For now:
+	// - register reference returns a *RegisterDefinition
+	// - global label reference returns a string
+	// - immediate returns an int / float
+	Definition() interface{}
+
+	// NOTE: A copy of newVal, not newVal itself, is used to replace the
+	// original value (current object).  The current object is discarded as part
+	// of this call.
+	ReplaceWith(newVal Value)
+
+	Copy(pos parseutil.StartEndPos) Value
+	Discard() // clear graph node references
+
 	SetParent(Instruction)
 }
 
 type value struct {
 	// Internal (set during ssa construction)
 	Parent Instruction
+}
+
+func (val *value) Discard() {
+	val.Parent = nil
 }
 
 func (val *value) SetParent(ins Instruction) {
@@ -168,8 +186,26 @@ type GlobalLabelReference struct {
 
 var _ Node = &GlobalLabelReference{}
 var _ Validator = &GlobalLabelReference{}
+var _ Value = &GlobalLabelReference{}
 
 func (GlobalLabelReference) isValue() {}
+
+func (ref *GlobalLabelReference) Definition() interface{} {
+	return ref.Label
+}
+
+func (ref *GlobalLabelReference) ReplaceWith(newVal Value) {
+	newVal = newVal.Copy(ref.StartEnd())
+	newVal.SetParent(ref.Parent)
+	ref.Parent.replaceSource(ref, newVal)
+	ref.Discard()
+}
+
+func (ref *GlobalLabelReference) Copy(pos parseutil.StartEndPos) Value {
+	copied := *ref
+	copied.StartEndPos = pos
+	return &copied
+}
 
 func (ref *GlobalLabelReference) Walk(visitor Visitor) {
 	visitor.Enter(ref)
@@ -196,8 +232,30 @@ type RegisterReference struct {
 
 var _ Node = &RegisterReference{}
 var _ Validator = &RegisterReference{}
+var _ Value = &RegisterReference{}
 
 func (RegisterReference) isValue() {}
+
+func (ref *RegisterReference) Definition() interface{} {
+	return ref.UseDef
+}
+
+func (ref *RegisterReference) ReplaceWith(newVal Value) {
+	newVal = newVal.Copy(ref.StartEnd())
+	newVal.SetParent(ref.Parent)
+	ref.Parent.replaceSource(ref, newVal)
+	ref.Discard()
+}
+
+func (ref *RegisterReference) Copy(pos parseutil.StartEndPos) Value {
+	return ref.UseDef.NewRef(pos)
+}
+
+func (ref *RegisterReference) Discard() {
+	delete(ref.UseDef.DefUses, ref)
+	ref.UseDef = nil
+	ref.Parent = nil
+}
 
 func (ref *RegisterReference) Walk(visitor Visitor) {
 	visitor.Enter(ref)
@@ -217,7 +275,26 @@ type IntImmediate struct {
 	Value int64
 }
 
+var _ Value = &IntImmediate{}
+
 func (IntImmediate) isValue() {}
+
+func (imm *IntImmediate) Definition() interface{} {
+	return imm.Value
+}
+
+func (imm *IntImmediate) ReplaceWith(newVal Value) {
+	newVal = newVal.Copy(imm.StartEnd())
+	newVal.SetParent(imm.Parent)
+	imm.Parent.replaceSource(imm, newVal)
+	imm.Discard()
+}
+
+func (imm *IntImmediate) Copy(pos parseutil.StartEndPos) Value {
+	copied := *imm
+	copied.StartEndPos = pos
+	return &copied
+}
 
 func (imm *IntImmediate) Walk(visitor Visitor) {
 	visitor.Enter(imm)
@@ -231,7 +308,26 @@ type FloatImmediate struct {
 	Value float64
 }
 
+var _ Value = &FloatImmediate{}
+
 func (FloatImmediate) isValue() {}
+
+func (imm *FloatImmediate) Definition() interface{} {
+	return imm.Value
+}
+
+func (imm *FloatImmediate) ReplaceWith(newVal Value) {
+	newVal = newVal.Copy(imm.StartEnd())
+	newVal.SetParent(imm.Parent)
+	imm.Parent.replaceSource(imm, newVal)
+	imm.Discard()
+}
+
+func (imm *FloatImmediate) Copy(pos parseutil.StartEndPos) Value {
+	copied := *imm
+	copied.StartEndPos = pos
+	return &copied
+}
 
 func (imm *FloatImmediate) Walk(visitor Visitor) {
 	visitor.Enter(imm)

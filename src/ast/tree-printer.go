@@ -119,25 +119,31 @@ func (printer *treePrinter) Enter(n Node) {
 		}
 		printer.write("\n%sDefUses:", printer.indent)
 		for ref, _ := range node.DefUses {
-			parent := "(ins)"
-			if ref.Parent == nil {
-				parent = "(phi)"
+			parent := ""
+			if ref.Parent != nil {
+				parent = "(ins)"
+				_, ok := ref.Parent.(*Phi)
+				if ok {
+					parent = "(phi)"
+				}
 			}
 			printer.write("\n%s  %s: %s", printer.indent, parent, ref.Loc())
 		}
 	case *RegisterReference:
 		printer.write("[RegisterReference: Name=%s Loc=%s", node.Name, node.Loc())
 		printer.push()
-		label := "(nil)"
+		parent := "(nil)"
 		if node.UseDef != nil {
 			if node.UseDef.Parent != nil {
-				label = "(ins) "
-			} else {
-				label = "(phi) "
+				parent = "(ins) "
+				_, ok := node.UseDef.Parent.(*Phi)
+				if ok {
+					parent = "(phi) "
+				}
 			}
-			label += node.UseDef.Loc().String()
+			parent += node.UseDef.Loc().String()
 		}
-		printer.write("\n%sUseDef: %s", printer.indent, label)
+		printer.write("\n%sUseDef: %s", printer.indent, parent)
 	case *GlobalLabelReference:
 		printer.write("[GlobalLabelReference: Label=%s]", node.Label)
 	case *IntImmediate:
@@ -152,7 +158,7 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[UnaryOperation: Kind=%s", node.Kind)
 		printer.push("Dest=", "Src=")
 	case *BinaryOperation:
-		printer.write("[BinnaryOperation: Kind=%s", node.Kind)
+		printer.write("[BinaryOperation: Kind=%s", node.Kind)
 		printer.push("Dest=", "Src1=", "Src2=")
 	case *FuncCall:
 		printer.list(

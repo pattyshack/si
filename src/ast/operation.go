@@ -15,6 +15,14 @@ type AssignOperation struct {
 
 var _ Instruction = &AssignOperation{}
 
+func (assign *AssignOperation) replaceSource(oldVal Value, newVal Value) {
+	if assign.Src != oldVal {
+		panic("should never happen")
+	}
+
+	assign.Src = newVal
+}
+
 func (assign *AssignOperation) Sources() []Value {
 	return []Value{assign.Src}
 }
@@ -51,6 +59,14 @@ type UnaryOperation struct {
 
 var _ Instruction = &UnaryOperation{}
 var _ Validator = &UnaryOperation{}
+
+func (unary *UnaryOperation) replaceSource(oldVal Value, newVal Value) {
+	if unary.Src != oldVal {
+		panic("should never happen")
+	}
+
+	unary.Src = newVal
+}
 
 func (unary *UnaryOperation) Sources() []Value {
 	return []Value{unary.Src}
@@ -109,6 +125,22 @@ type BinaryOperation struct {
 var _ Instruction = &BinaryOperation{}
 var _ Validator = &BinaryOperation{}
 
+func (binary *BinaryOperation) replaceSource(oldVal Value, newVal Value) {
+	replaceCount := 0
+	if binary.Src1 == oldVal {
+		binary.Src1 = newVal
+		replaceCount++
+	}
+	if binary.Src2 == oldVal {
+		binary.Src2 = newVal
+		replaceCount++
+	}
+
+	if replaceCount != 1 {
+		panic("should never happen")
+	}
+}
+
 func (binary *BinaryOperation) Sources() []Value {
 	return []Value{binary.Src1, binary.Src2}
 }
@@ -158,6 +190,20 @@ type FuncCall struct {
 
 var _ Instruction = &FuncCall{}
 var _ Validator = &FuncCall{}
+
+func (call *FuncCall) replaceSource(oldVal Value, newVal Value) {
+	replaceCount := 0
+	for idx, src := range call.Srcs {
+		if src == oldVal {
+			call.Srcs[idx] = newVal
+			replaceCount++
+		}
+	}
+
+	if replaceCount != 1 {
+		panic("should never happen")
+	}
+}
 
 func (call *FuncCall) Sources() []Value {
 	return call.Srcs
