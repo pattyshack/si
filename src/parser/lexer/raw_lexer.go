@@ -17,9 +17,8 @@ const (
 
 var (
 	keywords = map[string]lr.SymbolId{
-		"define":  lr.DefineToken,
-		"declare": lr.DeclareToken,
-		"func":    lr.FuncToken,
+		"define": lr.DefineToken,
+		"func":   lr.FuncToken,
 	}
 )
 

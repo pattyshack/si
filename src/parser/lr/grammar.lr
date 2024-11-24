@@ -3,7 +3,7 @@
 
 %token<Value> LPAREN RPAREN LBRACE RBRACE COMMA COLON AT PERCENT EQUAL
 
-%token<Value> DEFINE DECLARE
+%token<Value> DEFINE
 %token<Value> FUNC
 
 // NOTE: we'll parse each line individually, then fold statements/rbrace into
@@ -11,16 +11,11 @@
 %start line
 
 line<Line> ->
-  = declaration |
   = definition |
   = rbrace |
   = local_label |
   = operation_instruction |
   = control_flow_instruction
-
-declaration<Line> ->
-  func: DECLARE FUNC global_label LPAREN types RPAREN type |
-  data: DECLARE global_label type
 
 
 // NOTE: for simplicity, a function must always return a type (XXX: maybe

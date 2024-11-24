@@ -4,45 +4,6 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
-type DeclarationKind string
-
-const (
-	DataDeclaration = DeclarationKind("data")
-	FuncDeclaration = DeclarationKind("func")
-)
-
-type Declaration struct {
-	sourceEntry
-
-	parseutil.StartEndPos
-
-	Kind DeclarationKind
-
-	Label string
-	Type  Type
-}
-
-var _ SourceEntry = &Declaration{}
-var _ Validator = &Declaration{}
-
-func (decl *Declaration) Walk(visitor Visitor) {
-	visitor.Enter(decl)
-	decl.Type.Walk(visitor)
-	visitor.Exit(decl)
-}
-
-func (decl *Declaration) Validate(emitter *parseutil.Emitter) {
-	switch decl.Kind {
-	case DataDeclaration, FuncDeclaration: // ok
-	default:
-		emitter.Emit(decl.Loc(), "unexpected declaration kind (%s)", decl.Kind)
-	}
-
-	if decl.Label == "" {
-		emitter.Emit(decl.Loc(), "empty label string")
-	}
-}
-
 type FuncDefinition struct {
 	sourceEntry
 

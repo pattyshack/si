@@ -13,45 +13,6 @@ type Reducer struct{}
 
 var _ lr.Reducer = Reducer{}
 
-func (Reducer) DataToDeclaration(
-	declare *lr.TokenValue,
-	label *ast.GlobalLabelReference,
-	typeExpr ast.Type,
-) (
-	ast.Line,
-	error,
-) {
-	return &ast.Declaration{
-		StartEndPos: parseutil.NewStartEndPos(declare.Loc(), typeExpr.End()),
-		Kind:        ast.DataDeclaration,
-		Label:       label.Label,
-		Type:        typeExpr,
-	}, nil
-}
-
-func (Reducer) FuncToDeclaration(
-	declare *lr.TokenValue,
-	funcKW *lr.TokenValue,
-	label *ast.GlobalLabelReference,
-	lparen *lr.TokenValue,
-	parameters []ast.Type,
-	rparen *lr.TokenValue,
-	retType ast.Type,
-) (
-	ast.Line,
-	error,
-) {
-	return &ast.Declaration{
-		StartEndPos: parseutil.NewStartEndPos(declare.Loc(), retType.End()),
-		Kind:        ast.FuncDeclaration,
-		Label:       label.Label,
-		Type: ast.FunctionType{
-			ParameterTypes: parameters,
-			ReturnType:     retType,
-		},
-	}, nil
-}
-
 func (Reducer) FuncToDefinition(
 	define *lr.TokenValue,
 	funcKW *lr.TokenValue,

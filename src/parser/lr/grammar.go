@@ -26,158 +26,148 @@ const (
 	PercentToken        = SymbolId(267)
 	EqualToken          = SymbolId(268)
 	DefineToken         = SymbolId(269)
-	DeclareToken        = SymbolId(270)
-	FuncToken           = SymbolId(271)
+	FuncToken           = SymbolId(270)
 )
 
-type DeclarationReducer interface {
-	// 22:2: declaration -> func: ...
-	FuncToDeclaration(Declare_ *TokenValue, Func_ *TokenValue, GlobalLabel_ *ast.GlobalLabelReference, Lparen_ *TokenValue, Types_ []ast.Type, Rparen_ *TokenValue, Type_ ast.Type) (ast.Line, error)
-
-	// 23:2: declaration -> data: ...
-	DataToDeclaration(Declare_ *TokenValue, GlobalLabel_ *ast.GlobalLabelReference, Type_ ast.Type) (ast.Line, error)
-}
-
 type DefinitionReducer interface {
-	// 29:2: definition -> func: ...
+	// 24:2: definition -> func: ...
 	FuncToDefinition(Define_ *TokenValue, Func_ *TokenValue, GlobalLabel_ *ast.GlobalLabelReference, Lparen_ *TokenValue, Parameters_ []*ast.RegisterDefinition, Rparen_ *TokenValue, Type_ ast.Type, Lbrace_ *TokenValue) (ast.Line, error)
 }
 
 type RbraceReducer interface {
-	// 31:16: rbrace -> ...
+	// 26:16: rbrace -> ...
 	ToRbrace(Rbrace_ *TokenValue) (ast.Line, error)
 }
 
 type GlobalLabelReducer interface {
-	// 37:38: global_label -> ...
+	// 32:38: global_label -> ...
 	ToGlobalLabel(At_ *TokenValue, Identifier_ *TokenValue) (*ast.GlobalLabelReference, error)
 }
 
 type LocalLabelReducer interface {
-	// 39:27: local_label -> ...
+	// 34:27: local_label -> ...
 	ToLocalLabel(Colon_ *TokenValue, Identifier_ *TokenValue) (ParsedLocalLabel, error)
 }
 
 type RegisterReferenceReducer interface {
-	// 41:41: register_reference -> ...
+	// 36:41: register_reference -> ...
 	ToRegisterReference(Percent_ *TokenValue, Identifier_ *TokenValue) (*ast.RegisterReference, error)
 }
 
 type IdentifierReducer interface {
 
-	// 45:2: identifier -> string: ...
+	// 40:2: identifier -> string: ...
 	StringToIdentifier(StringLiteral_ *TokenValue) (*TokenValue, error)
 }
 
 type IntImmediateReducer interface {
-	// 51:26: int_immediate -> ...
+	// 46:26: int_immediate -> ...
 	ToIntImmediate(IntegerLiteral_ *TokenValue) (ast.Value, error)
 }
 
 type FloatImmediateReducer interface {
-	// 53:28: float_immediate -> ...
+	// 48:28: float_immediate -> ...
 	ToFloatImmediate(FloatLiteral_ *TokenValue) (ast.Value, error)
 }
 
 type TypedRegisterDefinitionReducer interface {
-	// 55:49: typed_register_definition -> ...
+	// 50:49: typed_register_definition -> ...
 	ToTypedRegisterDefinition(RegisterReference_ *ast.RegisterReference, Type_ ast.Type) (*ast.RegisterDefinition, error)
 }
 
 type RegisterDefinitionReducer interface {
 
-	// 59:2: register_definition -> inferred: ...
+	// 54:2: register_definition -> inferred: ...
 	InferredToRegisterDefinition(RegisterReference_ *ast.RegisterReference) (*ast.RegisterDefinition, error)
 }
 
 type ParametersReducer interface {
 
-	// 72:2: parameters -> improper: ...
+	// 67:2: parameters -> improper: ...
 	ImproperToParameters(ProperParameters_ []*ast.RegisterDefinition, Comma_ *TokenValue) ([]*ast.RegisterDefinition, error)
 
-	// 73:2: parameters -> nil: ...
+	// 68:2: parameters -> nil: ...
 	NilToParameters() ([]*ast.RegisterDefinition, error)
 }
 
 type ProperParametersReducer interface {
-	// 76:2: proper_parameters -> add: ...
+	// 71:2: proper_parameters -> add: ...
 	AddToProperParameters(ProperParameters_ []*ast.RegisterDefinition, Comma_ *TokenValue, TypedRegisterDefinition_ *ast.RegisterDefinition) ([]*ast.RegisterDefinition, error)
 
-	// 77:2: proper_parameters -> new: ...
+	// 72:2: proper_parameters -> new: ...
 	NewToProperParameters(TypedRegisterDefinition_ *ast.RegisterDefinition) ([]*ast.RegisterDefinition, error)
 }
 
 type ArgumentsReducer interface {
 
-	// 81:2: arguments -> improper: ...
+	// 76:2: arguments -> improper: ...
 	ImproperToArguments(ProperArguments_ []ast.Value, Comma_ *TokenValue) ([]ast.Value, error)
 
-	// 82:2: arguments -> nil: ...
+	// 77:2: arguments -> nil: ...
 	NilToArguments() ([]ast.Value, error)
 }
 
 type ProperArgumentsReducer interface {
-	// 85:2: proper_arguments -> add: ...
+	// 80:2: proper_arguments -> add: ...
 	AddToProperArguments(ProperArguments_ []ast.Value, Comma_ *TokenValue, Value_ ast.Value) ([]ast.Value, error)
 
-	// 86:2: proper_arguments -> new: ...
+	// 81:2: proper_arguments -> new: ...
 	NewToProperArguments(Value_ ast.Value) ([]ast.Value, error)
 }
 
 type TypesReducer interface {
 
-	// 90:2: types -> improper: ...
+	// 85:2: types -> improper: ...
 	ImproperToTypes(ProperTypes_ []ast.Type, Comma_ *TokenValue) ([]ast.Type, error)
 
-	// 91:2: types -> nil: ...
+	// 86:2: types -> nil: ...
 	NilToTypes() ([]ast.Type, error)
 }
 
 type ProperTypesReducer interface {
-	// 94:2: proper_types -> add: ...
+	// 89:2: proper_types -> add: ...
 	AddToProperTypes(ProperTypes_ []ast.Type, Comma_ *TokenValue, Type_ ast.Type) ([]ast.Type, error)
 
-	// 95:2: proper_types -> new: ...
+	// 90:2: proper_types -> new: ...
 	NewToProperTypes(Type_ ast.Type) ([]ast.Type, error)
 }
 
 type OperationInstructionReducer interface {
-	// 102:2: operation_instruction -> assign: ...
+	// 97:2: operation_instruction -> assign: ...
 	AssignToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Value_ ast.Value) (ast.Instruction, error)
 
-	// 103:2: operation_instruction -> unary: ...
+	// 98:2: operation_instruction -> unary: ...
 	UnaryToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value) (ast.Instruction, error)
 
-	// 104:2: operation_instruction -> binary: ...
+	// 99:2: operation_instruction -> binary: ...
 	BinaryToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value, Comma_ *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
-	// 105:2: operation_instruction -> call: ...
+	// 100:2: operation_instruction -> call: ...
 	CallToOperationInstruction(RegisterDefinition_ *ast.RegisterDefinition, Equal_ *TokenValue, Identifier_ *TokenValue, Value_ ast.Value, Lparen_ *TokenValue, Arguments_ []ast.Value, Rparen_ *TokenValue) (ast.Instruction, error)
 }
 
 type ControlFlowInstructionReducer interface {
-	// 108:2: control_flow_instruction -> unconditional: ...
+	// 103:2: control_flow_instruction -> unconditional: ...
 	UnconditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel) (ast.Instruction, error)
 
-	// 109:2: control_flow_instruction -> conditional: ...
+	// 104:2: control_flow_instruction -> conditional: ...
 	ConditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel, Comma_ *TokenValue, Value_ ast.Value, Comma_2 *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
-	// 110:2: control_flow_instruction -> terminate: ...
+	// 105:2: control_flow_instruction -> terminate: ...
 	TerminateToControlFlowInstruction(Identifier_ *TokenValue, ProperArguments_ []ast.Value) (ast.Instruction, error)
 }
 
 type NumberTypeReducer interface {
-	// 121:21: number_type -> ...
+	// 116:21: number_type -> ...
 	ToNumberType(Identifier_ *TokenValue) (ast.Type, error)
 }
 
 type FuncTypeReducer interface {
-	// 123:19: func_type -> ...
+	// 118:19: func_type -> ...
 	ToFuncType(Func_ *TokenValue, Lparen_ *TokenValue, Types_ []ast.Type, Rparen_ *TokenValue, Type_ ast.Type) (ast.Type, error)
 }
 
 type Reducer interface {
-	DeclarationReducer
 	DefinitionReducer
 	RbraceReducer
 	GlobalLabelReducer
@@ -217,66 +207,54 @@ func (DefaultParseErrorHandler) Error(nextToken parseutil.Token[SymbolId], stack
 func ExpectedTerminals(id _StateId) []SymbolId {
 	switch id {
 	case _State1:
-		return []SymbolId{IdentifierToken, RbraceToken, ColonToken, PercentToken, DefineToken, DeclareToken}
+		return []SymbolId{IdentifierToken, RbraceToken, ColonToken, PercentToken, DefineToken}
 	case _State2:
 		return []SymbolId{_EndMarker}
 	case _State3:
 		return []SymbolId{StringLiteralToken, IdentifierToken}
 	case _State4:
-		return []SymbolId{AtToken, FuncToken}
-	case _State5:
 		return []SymbolId{FuncToken}
-	case _State6:
+	case _State5:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, ColonToken, AtToken, PercentToken}
-	case _State7:
+	case _State6:
 		return []SymbolId{StringLiteralToken, IdentifierToken}
-	case _State8:
+	case _State7:
 		return []SymbolId{EqualToken}
+	case _State9:
+		return []SymbolId{AtToken}
 	case _State10:
 		return []SymbolId{StringLiteralToken, IdentifierToken}
-	case _State11:
-		return []SymbolId{AtToken}
-	case _State12:
-		return []SymbolId{IdentifierToken, FuncToken}
 	case _State13:
-		return []SymbolId{AtToken}
-	case _State16:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, IdentifierToken, AtToken, PercentToken}
+	case _State14:
+		return []SymbolId{LparenToken}
+	case _State15:
+		return []SymbolId{LparenToken}
+	case _State16:
+		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State17:
-		return []SymbolId{LparenToken}
+		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State18:
-		return []SymbolId{LparenToken}
-	case _State19:
-		return []SymbolId{LparenToken}
-	case _State20:
 		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State21:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State22:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State26:
 		return []SymbolId{CommaToken}
+	case _State24:
+		return []SymbolId{RparenToken}
+	case _State25:
+		return []SymbolId{RparenToken}
+	case _State27:
+		return []SymbolId{IdentifierToken, FuncToken}
+	case _State28:
+		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State29:
-		return []SymbolId{RparenToken}
-	case _State30:
-		return []SymbolId{RparenToken}
-	case _State31:
-		return []SymbolId{RparenToken}
+		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
+	case _State32:
+		return []SymbolId{IdentifierToken, FuncToken}
 	case _State33:
 		return []SymbolId{IdentifierToken, FuncToken}
-	case _State34:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
 	case _State35:
-		return []SymbolId{IntegerLiteralToken, FloatLiteralToken, AtToken, PercentToken}
-	case _State38:
-		return []SymbolId{IdentifierToken, FuncToken}
-	case _State39:
-		return []SymbolId{IdentifierToken, FuncToken}
-	case _State40:
-		return []SymbolId{IdentifierToken, FuncToken}
-	case _State42:
 		return []SymbolId{RparenToken}
-	case _State44:
+	case _State37:
 		return []SymbolId{LbraceToken}
 	}
 
@@ -421,14 +399,10 @@ func (i SymbolId) String() string {
 		return "EQUAL"
 	case DefineToken:
 		return "DEFINE"
-	case DeclareToken:
-		return "DECLARE"
 	case FuncToken:
 		return "FUNC"
 	case LineType:
 		return "line"
-	case DeclarationType:
-		return "declaration"
 	case DefinitionType:
 		return "definition"
 	case RbraceType:
@@ -484,31 +458,30 @@ const (
 	_EndMarker      = SymbolId(0)
 	_WildcardMarker = SymbolId(-1)
 
-	LineType                    = SymbolId(272)
-	DeclarationType             = SymbolId(273)
-	DefinitionType              = SymbolId(274)
-	RbraceType                  = SymbolId(275)
-	GlobalLabelType             = SymbolId(276)
-	LocalLabelType              = SymbolId(277)
-	RegisterReferenceType       = SymbolId(278)
-	IdentifierType              = SymbolId(279)
-	ImmediateType               = SymbolId(280)
-	IntImmediateType            = SymbolId(281)
-	FloatImmediateType          = SymbolId(282)
-	TypedRegisterDefinitionType = SymbolId(283)
-	RegisterDefinitionType      = SymbolId(284)
-	ValueType                   = SymbolId(285)
-	ParametersType              = SymbolId(286)
-	ProperParametersType        = SymbolId(287)
-	ArgumentsType               = SymbolId(288)
-	ProperArgumentsType         = SymbolId(289)
-	TypesType                   = SymbolId(290)
-	ProperTypesType             = SymbolId(291)
-	OperationInstructionType    = SymbolId(292)
-	ControlFlowInstructionType  = SymbolId(293)
-	TypeType                    = SymbolId(294)
-	NumberTypeType              = SymbolId(295)
-	FuncTypeType                = SymbolId(296)
+	LineType                    = SymbolId(271)
+	DefinitionType              = SymbolId(272)
+	RbraceType                  = SymbolId(273)
+	GlobalLabelType             = SymbolId(274)
+	LocalLabelType              = SymbolId(275)
+	RegisterReferenceType       = SymbolId(276)
+	IdentifierType              = SymbolId(277)
+	ImmediateType               = SymbolId(278)
+	IntImmediateType            = SymbolId(279)
+	FloatImmediateType          = SymbolId(280)
+	TypedRegisterDefinitionType = SymbolId(281)
+	RegisterDefinitionType      = SymbolId(282)
+	ValueType                   = SymbolId(283)
+	ParametersType              = SymbolId(284)
+	ProperParametersType        = SymbolId(285)
+	ArgumentsType               = SymbolId(286)
+	ProperArgumentsType         = SymbolId(287)
+	TypesType                   = SymbolId(288)
+	ProperTypesType             = SymbolId(289)
+	OperationInstructionType    = SymbolId(290)
+	ControlFlowInstructionType  = SymbolId(291)
+	TypeType                    = SymbolId(292)
+	NumberTypeType              = SymbolId(293)
+	FuncTypeType                = SymbolId(294)
 )
 
 type _ActionType int
@@ -539,63 +512,58 @@ func (i _ActionType) String() string {
 type _ReduceType int
 
 const (
-	_ReduceDeclarationToLine                           = _ReduceType(1)
-	_ReduceDefinitionToLine                            = _ReduceType(2)
-	_ReduceRbraceToLine                                = _ReduceType(3)
-	_ReduceLocalLabelToLine                            = _ReduceType(4)
-	_ReduceOperationInstructionToLine                  = _ReduceType(5)
-	_ReduceControlFlowInstructionToLine                = _ReduceType(6)
-	_ReduceFuncToDeclaration                           = _ReduceType(7)
-	_ReduceDataToDeclaration                           = _ReduceType(8)
-	_ReduceFuncToDefinition                            = _ReduceType(9)
-	_ReduceToRbrace                                    = _ReduceType(10)
-	_ReduceToGlobalLabel                               = _ReduceType(11)
-	_ReduceToLocalLabel                                = _ReduceType(12)
-	_ReduceToRegisterReference                         = _ReduceType(13)
-	_ReduceIdentifierToIdentifier                      = _ReduceType(14)
-	_ReduceStringToIdentifier                          = _ReduceType(15)
-	_ReduceIntImmediateToImmediate                     = _ReduceType(16)
-	_ReduceFloatImmediateToImmediate                   = _ReduceType(17)
-	_ReduceToIntImmediate                              = _ReduceType(18)
-	_ReduceToFloatImmediate                            = _ReduceType(19)
-	_ReduceToTypedRegisterDefinition                   = _ReduceType(20)
-	_ReduceTypedRegisterDefinitionToRegisterDefinition = _ReduceType(21)
-	_ReduceInferredToRegisterDefinition                = _ReduceType(22)
-	_ReduceRegisterReferenceToValue                    = _ReduceType(23)
-	_ReduceGlobalLabelToValue                          = _ReduceType(24)
-	_ReduceImmediateToValue                            = _ReduceType(25)
-	_ReduceProperParametersToParameters                = _ReduceType(26)
-	_ReduceImproperToParameters                        = _ReduceType(27)
-	_ReduceNilToParameters                             = _ReduceType(28)
-	_ReduceAddToProperParameters                       = _ReduceType(29)
-	_ReduceNewToProperParameters                       = _ReduceType(30)
-	_ReduceProperArgumentsToArguments                  = _ReduceType(31)
-	_ReduceImproperToArguments                         = _ReduceType(32)
-	_ReduceNilToArguments                              = _ReduceType(33)
-	_ReduceAddToProperArguments                        = _ReduceType(34)
-	_ReduceNewToProperArguments                        = _ReduceType(35)
-	_ReduceProperTypesToTypes                          = _ReduceType(36)
-	_ReduceImproperToTypes                             = _ReduceType(37)
-	_ReduceNilToTypes                                  = _ReduceType(38)
-	_ReduceAddToProperTypes                            = _ReduceType(39)
-	_ReduceNewToProperTypes                            = _ReduceType(40)
-	_ReduceAssignToOperationInstruction                = _ReduceType(41)
-	_ReduceUnaryToOperationInstruction                 = _ReduceType(42)
-	_ReduceBinaryToOperationInstruction                = _ReduceType(43)
-	_ReduceCallToOperationInstruction                  = _ReduceType(44)
-	_ReduceUnconditionalToControlFlowInstruction       = _ReduceType(45)
-	_ReduceConditionalToControlFlowInstruction         = _ReduceType(46)
-	_ReduceTerminateToControlFlowInstruction           = _ReduceType(47)
-	_ReduceNumberTypeToType                            = _ReduceType(48)
-	_ReduceFuncTypeToType                              = _ReduceType(49)
-	_ReduceToNumberType                                = _ReduceType(50)
-	_ReduceToFuncType                                  = _ReduceType(51)
+	_ReduceDefinitionToLine                            = _ReduceType(1)
+	_ReduceRbraceToLine                                = _ReduceType(2)
+	_ReduceLocalLabelToLine                            = _ReduceType(3)
+	_ReduceOperationInstructionToLine                  = _ReduceType(4)
+	_ReduceControlFlowInstructionToLine                = _ReduceType(5)
+	_ReduceFuncToDefinition                            = _ReduceType(6)
+	_ReduceToRbrace                                    = _ReduceType(7)
+	_ReduceToGlobalLabel                               = _ReduceType(8)
+	_ReduceToLocalLabel                                = _ReduceType(9)
+	_ReduceToRegisterReference                         = _ReduceType(10)
+	_ReduceIdentifierToIdentifier                      = _ReduceType(11)
+	_ReduceStringToIdentifier                          = _ReduceType(12)
+	_ReduceIntImmediateToImmediate                     = _ReduceType(13)
+	_ReduceFloatImmediateToImmediate                   = _ReduceType(14)
+	_ReduceToIntImmediate                              = _ReduceType(15)
+	_ReduceToFloatImmediate                            = _ReduceType(16)
+	_ReduceToTypedRegisterDefinition                   = _ReduceType(17)
+	_ReduceTypedRegisterDefinitionToRegisterDefinition = _ReduceType(18)
+	_ReduceInferredToRegisterDefinition                = _ReduceType(19)
+	_ReduceRegisterReferenceToValue                    = _ReduceType(20)
+	_ReduceGlobalLabelToValue                          = _ReduceType(21)
+	_ReduceImmediateToValue                            = _ReduceType(22)
+	_ReduceProperParametersToParameters                = _ReduceType(23)
+	_ReduceImproperToParameters                        = _ReduceType(24)
+	_ReduceNilToParameters                             = _ReduceType(25)
+	_ReduceAddToProperParameters                       = _ReduceType(26)
+	_ReduceNewToProperParameters                       = _ReduceType(27)
+	_ReduceProperArgumentsToArguments                  = _ReduceType(28)
+	_ReduceImproperToArguments                         = _ReduceType(29)
+	_ReduceNilToArguments                              = _ReduceType(30)
+	_ReduceAddToProperArguments                        = _ReduceType(31)
+	_ReduceNewToProperArguments                        = _ReduceType(32)
+	_ReduceProperTypesToTypes                          = _ReduceType(33)
+	_ReduceImproperToTypes                             = _ReduceType(34)
+	_ReduceNilToTypes                                  = _ReduceType(35)
+	_ReduceAddToProperTypes                            = _ReduceType(36)
+	_ReduceNewToProperTypes                            = _ReduceType(37)
+	_ReduceAssignToOperationInstruction                = _ReduceType(38)
+	_ReduceUnaryToOperationInstruction                 = _ReduceType(39)
+	_ReduceBinaryToOperationInstruction                = _ReduceType(40)
+	_ReduceCallToOperationInstruction                  = _ReduceType(41)
+	_ReduceUnconditionalToControlFlowInstruction       = _ReduceType(42)
+	_ReduceConditionalToControlFlowInstruction         = _ReduceType(43)
+	_ReduceTerminateToControlFlowInstruction           = _ReduceType(44)
+	_ReduceNumberTypeToType                            = _ReduceType(45)
+	_ReduceFuncTypeToType                              = _ReduceType(46)
+	_ReduceToNumberType                                = _ReduceType(47)
+	_ReduceToFuncType                                  = _ReduceType(48)
 )
 
 func (i _ReduceType) String() string {
 	switch i {
-	case _ReduceDeclarationToLine:
-		return "DeclarationToLine"
 	case _ReduceDefinitionToLine:
 		return "DefinitionToLine"
 	case _ReduceRbraceToLine:
@@ -606,10 +574,6 @@ func (i _ReduceType) String() string {
 		return "OperationInstructionToLine"
 	case _ReduceControlFlowInstructionToLine:
 		return "ControlFlowInstructionToLine"
-	case _ReduceFuncToDeclaration:
-		return "FuncToDeclaration"
-	case _ReduceDataToDeclaration:
-		return "DataToDeclaration"
 	case _ReduceFuncToDefinition:
 		return "FuncToDefinition"
 	case _ReduceToRbrace:
@@ -746,13 +710,6 @@ const (
 	_State36 = _StateId(36)
 	_State37 = _StateId(37)
 	_State38 = _StateId(38)
-	_State39 = _StateId(39)
-	_State40 = _StateId(40)
-	_State41 = _StateId(41)
-	_State42 = _StateId(42)
-	_State43 = _StateId(43)
-	_State44 = _StateId(44)
-	_State45 = _StateId(45)
 )
 
 type Symbol struct {
@@ -793,7 +750,7 @@ func NewSymbol(token parseutil.Token[SymbolId]) (*Symbol, error) {
 				token.Id())
 		}
 		symbol.Generic_ = val
-	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, DeclareToken, FuncToken:
+	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, FuncToken:
 		val, ok := token.(*TokenValue)
 		if !ok {
 			return nil, parseutil.NewLocationError(
@@ -834,7 +791,7 @@ func (s *Symbol) StartEnd() parseutil.StartEndPos {
 		if ok {
 			return loc.StartEnd()
 		}
-	case LineType, DeclarationType, DefinitionType, RbraceType:
+	case LineType, DefinitionType, RbraceType:
 		loc, ok := interface{}(s.Line).(locator)
 		if ok {
 			return loc.StartEnd()
@@ -874,7 +831,7 @@ func (s *Symbol) StartEnd() parseutil.StartEndPos {
 		if ok {
 			return loc.StartEnd()
 		}
-	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, DeclareToken, FuncToken, IdentifierType:
+	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, FuncToken, IdentifierType:
 		loc, ok := interface{}(s.Value).(locator)
 		if ok {
 			return loc.StartEnd()
@@ -901,7 +858,7 @@ func (s *Symbol) Loc() parseutil.Location {
 		if ok {
 			return loc.Loc()
 		}
-	case LineType, DeclarationType, DefinitionType, RbraceType:
+	case LineType, DefinitionType, RbraceType:
 		loc, ok := interface{}(s.Line).(locator)
 		if ok {
 			return loc.Loc()
@@ -941,7 +898,7 @@ func (s *Symbol) Loc() parseutil.Location {
 		if ok {
 			return loc.Loc()
 		}
-	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, DeclareToken, FuncToken, IdentifierType:
+	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, FuncToken, IdentifierType:
 		loc, ok := interface{}(s.Value).(locator)
 		if ok {
 			return loc.Loc()
@@ -968,7 +925,7 @@ func (s *Symbol) End() parseutil.Location {
 		if ok {
 			return loc.End()
 		}
-	case LineType, DeclarationType, DefinitionType, RbraceType:
+	case LineType, DefinitionType, RbraceType:
 		loc, ok := interface{}(s.Line).(locator)
 		if ok {
 			return loc.End()
@@ -1008,7 +965,7 @@ func (s *Symbol) End() parseutil.Location {
 		if ok {
 			return loc.End()
 		}
-	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, DeclareToken, FuncToken, IdentifierType:
+	case IntegerLiteralToken, FloatLiteralToken, StringLiteralToken, IdentifierToken, LparenToken, RparenToken, LbraceToken, RbraceToken, CommaToken, ColonToken, AtToken, PercentToken, EqualToken, DefineToken, FuncToken, IdentifierType:
 		loc, ok := interface{}(s.Value).(locator)
 		if ok {
 			return loc.End()
@@ -1092,58 +1049,41 @@ func (act *_Action) ReduceSymbol(
 	var err error
 	symbol := &Symbol{}
 	switch act.ReduceType {
-	case _ReduceDeclarationToLine:
+	case _ReduceDefinitionToLine:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = LineType
 		//line grammar.lr:14:4
 		symbol.Line = args[0].Line
 		err = nil
-	case _ReduceDefinitionToLine:
+	case _ReduceRbraceToLine:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = LineType
 		//line grammar.lr:15:4
 		symbol.Line = args[0].Line
 		err = nil
-	case _ReduceRbraceToLine:
-		args := stack[len(stack)-1:]
-		stack = stack[:len(stack)-1]
-		symbol.SymbolId_ = LineType
-		//line grammar.lr:16:4
-		symbol.Line = args[0].Line
-		err = nil
 	case _ReduceLocalLabelToLine:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = LineType
-		//line grammar.lr:17:4
+		//line grammar.lr:16:4
 		symbol.Line = args[0].LocalLabel
 		err = nil
 	case _ReduceOperationInstructionToLine:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = LineType
-		//line grammar.lr:18:4
+		//line grammar.lr:17:4
 		symbol.Line = args[0].Instruction
 		err = nil
 	case _ReduceControlFlowInstructionToLine:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = LineType
-		//line grammar.lr:19:4
+		//line grammar.lr:18:4
 		symbol.Line = args[0].Instruction
 		err = nil
-	case _ReduceFuncToDeclaration:
-		args := stack[len(stack)-7:]
-		stack = stack[:len(stack)-7]
-		symbol.SymbolId_ = DeclarationType
-		symbol.Line, err = reducer.FuncToDeclaration(args[0].Value, args[1].Value, args[2].GlobalLabelReference, args[3].Value, args[4].Types, args[5].Value, args[6].Type)
-	case _ReduceDataToDeclaration:
-		args := stack[len(stack)-3:]
-		stack = stack[:len(stack)-3]
-		symbol.SymbolId_ = DeclarationType
-		symbol.Line, err = reducer.DataToDeclaration(args[0].Value, args[1].GlobalLabelReference, args[2].Type)
 	case _ReduceFuncToDefinition:
 		args := stack[len(stack)-8:]
 		stack = stack[:len(stack)-8]
@@ -1173,7 +1113,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = IdentifierType
-		//line grammar.lr:44:4
+		//line grammar.lr:39:4
 		symbol.Value = args[0].Value
 		err = nil
 	case _ReduceStringToIdentifier:
@@ -1185,14 +1125,14 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ImmediateType
-		//line grammar.lr:48:4
+		//line grammar.lr:43:4
 		symbol.OpValue = args[0].OpValue
 		err = nil
 	case _ReduceFloatImmediateToImmediate:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ImmediateType
-		//line grammar.lr:49:4
+		//line grammar.lr:44:4
 		symbol.OpValue = args[0].OpValue
 		err = nil
 	case _ReduceToIntImmediate:
@@ -1214,7 +1154,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = RegisterDefinitionType
-		//line grammar.lr:58:4
+		//line grammar.lr:53:4
 		symbol.RegisterDefinition = args[0].RegisterDefinition
 		err = nil
 	case _ReduceInferredToRegisterDefinition:
@@ -1226,28 +1166,28 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:62:4
+		//line grammar.lr:57:4
 		symbol.OpValue = args[0].RegisterReference
 		err = nil
 	case _ReduceGlobalLabelToValue:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:63:4
+		//line grammar.lr:58:4
 		symbol.OpValue = args[0].GlobalLabelReference
 		err = nil
 	case _ReduceImmediateToValue:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ValueType
-		//line grammar.lr:64:4
+		//line grammar.lr:59:4
 		symbol.OpValue = args[0].OpValue
 		err = nil
 	case _ReduceProperParametersToParameters:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ParametersType
-		//line grammar.lr:71:4
+		//line grammar.lr:66:4
 		symbol.Parameters = args[0].Parameters
 		err = nil
 	case _ReduceImproperToParameters:
@@ -1272,7 +1212,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = ArgumentsType
-		//line grammar.lr:80:4
+		//line grammar.lr:75:4
 		symbol.Arguments = args[0].Arguments
 		err = nil
 	case _ReduceImproperToArguments:
@@ -1297,7 +1237,7 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypesType
-		//line grammar.lr:89:4
+		//line grammar.lr:84:4
 		symbol.Types = args[0].Types
 		err = nil
 	case _ReduceImproperToTypes:
@@ -1357,14 +1297,14 @@ func (act *_Action) ReduceSymbol(
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypeType
-		//line grammar.lr:118:4
+		//line grammar.lr:113:4
 		symbol.Type = args[0].Type
 		err = nil
 	case _ReduceFuncTypeToType:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
 		symbol.SymbolId_ = TypeType
-		//line grammar.lr:119:4
+		//line grammar.lr:114:4
 		symbol.Type = args[0].Type
 		err = nil
 	case _ReduceToNumberType:
@@ -1406,25 +1346,21 @@ func (_ActionTableType) Get(
 	case _State1:
 		switch symbolId {
 		case IdentifierToken:
-			return _Action{_ShiftAction, _State6, 0}, true
+			return _Action{_ShiftAction, _State5, 0}, true
 		case ColonToken:
 			return _Action{_ShiftAction, _State3, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case DefineToken:
-			return _Action{_ShiftAction, _State5, 0}, true
-		case DeclareToken:
 			return _Action{_ShiftAction, _State4, 0}, true
 		case LineType:
 			return _Action{_ShiftAction, _State2, 0}, true
 		case RegisterReferenceType:
-			return _Action{_ShiftAction, _State9, 0}, true
-		case RegisterDefinitionType:
 			return _Action{_ShiftAction, _State8, 0}, true
+		case RegisterDefinitionType:
+			return _Action{_ShiftAction, _State7, 0}, true
 		case RbraceToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToRbrace}, true
-		case DeclarationType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceDeclarationToLine}, true
 		case DefinitionType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceDefinitionToLine}, true
 		case RbraceType:
@@ -1454,30 +1390,21 @@ func (_ActionTableType) Get(
 		}
 	case _State4:
 		switch symbolId {
-		case AtToken:
-			return _Action{_ShiftAction, _State10, 0}, true
 		case FuncToken:
-			return _Action{_ShiftAction, _State11, 0}, true
-		case GlobalLabelType:
-			return _Action{_ShiftAction, _State12, 0}, true
+			return _Action{_ShiftAction, _State9, 0}, true
 		}
 	case _State5:
-		switch symbolId {
-		case FuncToken:
-			return _Action{_ShiftAction, _State13, 0}, true
-		}
-	case _State6:
 		switch symbolId {
 		case ColonToken:
 			return _Action{_ShiftAction, _State3, 0}, true
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case LocalLabelType:
-			return _Action{_ShiftAction, _State14, 0}, true
+			return _Action{_ShiftAction, _State11, 0}, true
 		case ProperArgumentsType:
-			return _Action{_ShiftAction, _State15, 0}, true
+			return _Action{_ShiftAction, _State12, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1495,7 +1422,7 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperArguments}, true
 		}
-	case _State7:
+	case _State6:
 		switch symbolId {
 		case StringLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceStringToIdentifier}, true
@@ -1504,15 +1431,15 @@ func (_ActionTableType) Get(
 		case IdentifierType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToRegisterReference}, true
 		}
-	case _State8:
+	case _State7:
 		switch symbolId {
 		case EqualToken:
-			return _Action{_ShiftAction, _State16, 0}, true
+			return _Action{_ShiftAction, _State13, 0}, true
 		}
-	case _State9:
+	case _State8:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1525,6 +1452,13 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceInferredToRegisterDefinition}, true
 		}
+	case _State9:
+		switch symbolId {
+		case AtToken:
+			return _Action{_ShiftAction, _State10, 0}, true
+		case GlobalLabelType:
+			return _Action{_ShiftAction, _State15, 0}, true
+		}
 	case _State10:
 		switch symbolId {
 		case StringLiteralToken:
@@ -1536,55 +1470,28 @@ func (_ActionTableType) Get(
 		}
 	case _State11:
 		switch symbolId {
-		case AtToken:
-			return _Action{_ShiftAction, _State10, 0}, true
-		case GlobalLabelType:
-			return _Action{_ShiftAction, _State18, 0}, true
-		}
-	case _State12:
-		switch symbolId {
-		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
-		case IdentifierToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
-		case TypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceDataToDeclaration}, true
-		case NumberTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceNumberTypeToType}, true
-		case FuncTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
-		}
-	case _State13:
-		switch symbolId {
-		case AtToken:
-			return _Action{_ShiftAction, _State10, 0}, true
-		case GlobalLabelType:
-			return _Action{_ShiftAction, _State19, 0}, true
-		}
-	case _State14:
-		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State20, 0}, true
+			return _Action{_ShiftAction, _State16, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceUnconditionalToControlFlowInstruction}, true
 		}
-	case _State15:
+	case _State12:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State21, 0}, true
+			return _Action{_ShiftAction, _State17, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceTerminateToControlFlowInstruction}, true
 		}
-	case _State16:
+	case _State13:
 		switch symbolId {
 		case IdentifierToken:
-			return _Action{_ShiftAction, _State22, 0}, true
+			return _Action{_ShiftAction, _State18, 0}, true
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1602,29 +1509,24 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAssignToOperationInstruction}, true
 		}
-	case _State17:
+	case _State14:
 		switch symbolId {
 		case LparenToken:
-			return _Action{_ShiftAction, _State23, 0}, true
+			return _Action{_ShiftAction, _State19, 0}, true
 		}
-	case _State18:
+	case _State15:
 		switch symbolId {
 		case LparenToken:
-			return _Action{_ShiftAction, _State24, 0}, true
+			return _Action{_ShiftAction, _State20, 0}, true
 		}
-	case _State19:
-		switch symbolId {
-		case LparenToken:
-			return _Action{_ShiftAction, _State25, 0}, true
-		}
-	case _State20:
+	case _State16:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case ValueType:
-			return _Action{_ShiftAction, _State26, 0}, true
+			return _Action{_ShiftAction, _State21, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1640,12 +1542,12 @@ func (_ActionTableType) Get(
 		case FloatImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		}
-	case _State21:
+	case _State17:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1663,14 +1565,14 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperArguments}, true
 		}
-	case _State22:
+	case _State18:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case ValueType:
-			return _Action{_ShiftAction, _State27, 0}, true
+			return _Action{_ShiftAction, _State22, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1686,14 +1588,14 @@ func (_ActionTableType) Get(
 		case FloatImmediateType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFloatImmediateToImmediate}, true
 		}
-	case _State23:
+	case _State19:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case TypesType:
-			return _Action{_ShiftAction, _State29, 0}, true
+			return _Action{_ShiftAction, _State24, 0}, true
 		case ProperTypesType:
-			return _Action{_ShiftAction, _State28, 0}, true
+			return _Action{_ShiftAction, _State23, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1706,92 +1608,67 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToTypes}, true
 		}
-	case _State24:
-		switch symbolId {
-		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
-		case TypesType:
-			return _Action{_ShiftAction, _State30, 0}, true
-		case ProperTypesType:
-			return _Action{_ShiftAction, _State28, 0}, true
-		case IdentifierToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
-		case TypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperTypes}, true
-		case NumberTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceNumberTypeToType}, true
-		case FuncTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
-
-		default:
-			return _Action{_ReduceAction, 0, _ReduceNilToTypes}, true
-		}
-	case _State25:
+	case _State20:
 		switch symbolId {
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case RegisterReferenceType:
-			return _Action{_ShiftAction, _State33, 0}, true
+			return _Action{_ShiftAction, _State27, 0}, true
 		case ParametersType:
-			return _Action{_ShiftAction, _State31, 0}, true
+			return _Action{_ShiftAction, _State25, 0}, true
 		case ProperParametersType:
-			return _Action{_ShiftAction, _State32, 0}, true
+			return _Action{_ShiftAction, _State26, 0}, true
 		case TypedRegisterDefinitionType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceNewToProperParameters}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToParameters}, true
 		}
-	case _State26:
+	case _State21:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State34, 0}, true
+			return _Action{_ShiftAction, _State28, 0}, true
 		}
-	case _State27:
+	case _State22:
 		switch symbolId {
 		case LparenToken:
-			return _Action{_ShiftAction, _State36, 0}, true
+			return _Action{_ShiftAction, _State30, 0}, true
 		case CommaToken:
-			return _Action{_ShiftAction, _State35, 0}, true
+			return _Action{_ShiftAction, _State29, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceUnaryToOperationInstruction}, true
 		}
-	case _State28:
+	case _State23:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State37, 0}, true
+			return _Action{_ShiftAction, _State31, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperTypesToTypes}, true
 		}
-	case _State29:
+	case _State24:
 		switch symbolId {
 		case RparenToken:
-			return _Action{_ShiftAction, _State38, 0}, true
+			return _Action{_ShiftAction, _State32, 0}, true
 		}
-	case _State30:
+	case _State25:
 		switch symbolId {
 		case RparenToken:
-			return _Action{_ShiftAction, _State39, 0}, true
+			return _Action{_ShiftAction, _State33, 0}, true
 		}
-	case _State31:
-		switch symbolId {
-		case RparenToken:
-			return _Action{_ShiftAction, _State40, 0}, true
-		}
-	case _State32:
+	case _State26:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State41, 0}, true
+			return _Action{_ShiftAction, _State34, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperParametersToParameters}, true
 		}
-	case _State33:
+	case _State27:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1801,12 +1678,12 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State34:
+	case _State28:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1824,12 +1701,12 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceConditionalToControlFlowInstruction}, true
 		}
-	case _State35:
+	case _State29:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1847,16 +1724,16 @@ func (_ActionTableType) Get(
 		case ValueType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceBinaryToOperationInstruction}, true
 		}
-	case _State36:
+	case _State30:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case ArgumentsType:
-			return _Action{_ShiftAction, _State42, 0}, true
+			return _Action{_ShiftAction, _State35, 0}, true
 		case ProperArgumentsType:
-			return _Action{_ShiftAction, _State43, 0}, true
+			return _Action{_ShiftAction, _State36, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -1877,10 +1754,10 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceNilToArguments}, true
 		}
-	case _State37:
+	case _State31:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1893,10 +1770,10 @@ func (_ActionTableType) Get(
 		default:
 			return _Action{_ReduceAction, 0, _ReduceImproperToTypes}, true
 		}
-	case _State38:
+	case _State32:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case TypeType:
@@ -1906,25 +1783,12 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State39:
+	case _State33:
 		switch symbolId {
 		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
-		case IdentifierToken:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
+			return _Action{_ShiftAction, _State14, 0}, true
 		case TypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncToDeclaration}, true
-		case NumberTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceNumberTypeToType}, true
-		case FuncTypeType:
-			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
-		}
-	case _State40:
-		switch symbolId {
-		case FuncToken:
-			return _Action{_ShiftAction, _State17, 0}, true
-		case TypeType:
-			return _Action{_ShiftAction, _State44, 0}, true
+			return _Action{_ShiftAction, _State37, 0}, true
 		case IdentifierToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToNumberType}, true
 		case NumberTypeType:
@@ -1932,42 +1796,42 @@ func (_ActionTableType) Get(
 		case FuncTypeType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncTypeToType}, true
 		}
-	case _State41:
+	case _State34:
 		switch symbolId {
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case RegisterReferenceType:
-			return _Action{_ShiftAction, _State33, 0}, true
+			return _Action{_ShiftAction, _State27, 0}, true
 		case TypedRegisterDefinitionType:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceAddToProperParameters}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceImproperToParameters}, true
 		}
-	case _State42:
+	case _State35:
 		switch symbolId {
 		case RparenToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceCallToOperationInstruction}, true
 		}
-	case _State43:
+	case _State36:
 		switch symbolId {
 		case CommaToken:
-			return _Action{_ShiftAction, _State45, 0}, true
+			return _Action{_ShiftAction, _State38, 0}, true
 
 		default:
 			return _Action{_ReduceAction, 0, _ReduceProperArgumentsToArguments}, true
 		}
-	case _State44:
+	case _State37:
 		switch symbolId {
 		case LbraceToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceFuncToDefinition}, true
 		}
-	case _State45:
+	case _State38:
 		switch symbolId {
 		case AtToken:
 			return _Action{_ShiftAction, _State10, 0}, true
 		case PercentToken:
-			return _Action{_ShiftAction, _State7, 0}, true
+			return _Action{_ShiftAction, _State6, 0}, true
 		case IntegerLiteralToken:
 			return _Action{_ShiftAndReduceAction, 0, _ReduceToIntImmediate}, true
 		case FloatLiteralToken:
@@ -2004,7 +1868,6 @@ Parser Debug States:
       (nil)
     ShiftAndReduce:
       RBRACE -> [rbrace]
-      declaration -> [line]
       definition -> [line]
       rbrace -> [line]
       local_label -> [line]
@@ -2012,14 +1875,13 @@ Parser Debug States:
       operation_instruction -> [line]
       control_flow_instruction -> [line]
     Goto:
-      IDENTIFIER -> State 6
+      IDENTIFIER -> State 5
       COLON -> State 3
-      PERCENT -> State 7
-      DEFINE -> State 5
-      DECLARE -> State 4
+      PERCENT -> State 6
+      DEFINE -> State 4
       line -> State 2
-      register_reference -> State 9
-      register_definition -> State 8
+      register_reference -> State 8
+      register_definition -> State 7
 
   State 2:
     Kernel Items:
@@ -2045,28 +1907,15 @@ Parser Debug States:
 
   State 4:
     Kernel Items:
-      declaration: DECLARE.FUNC global_label LPAREN types RPAREN type
-      declaration: DECLARE.global_label type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      AT -> State 10
-      FUNC -> State 11
-      global_label -> State 12
-
-  State 5:
-    Kernel Items:
       definition: DEFINE.FUNC global_label LPAREN parameters RPAREN type LBRACE
     Reduce:
       (nil)
     ShiftAndReduce:
       (nil)
     Goto:
-      FUNC -> State 13
+      FUNC -> State 9
 
-  State 6:
+  State 5:
     Kernel Items:
       control_flow_instruction: IDENTIFIER.local_label
       control_flow_instruction: IDENTIFIER.local_label COMMA value COMMA value
@@ -2085,11 +1934,11 @@ Parser Debug States:
     Goto:
       COLON -> State 3
       AT -> State 10
-      PERCENT -> State 7
-      local_label -> State 14
-      proper_arguments -> State 15
+      PERCENT -> State 6
+      local_label -> State 11
+      proper_arguments -> State 12
 
-  State 7:
+  State 6:
     Kernel Items:
       register_reference: PERCENT.identifier
     Reduce:
@@ -2101,7 +1950,7 @@ Parser Debug States:
     Goto:
       (nil)
 
-  State 8:
+  State 7:
     Kernel Items:
       operation_instruction: register_definition.EQUAL value
       operation_instruction: register_definition.EQUAL IDENTIFIER value
@@ -2112,9 +1961,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      EQUAL -> State 16
+      EQUAL -> State 13
 
-  State 9:
+  State 8:
     Kernel Items:
       typed_register_definition: register_reference.type
       register_definition: register_reference., *
@@ -2126,7 +1975,18 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
+      FUNC -> State 14
+
+  State 9:
+    Kernel Items:
+      definition: DEFINE FUNC.global_label LPAREN parameters RPAREN type LBRACE
+    Reduce:
+      (nil)
+    ShiftAndReduce:
+      (nil)
+    Goto:
+      AT -> State 10
+      global_label -> State 15
 
   State 10:
     Kernel Items:
@@ -2142,41 +2002,6 @@ Parser Debug States:
 
   State 11:
     Kernel Items:
-      declaration: DECLARE FUNC.global_label LPAREN types RPAREN type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      AT -> State 10
-      global_label -> State 18
-
-  State 12:
-    Kernel Items:
-      declaration: DECLARE global_label.type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      IDENTIFIER -> [number_type]
-      type -> [declaration]
-      number_type -> [type]
-      func_type -> [type]
-    Goto:
-      FUNC -> State 17
-
-  State 13:
-    Kernel Items:
-      definition: DEFINE FUNC.global_label LPAREN parameters RPAREN type LBRACE
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      AT -> State 10
-      global_label -> State 19
-
-  State 14:
-    Kernel Items:
       control_flow_instruction: IDENTIFIER local_label., *
       control_flow_instruction: IDENTIFIER local_label.COMMA value COMMA value
     Reduce:
@@ -2184,9 +2009,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 20
+      COMMA -> State 16
 
-  State 15:
+  State 12:
     Kernel Items:
       proper_arguments: proper_arguments.COMMA value
       control_flow_instruction: IDENTIFIER proper_arguments., *
@@ -2195,9 +2020,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 21
+      COMMA -> State 17
 
-  State 16:
+  State 13:
     Kernel Items:
       operation_instruction: register_definition EQUAL.value
       operation_instruction: register_definition EQUAL.IDENTIFIER value
@@ -2215,11 +2040,11 @@ Parser Debug States:
       float_immediate -> [immediate]
       value -> [operation_instruction]
     Goto:
-      IDENTIFIER -> State 22
+      IDENTIFIER -> State 18
       AT -> State 10
-      PERCENT -> State 7
+      PERCENT -> State 6
 
-  State 17:
+  State 14:
     Kernel Items:
       func_type: FUNC.LPAREN types RPAREN type
     Reduce:
@@ -2227,19 +2052,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 23
+      LPAREN -> State 19
 
-  State 18:
-    Kernel Items:
-      declaration: DECLARE FUNC global_label.LPAREN types RPAREN type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      LPAREN -> State 24
-
-  State 19:
+  State 15:
     Kernel Items:
       definition: DEFINE FUNC global_label.LPAREN parameters RPAREN type LBRACE
     Reduce:
@@ -2247,9 +2062,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 25
+      LPAREN -> State 20
 
-  State 20:
+  State 16:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA.value COMMA value
     Reduce:
@@ -2264,10 +2079,10 @@ Parser Debug States:
       float_immediate -> [immediate]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
-      value -> State 26
+      PERCENT -> State 6
+      value -> State 21
 
-  State 21:
+  State 17:
     Kernel Items:
       proper_arguments: proper_arguments COMMA.value
     Reduce:
@@ -2283,9 +2098,9 @@ Parser Debug States:
       value -> [proper_arguments]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
+      PERCENT -> State 6
 
-  State 22:
+  State 18:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER.value
       operation_instruction: register_definition EQUAL IDENTIFIER.value COMMA value
@@ -2302,10 +2117,10 @@ Parser Debug States:
       float_immediate -> [immediate]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
-      value -> State 27
+      PERCENT -> State 6
+      value -> State 22
 
-  State 23:
+  State 19:
     Kernel Items:
       func_type: FUNC LPAREN.types RPAREN type
     Reduce:
@@ -2316,26 +2131,11 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
-      types -> State 29
-      proper_types -> State 28
+      FUNC -> State 14
+      types -> State 24
+      proper_types -> State 23
 
-  State 24:
-    Kernel Items:
-      declaration: DECLARE FUNC global_label LPAREN.types RPAREN type
-    Reduce:
-      * -> [types]
-    ShiftAndReduce:
-      IDENTIFIER -> [number_type]
-      type -> [proper_types]
-      number_type -> [type]
-      func_type -> [type]
-    Goto:
-      FUNC -> State 17
-      types -> State 30
-      proper_types -> State 28
-
-  State 25:
+  State 20:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN.parameters RPAREN type LBRACE
     Reduce:
@@ -2343,12 +2143,12 @@ Parser Debug States:
     ShiftAndReduce:
       typed_register_definition -> [proper_parameters]
     Goto:
-      PERCENT -> State 7
-      register_reference -> State 33
-      parameters -> State 31
-      proper_parameters -> State 32
+      PERCENT -> State 6
+      register_reference -> State 27
+      parameters -> State 25
+      proper_parameters -> State 26
 
-  State 26:
+  State 21:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA value.COMMA value
     Reduce:
@@ -2356,9 +2156,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 34
+      COMMA -> State 28
 
-  State 27:
+  State 22:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value., *
       operation_instruction: register_definition EQUAL IDENTIFIER value.COMMA value
@@ -2368,10 +2168,10 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      LPAREN -> State 36
-      COMMA -> State 35
+      LPAREN -> State 30
+      COMMA -> State 29
 
-  State 28:
+  State 23:
     Kernel Items:
       types: proper_types., *
       types: proper_types.COMMA
@@ -2381,9 +2181,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 37
+      COMMA -> State 31
 
-  State 29:
+  State 24:
     Kernel Items:
       func_type: FUNC LPAREN types.RPAREN type
     Reduce:
@@ -2391,19 +2191,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      RPAREN -> State 38
+      RPAREN -> State 32
 
-  State 30:
-    Kernel Items:
-      declaration: DECLARE FUNC global_label LPAREN types.RPAREN type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      (nil)
-    Goto:
-      RPAREN -> State 39
-
-  State 31:
+  State 25:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters.RPAREN type LBRACE
     Reduce:
@@ -2411,9 +2201,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      RPAREN -> State 40
+      RPAREN -> State 33
 
-  State 32:
+  State 26:
     Kernel Items:
       parameters: proper_parameters., *
       parameters: proper_parameters.COMMA
@@ -2423,9 +2213,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 41
+      COMMA -> State 34
 
-  State 33:
+  State 27:
     Kernel Items:
       typed_register_definition: register_reference.type
     Reduce:
@@ -2436,9 +2226,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
+      FUNC -> State 14
 
-  State 34:
+  State 28:
     Kernel Items:
       control_flow_instruction: IDENTIFIER local_label COMMA value COMMA.value
     Reduce:
@@ -2454,9 +2244,9 @@ Parser Debug States:
       value -> [control_flow_instruction]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
+      PERCENT -> State 6
 
-  State 35:
+  State 29:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value COMMA.value
     Reduce:
@@ -2472,9 +2262,9 @@ Parser Debug States:
       value -> [operation_instruction]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
+      PERCENT -> State 6
 
-  State 36:
+  State 30:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value LPAREN.arguments RPAREN
     Reduce:
@@ -2490,11 +2280,11 @@ Parser Debug States:
       value -> [proper_arguments]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
-      arguments -> State 42
-      proper_arguments -> State 43
+      PERCENT -> State 6
+      arguments -> State 35
+      proper_arguments -> State 36
 
-  State 37:
+  State 31:
     Kernel Items:
       types: proper_types COMMA., *
       proper_types: proper_types COMMA.type
@@ -2506,9 +2296,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
+      FUNC -> State 14
 
-  State 38:
+  State 32:
     Kernel Items:
       func_type: FUNC LPAREN types RPAREN.type
     Reduce:
@@ -2519,22 +2309,9 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
+      FUNC -> State 14
 
-  State 39:
-    Kernel Items:
-      declaration: DECLARE FUNC global_label LPAREN types RPAREN.type
-    Reduce:
-      (nil)
-    ShiftAndReduce:
-      IDENTIFIER -> [number_type]
-      type -> [declaration]
-      number_type -> [type]
-      func_type -> [type]
-    Goto:
-      FUNC -> State 17
-
-  State 40:
+  State 33:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters RPAREN.type LBRACE
     Reduce:
@@ -2544,10 +2321,10 @@ Parser Debug States:
       number_type -> [type]
       func_type -> [type]
     Goto:
-      FUNC -> State 17
-      type -> State 44
+      FUNC -> State 14
+      type -> State 37
 
-  State 41:
+  State 34:
     Kernel Items:
       parameters: proper_parameters COMMA., *
       proper_parameters: proper_parameters COMMA.typed_register_definition
@@ -2556,10 +2333,10 @@ Parser Debug States:
     ShiftAndReduce:
       typed_register_definition -> [proper_parameters]
     Goto:
-      PERCENT -> State 7
-      register_reference -> State 33
+      PERCENT -> State 6
+      register_reference -> State 27
 
-  State 42:
+  State 35:
     Kernel Items:
       operation_instruction: register_definition EQUAL IDENTIFIER value LPAREN arguments.RPAREN
     Reduce:
@@ -2569,7 +2346,7 @@ Parser Debug States:
     Goto:
       (nil)
 
-  State 43:
+  State 36:
     Kernel Items:
       arguments: proper_arguments., *
       arguments: proper_arguments.COMMA
@@ -2579,9 +2356,9 @@ Parser Debug States:
     ShiftAndReduce:
       (nil)
     Goto:
-      COMMA -> State 45
+      COMMA -> State 38
 
-  State 44:
+  State 37:
     Kernel Items:
       definition: DEFINE FUNC global_label LPAREN parameters RPAREN type.LBRACE
     Reduce:
@@ -2591,7 +2368,7 @@ Parser Debug States:
     Goto:
       (nil)
 
-  State 45:
+  State 38:
     Kernel Items:
       arguments: proper_arguments COMMA., *
       proper_arguments: proper_arguments COMMA.value
@@ -2608,15 +2385,15 @@ Parser Debug States:
       value -> [proper_arguments]
     Goto:
       AT -> State 10
-      PERCENT -> State 7
+      PERCENT -> State 6
 
-Number of states: 45
-Number of shift actions: 77
-Number of reduce actions: 15
-Number of shift-and-reduce actions: 126
+Number of states: 38
+Number of shift actions: 64
+Number of reduce actions: 14
+Number of shift-and-reduce actions: 113
 Number of shift/reduce conflicts: 0
 Number of reduce/reduce conflicts: 0
-Number of unoptimized states: 178
-Number of unoptimized shift actions: 284
-Number of unoptimized reduce actions: 194
+Number of unoptimized states: 158
+Number of unoptimized shift actions: 241
+Number of unoptimized reduce actions: 183
 */
