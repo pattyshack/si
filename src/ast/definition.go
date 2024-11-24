@@ -53,6 +53,13 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 		} else {
 			names[param.Name] = param
 		}
+
+		if param.Type == nil {
+			emitter.Emit(
+				param.Loc(),
+				"function parameter (%s) must be explicitly typed",
+				param.Name)
+		}
 	}
 }
 
