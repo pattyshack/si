@@ -153,8 +153,8 @@ type ControlFlowInstructionReducer interface {
 	// 104:2: control_flow_instruction -> conditional: ...
 	ConditionalToControlFlowInstruction(Identifier_ *TokenValue, LocalLabel_ ParsedLocalLabel, Comma_ *TokenValue, Value_ ast.Value, Comma_2 *TokenValue, Value_2 ast.Value) (ast.Instruction, error)
 
-	// 105:2: control_flow_instruction -> terminate: ...
-	TerminateToControlFlowInstruction(Identifier_ *TokenValue, ProperArguments_ []ast.Value) (ast.Instruction, error)
+	// 105:2: control_flow_instruction -> terminal: ...
+	TerminalToControlFlowInstruction(Identifier_ *TokenValue, ProperArguments_ []ast.Value) (ast.Instruction, error)
 }
 
 type NumberTypeReducer interface {
@@ -555,7 +555,7 @@ const (
 	_ReduceCallToOperationInstruction                  = _ReduceType(41)
 	_ReduceUnconditionalToControlFlowInstruction       = _ReduceType(42)
 	_ReduceConditionalToControlFlowInstruction         = _ReduceType(43)
-	_ReduceTerminateToControlFlowInstruction           = _ReduceType(44)
+	_ReduceTerminalToControlFlowInstruction            = _ReduceType(44)
 	_ReduceNumberTypeToType                            = _ReduceType(45)
 	_ReduceFuncTypeToType                              = _ReduceType(46)
 	_ReduceToNumberType                                = _ReduceType(47)
@@ -650,8 +650,8 @@ func (i _ReduceType) String() string {
 		return "UnconditionalToControlFlowInstruction"
 	case _ReduceConditionalToControlFlowInstruction:
 		return "ConditionalToControlFlowInstruction"
-	case _ReduceTerminateToControlFlowInstruction:
-		return "TerminateToControlFlowInstruction"
+	case _ReduceTerminalToControlFlowInstruction:
+		return "TerminalToControlFlowInstruction"
 	case _ReduceNumberTypeToType:
 		return "NumberTypeToType"
 	case _ReduceFuncTypeToType:
@@ -1288,11 +1288,11 @@ func (act *_Action) ReduceSymbol(
 		stack = stack[:len(stack)-6]
 		symbol.SymbolId_ = ControlFlowInstructionType
 		symbol.Instruction, err = reducer.ConditionalToControlFlowInstruction(args[0].Value, args[1].LocalLabel, args[2].Value, args[3].OpValue, args[4].Value, args[5].OpValue)
-	case _ReduceTerminateToControlFlowInstruction:
+	case _ReduceTerminalToControlFlowInstruction:
 		args := stack[len(stack)-2:]
 		stack = stack[:len(stack)-2]
 		symbol.SymbolId_ = ControlFlowInstructionType
-		symbol.Instruction, err = reducer.TerminateToControlFlowInstruction(args[0].Value, args[1].Arguments)
+		symbol.Instruction, err = reducer.TerminalToControlFlowInstruction(args[0].Value, args[1].Arguments)
 	case _ReduceNumberTypeToType:
 		args := stack[len(stack)-1:]
 		stack = stack[:len(stack)-1]
@@ -1482,7 +1482,7 @@ func (_ActionTableType) Get(
 			return _Action{_ShiftAction, _State17, 0}, true
 
 		default:
-			return _Action{_ReduceAction, 0, _ReduceTerminateToControlFlowInstruction}, true
+			return _Action{_ReduceAction, 0, _ReduceTerminalToControlFlowInstruction}, true
 		}
 	case _State13:
 		switch symbolId {

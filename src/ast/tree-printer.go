@@ -148,9 +148,9 @@ func (printer *treePrinter) Enter(n Node) {
 	case *ConditionalJump:
 		printer.write("[ConditionalJump: Kind=%s Label=%s", node.Kind, node.Label)
 		printer.push("Src1=", "Src2=")
-	case *Terminate:
+	case *Terminal:
 		printer.list(
-			fmt.Sprintf("[Terminate: Kind=%s", node.Kind),
+			fmt.Sprintf("[Terminal: Kind=%s", node.Kind),
 			"Argument",
 			len(node.Srcs))
 
@@ -217,7 +217,7 @@ func (printer *treePrinter) Exit(n Node) {
 
 	case *ConditionalJump:
 		printer.endNode()
-	case *Terminate:
+	case *Terminal:
 		printer.endList(len(node.Srcs))
 
 	case FunctionType:

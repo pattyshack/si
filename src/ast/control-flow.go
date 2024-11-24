@@ -81,31 +81,31 @@ func (jump *ConditionalJump) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-type TerminateKind string
+type TerminalKind string
 
 const (
-	Ret  = TerminateKind("ret")
-	Exit = TerminateKind("exit")
+	Ret  = TerminalKind("ret")
+	Exit = TerminalKind("exit")
 )
 
 // Exit instruction of the form: <op> [<src>]+
 //
 // Note: this translates into a syscall instruction, but we've special cased
 // exit since it has semantic meaning in the control flow graph.
-type Terminate struct {
+type Terminal struct {
 	controlFlowInstruction
 
 	parseutil.StartEndPos
 
-	Kind TerminateKind
+	Kind TerminalKind
 
 	Srcs []Value
 }
 
-var _ Instruction = &Terminate{}
-var _ Validator = &Terminate{}
+var _ Instruction = &Terminal{}
+var _ Validator = &Terminal{}
 
-func (term *Terminate) Walk(visitor Visitor) {
+func (term *Terminal) Walk(visitor Visitor) {
 	visitor.Enter(term)
 	for _, src := range term.Srcs {
 		src.Walk(visitor)
@@ -113,7 +113,7 @@ func (term *Terminate) Walk(visitor Visitor) {
 	visitor.Exit(term)
 }
 
-func (term *Terminate) Validate(emitter *parseutil.Emitter) {
+func (term *Terminal) Validate(emitter *parseutil.Emitter) {
 	switch term.Kind {
 	case Ret, Exit: // ok
 	default:

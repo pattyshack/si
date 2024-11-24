@@ -61,7 +61,7 @@ func (initializer *controlFlowGraphInitializer) Process(
 				block.Children = append(block.Children, child)
 				child.Parents = append(child.Parents, block)
 			}
-		case *ast.Terminate:
+		case *ast.Terminal:
 			canFallthrough = false
 		}
 

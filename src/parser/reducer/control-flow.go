@@ -41,16 +41,16 @@ func (Reducer) ConditionalToControlFlowInstruction(
 	}, nil
 }
 
-func (Reducer) TerminateToControlFlowInstruction(
+func (Reducer) TerminalToControlFlowInstruction(
 	op *lr.TokenValue,
 	args []ast.Value,
 ) (
 	ast.Instruction,
 	error,
 ) {
-	return &ast.Terminate{
+	return &ast.Terminal{
 		StartEndPos: parseutil.NewStartEndPos(op.Loc(), args[len(args)-1].End()),
-		Kind:        ast.TerminateKind(op.Value),
+		Kind:        ast.TerminalKind(op.Value),
 		Srcs:        args,
 	}, nil
 }
