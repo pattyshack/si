@@ -65,6 +65,19 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	validateUsableType(def.ReturnType, emitter)
 }
 
+func (def *FuncDefinition) Type() Type {
+	paramTypes := []Type{}
+	for _, param := range def.Parameters {
+		paramTypes = append(paramTypes, param.Type)
+	}
+
+	return FunctionType{
+		StartEndPos:    def.StartEndPos,
+		ReturnType:     def.ReturnType,
+		ParameterTypes: paramTypes,
+	}
+}
+
 // A straight-line / basic block
 type Block struct {
 	parseutil.StartEndPos

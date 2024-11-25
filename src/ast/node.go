@@ -26,6 +26,10 @@ type SourceEntry interface {
 	Node
 	Line
 	isSourceEntry()
+
+	// Internal
+
+	Type() Type
 }
 
 type sourceEntry struct {
@@ -100,6 +104,8 @@ type Value interface {
 	Node
 	isValue()
 
+	// Internal
+
 	// What this reference refers to.  For now:
 	// - register reference returns a *RegisterDefinition
 	// - global label reference returns a string
@@ -115,6 +121,8 @@ type Value interface {
 	Discard() // clear graph node references
 
 	SetParent(Instruction)
+
+	Type() Type
 }
 
 type value struct {
@@ -137,6 +145,10 @@ type GlobalLabelReference struct {
 	parseutil.StartEndPos
 
 	Label string
+
+	// Internal
+
+	Signature SourceEntry
 }
 
 var _ Node = &GlobalLabelReference{}
@@ -171,6 +183,15 @@ func (ref *GlobalLabelReference) Validate(emitter *parseutil.Emitter) {
 	if ref.Label == "" {
 		emitter.Emit(ref.Loc(), "empty global label name")
 	}
+}
+
+func (ref *GlobalLabelReference) Type() Type {
+	if ref.Signature == nil { // failed named binding
+		return ErrorType{
+			StartEndPos: ref.StartEndPos,
+		}
+	}
+	return ref.Signature.Type()
 }
 
 // %-prefixed local register variable reference.  Note that the '%' prefix is
@@ -223,6 +244,15 @@ func (ref *RegisterReference) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
+func (ref *RegisterReference) Type() Type {
+	if ref.UseDef == nil { // failed named binding
+		return ErrorType{
+			StartEndPos: ref.StartEndPos,
+		}
+	}
+	return ref.UseDef.Type
+}
+
 type IntImmediate struct {
 	value
 	parseutil.StartEndPos
@@ -256,6 +286,12 @@ func (imm *IntImmediate) Walk(visitor Visitor) {
 	visitor.Exit(imm)
 }
 
+func (imm *IntImmediate) Type() Type {
+	return IntLiteralType{
+		StartEndPos: imm.StartEndPos,
+	}
+}
+
 type FloatImmediate struct {
 	value
 	parseutil.StartEndPos
@@ -287,4 +323,10 @@ func (imm *FloatImmediate) Copy(pos parseutil.StartEndPos) Value {
 func (imm *FloatImmediate) Walk(visitor Visitor) {
 	visitor.Enter(imm)
 	visitor.Exit(imm)
+}
+
+func (imm *FloatImmediate) Type() Type {
+	return FloatLiteralType{
+		StartEndPos: imm.StartEndPos,
+	}
 }
