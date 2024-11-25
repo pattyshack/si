@@ -235,7 +235,7 @@ func (call *FuncCall) replaceSource(oldVal Value, newVal Value) {
 }
 
 func (call *FuncCall) Sources() []Value {
-	return call.Srcs
+	return append([]Value{call.Func}, call.Srcs...)
 }
 
 func (call *FuncCall) Destination() *RegisterDefinition {
