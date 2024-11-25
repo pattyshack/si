@@ -214,7 +214,7 @@ type FuncCall struct {
 
 	Dest *RegisterDefinition
 	Func Value
-	Srcs []Value
+	Args []Value
 }
 
 var _ Instruction = &FuncCall{}
@@ -222,9 +222,9 @@ var _ Validator = &FuncCall{}
 
 func (call *FuncCall) replaceSource(oldVal Value, newVal Value) {
 	replaceCount := 0
-	for idx, src := range call.Srcs {
+	for idx, src := range call.Args {
 		if src == oldVal {
-			call.Srcs[idx] = newVal
+			call.Args[idx] = newVal
 			replaceCount++
 		}
 	}
@@ -235,7 +235,7 @@ func (call *FuncCall) replaceSource(oldVal Value, newVal Value) {
 }
 
 func (call *FuncCall) Sources() []Value {
-	return append([]Value{call.Func}, call.Srcs...)
+	return append([]Value{call.Func}, call.Args...)
 }
 
 func (call *FuncCall) Destination() *RegisterDefinition {
@@ -246,7 +246,7 @@ func (call *FuncCall) Walk(visitor Visitor) {
 	visitor.Enter(call)
 	call.Dest.Walk(visitor)
 	call.Func.Walk(visitor)
-	for _, src := range call.Srcs {
+	for _, src := range call.Args {
 		src.Walk(visitor)
 	}
 	visitor.Exit(call)

@@ -164,7 +164,7 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.list(
 			fmt.Sprintf("[FuncCall: Kind=%s", node.Kind),
 			"Argument",
-			len(node.Srcs),
+			len(node.Args),
 			"Dest=",
 			"Func=")
 
@@ -236,7 +236,7 @@ func (printer *treePrinter) Exit(n Node) {
 	case *BinaryOperation:
 		printer.endNode()
 	case *FuncCall:
-		printer.endList(len(node.Srcs))
+		printer.endList(len(node.Args))
 
 	case *ConditionalJump:
 		printer.endNode()

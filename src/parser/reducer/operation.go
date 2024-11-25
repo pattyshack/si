@@ -76,6 +76,6 @@ func (Reducer) CallToOperationInstruction(
 		Kind:        ast.FuncCallKind(callKind.Value),
 		Dest:        dest,
 		Func:        funcLoc,
-		Srcs:        args,
+		Args:        args,
 	}, nil
 }
