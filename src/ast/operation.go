@@ -4,6 +4,35 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
+type Instruction interface {
+	Node
+	Line
+
+	ParentBlock() *Block
+	SetParentBlock(*Block)
+
+	// NOTE: caller is responsible for copying newSrc and discarding oldSrc.
+	replaceSource(oldSrc Value, newSrc Value)
+
+	Sources() []Value                 // empty if there are no src dependencies
+	Destination() *RegisterDefinition // nil if instruction has no destination
+}
+
+type instruction struct {
+	// Internal (set during ssa construction)
+	Parent *Block
+}
+
+func (instruction) IsLine() {}
+
+func (ins *instruction) ParentBlock() *Block {
+	return ins.Parent
+}
+
+func (ins *instruction) SetParentBlock(block *Block) {
+	ins.Parent = block
+}
+
 type AssignOperation struct {
 	instruction
 

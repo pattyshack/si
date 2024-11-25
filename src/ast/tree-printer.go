@@ -177,6 +177,12 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[Terminal: Kind=%s", node.Kind)
 		printer.push("Src=")
 
+	case ErrorType:
+		printer.write("[ErrorType]")
+	case IntLiteralType:
+		printer.write("[IntLiteralType]")
+	case FloatLiteralType:
+		printer.write("[FloatLiteralType]")
 	case NumberType:
 		printer.write("[NumberType: Kind=%s]", node.Kind)
 	case FunctionType:

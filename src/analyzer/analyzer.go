@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"context"
+
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/ast"
@@ -24,6 +26,10 @@ func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
 
 	signatures := collector.Signatures()
 
+	_, abort := context.WithCancel(context.Background())
+	// TODO
+	//abortCtx, abort := context.WithCancel(context.Background())
+
 	entryEmitters := []*parseutil.Emitter{}
 	ParallelProcess(
 		sources,
@@ -39,6 +45,9 @@ func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
 
 			return func(entry ast.SourceEntry) {
 				Process(entry, passes, nil)
+				if entryEmitter.HasErrors() {
+					abort()
+				}
 			}
 		})
 

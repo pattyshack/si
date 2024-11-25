@@ -61,6 +61,8 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 				param.Name)
 		}
 	}
+
+	validateUsableType(def.ReturnType, emitter)
 }
 
 // A straight-line / basic block

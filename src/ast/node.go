@@ -22,55 +22,6 @@ type Line interface { // used only by the parser
 	IsLine()
 }
 
-type Instruction interface {
-	Node
-	Line
-
-	ParentBlock() *Block
-	SetParentBlock(*Block)
-
-	// NOTE: caller is responsible for copying newSrc and discarding oldSrc.
-	replaceSource(oldSrc Value, newSrc Value)
-
-	Sources() []Value                 // empty if there are no src dependencies
-	Destination() *RegisterDefinition // nil if instruction has no destination
-}
-
-type instruction struct {
-	// Internal (set during ssa construction)
-	Parent *Block
-}
-
-func (instruction) IsLine() {}
-
-func (ins *instruction) ParentBlock() *Block {
-	return ins.Parent
-}
-
-func (ins *instruction) SetParentBlock(block *Block) {
-	ins.Parent = block
-}
-
-type ControlFlowInstruction interface {
-	Instruction
-	isControlFlow()
-}
-
-type controlFlowInstruction struct {
-	instruction
-}
-
-func (controlFlowInstruction) isControlFlow() {}
-
-type Type interface {
-	Node
-	isTypeExpr()
-}
-
-type isType struct{}
-
-func (isType) isTypeExpr() {}
-
 type SourceEntry interface {
 	Node
 	Line
@@ -117,6 +68,10 @@ func (def *RegisterDefinition) Walk(visitor Visitor) {
 func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Name == "" {
 		emitter.Emit(def.Loc(), "empty register definition name")
+	}
+
+	if def.Type != nil {
+		validateUsableType(def.Type, emitter)
 	}
 }
 

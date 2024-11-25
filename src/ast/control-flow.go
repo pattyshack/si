@@ -4,6 +4,17 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
+type ControlFlowInstruction interface {
+	Instruction
+	isControlFlow()
+}
+
+type controlFlowInstruction struct {
+	instruction
+}
+
+func (controlFlowInstruction) isControlFlow() {}
+
 // XXX: Need to support generic jump to some arbitrary offset?  Preferably not
 // since single entry point per block simplifies ssa generation.
 

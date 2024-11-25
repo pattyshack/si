@@ -41,14 +41,12 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		if ok {
 			continue
 		}
+		processed[block] = struct{}{}
 
 		liveOut := constructor.processBlock(block)
 		constructor.populateChildrenPhis(block, liveOut)
 
-		for _, child := range block.Children {
-			queue = append(queue, child)
-		}
-		processed[block] = struct{}{}
+		queue = append(queue, block.Children...)
 	}
 
 	// In theory, this should never happen since the graph is reducible, but
