@@ -61,7 +61,7 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 				for ref, _ := range phi.Dest.DefUses {
 					constructor.Emit(
 						ref.Loc(),
-						"variable (%s) not defined in all parent blocks",
+						"register (%s) not defined in all parent blocks",
 						ref.Name)
 				}
 			}
@@ -96,7 +96,7 @@ func (constructor *ssaConstructor) processBlock(
 			if !ok {
 				constructor.Emit(
 					ref.Loc(),
-					"variable (%s) not defined in all parent blocks",
+					"register (%s) not defined in all parent blocks",
 					ref.Name)
 				continue
 			}
