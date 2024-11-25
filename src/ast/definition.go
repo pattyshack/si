@@ -106,12 +106,16 @@ func (block *Block) Validate(emitter *parseutil.Emitter) {
 		return
 	}
 
-	for idx, instruction := range block.Instructions {
-		_, ok := instruction.(ControlFlowInstruction)
-		if ok && idx != len(block.Instructions)-1 {
-			emitter.Emit(
-				instruction.Loc(),
-				"control flow instruction must be the last instruction in the block")
+	for idx, in := range block.Instructions {
+		switch inst := in.(type) {
+		case ControlFlowInstruction:
+			if idx != len(block.Instructions)-1 {
+				emitter.Emit(
+					inst.Loc(),
+					"control flow instruction must be the last instruction in the block")
+			}
+		case *Phi:
+			emitter.Emit(inst.Loc(), "phi cannot be used as a regular instruction")
 		}
 	}
 }
