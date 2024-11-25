@@ -132,6 +132,10 @@ func (printer *treePrinter) Enter(n Node) {
 	case *RegisterReference:
 		printer.write("[RegisterReference: Name=%s Loc=%s", node.Name, node.Loc())
 		printer.push()
+
+		if node.UseDef != nil && node.UseDef.Type != nil {
+			printer.write("\n%sType: %s", printer.indent, node.UseDef.Type)
+		}
 		parent := "(nil)"
 		if node.UseDef != nil {
 			if node.UseDef.Parent != nil {
@@ -146,6 +150,9 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("\n%sUseDef: %s", printer.indent, parent)
 	case *GlobalLabelReference:
 		printer.write("[GlobalLabelReference: Label=%s]", node.Label)
+		if node.Signature != nil {
+			printer.write("\n%sType: %s", printer.indent, node.Signature.Type())
+		}
 	case *IntImmediate:
 		printer.write("[IntImmediate: Value=%d]", node.Value)
 	case *FloatImmediate:

@@ -7,6 +7,8 @@ import (
 type Type interface {
 	Node
 	isTypeExpr()
+
+	String() string
 }
 
 type isType struct{}
@@ -20,9 +22,19 @@ type ErrorType struct {
 	parseutil.StartEndPos
 }
 
+func NewErrorType(pos parseutil.StartEndPos) ErrorType {
+	return ErrorType{
+		StartEndPos: pos,
+	}
+}
+
 func (t ErrorType) Walk(visitor Visitor) {
 	visitor.Enter(t)
 	visitor.Exit(t)
+}
+
+func (ErrorType) String() string {
+	return "ErrorType"
 }
 
 // Internal use only. Compatible with all sign/unsigned int types.
@@ -36,6 +48,10 @@ func (t IntLiteralType) Walk(visitor Visitor) {
 	visitor.Exit(t)
 }
 
+func (IntLiteralType) String() string {
+	return "IntLiteralType"
+}
+
 // Internal use only. Compatible with all sign/unsigned float types.
 type FloatLiteralType struct {
 	isType
@@ -45,6 +61,10 @@ type FloatLiteralType struct {
 func (t FloatLiteralType) Walk(visitor Visitor) {
 	visitor.Enter(t)
 	visitor.Exit(t)
+}
+
+func (FloatLiteralType) String() string {
+	return "FloatLiteralType"
 }
 
 func validateUsableType(typeExpr Type, emitter *parseutil.Emitter) {
@@ -99,6 +119,10 @@ func (numType NumberType) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
+func (numType NumberType) String() string {
+	return string(numType.Kind)
+}
+
 type FunctionType struct {
 	isType
 	parseutil.StartEndPos
@@ -124,4 +148,17 @@ func (funcType FunctionType) Validate(emitter *parseutil.Emitter) {
 	for _, paramType := range funcType.ParameterTypes {
 		validateUsableType(paramType, emitter)
 	}
+}
+
+func (funcType FunctionType) String() string {
+	result := "func("
+	for idx, param := range funcType.ParameterTypes {
+		if idx == 0 {
+			result += param.String()
+		} else {
+			result += ", " + param.String()
+		}
+	}
+	result += ") " + funcType.ReturnType.String()
+	return result
 }

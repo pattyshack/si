@@ -187,9 +187,7 @@ func (ref *GlobalLabelReference) Validate(emitter *parseutil.Emitter) {
 
 func (ref *GlobalLabelReference) Type() Type {
 	if ref.Signature == nil { // failed named binding
-		return ErrorType{
-			StartEndPos: ref.StartEndPos,
-		}
+		return NewErrorType(ref.StartEndPos)
 	}
 	return ref.Signature.Type()
 }
@@ -246,9 +244,7 @@ func (ref *RegisterReference) Validate(emitter *parseutil.Emitter) {
 
 func (ref *RegisterReference) Type() Type {
 	if ref.UseDef == nil { // failed named binding
-		return ErrorType{
-			StartEndPos: ref.StartEndPos,
-		}
+		return NewErrorType(ref.StartEndPos)
 	}
 	return ref.UseDef.Type
 }
