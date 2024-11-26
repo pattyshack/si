@@ -70,8 +70,18 @@ func (assign *AssignOperation) Walk(visitor Visitor) {
 type UnaryOperationKind string
 
 const (
-	Neg = UnaryOperationKind("neg")
-	Not = UnaryOperationKind("not")
+	Neg   = UnaryOperationKind("neg")
+	Not   = UnaryOperationKind("not")
+	ToI8  = UnaryOperationKind("toI8")
+	ToI16 = UnaryOperationKind("toI16")
+	ToI32 = UnaryOperationKind("toI32")
+	ToI64 = UnaryOperationKind("toI64")
+	ToU8  = UnaryOperationKind("toU8")
+	ToU16 = UnaryOperationKind("toU16")
+	ToU32 = UnaryOperationKind("toU32")
+	ToU64 = UnaryOperationKind("toU64")
+	ToF32 = UnaryOperationKind("toF32")
+	ToF64 = UnaryOperationKind("toF64")
 )
 
 // Instructions of the form: <dest> = <type> <src>
@@ -114,7 +124,10 @@ func (unary *UnaryOperation) Walk(visitor Visitor) {
 
 func (unary *UnaryOperation) Validate(emitter *parseutil.Emitter) {
 	switch unary.Kind {
-	case Neg, Not: // ok
+	case Neg, Not,
+		ToI8, ToI16, ToI32, ToI64,
+		ToU8, ToU16, ToU32, ToU64,
+		ToF32, ToF64: // ok
 	default:
 		emitter.Emit(unary.Loc(), "unexpected unary operation (%s)", unary.Kind)
 	}

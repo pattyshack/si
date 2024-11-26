@@ -20,10 +20,15 @@ func (Reducer) ToNumberType(
 			StartEndPos: token.StartEndPos,
 			Kind:        ast.FloatTypeKind(token.Value),
 		}, nil
-	} else {
-		return ast.IntType{
+	} else if strings.HasPrefix(token.Value, "U") {
+		return ast.UnsignedIntType{
 			StartEndPos: token.StartEndPos,
-			Kind:        ast.IntTypeKind(token.Value),
+			Kind:        ast.UnsignedIntTypeKind(token.Value),
+		}, nil
+	} else {
+		return ast.SignedIntType{
+			StartEndPos: token.StartEndPos,
+			Kind:        ast.SignedIntTypeKind(token.Value),
 		}, nil
 	}
 }

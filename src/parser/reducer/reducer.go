@@ -116,7 +116,14 @@ func (Reducer) ToIntImmediate(
 	ast.Value,
 	error,
 ) {
-	value, err := strconv.ParseInt(token.Value, 0, 64)
+	isNegative := false
+	bytes := []byte(token.Value)
+	if len(bytes) > 1 && bytes[0] == '-' {
+		isNegative = true
+		bytes = bytes[1:]
+	}
+
+	value, err := strconv.ParseUint(string(bytes), 0, 64)
 	if err != nil {
 		return nil, parseutil.NewLocationError(
 			token.Loc(),
@@ -128,6 +135,7 @@ func (Reducer) ToIntImmediate(
 	return &ast.IntImmediate{
 		StartEndPos: token.StartEndPos,
 		Value:       value,
+		IsNegative:  isNegative,
 	}, nil
 }
 

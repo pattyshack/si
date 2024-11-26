@@ -26,12 +26,29 @@ func IsErrorType(t Type) bool {
 	return ok
 }
 
-// int or int literal
+func IsSignedIntSubType(t Type) bool {
+	switch t.(type) {
+	case PositiveIntLiteralType:
+		return true
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
+		return true
+	default:
+		return false
+	}
+}
+
+// signed/unsigned int or int literal
 func IsIntSubType(t Type) bool {
 	switch t.(type) {
-	case IntLiteralType:
+	case PositiveIntLiteralType:
 		return true
-	case IntType:
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
+		return true
+	case UnsignedIntType:
 		return true
 	default:
 		return false
@@ -50,13 +67,21 @@ func IsFloatSubType(t Type) bool {
 	}
 }
 
+func IsNumberSubType(t Type) bool {
+	return IsIntSubType(t) || IsFloatSubType(t)
+}
+
 // == and !=
 // NOTE: float is not comparable
 func IsComparableType(t Type) bool {
 	switch t.(type) {
-	case IntLiteralType:
+	case PositiveIntLiteralType:
 		return true
-	case IntType:
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
+		return true
+	case UnsignedIntType:
 		return true
 	case FunctionType:
 		return true
@@ -68,9 +93,13 @@ func IsComparableType(t Type) bool {
 // < and >=
 func IsOrderedType(t Type) bool {
 	switch t.(type) {
-	case IntLiteralType:
+	case PositiveIntLiteralType:
 		return true
-	case IntType:
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
+		return true
+	case UnsignedIntType:
 		return true
 	case FloatLiteralType:
 		return true
@@ -111,31 +140,66 @@ func (ErrorType) IsSubTypeOf(Type) bool {
 	return false
 }
 
-// Internal use only. Compatible with all sign/unsigned int types.
-type IntLiteralType struct {
+// Internal use only. Compatible with all signed/unsigned int types.
+type PositiveIntLiteralType struct {
 	isType
 	parseutil.StartEndPos
 }
 
-func (t IntLiteralType) Walk(visitor Visitor) {
+func (t PositiveIntLiteralType) Walk(visitor Visitor) {
 	visitor.Enter(t)
 	visitor.Exit(t)
 }
 
-func (IntLiteralType) String() string {
-	return "IntLiteralType"
+func (PositiveIntLiteralType) String() string {
+	return "PositiveIntLiteralType"
 }
 
-func (IntLiteralType) Equals(other Type) bool {
-	_, ok := other.(IntLiteralType)
+func (PositiveIntLiteralType) Equals(other Type) bool {
+	_, ok := other.(PositiveIntLiteralType)
 	return ok
 }
 
-func (IntLiteralType) IsSubTypeOf(other Type) bool {
+func (PositiveIntLiteralType) IsSubTypeOf(other Type) bool {
 	switch other.(type) {
-	case IntLiteralType:
+	case PositiveIntLiteralType:
 		return true
-	case IntType:
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
+		return true
+	case UnsignedIntType:
+		return true
+	default:
+		return false
+	}
+}
+
+// Internal use only. Compatible with all signed int types.
+type NegativeIntLiteralType struct {
+	isType
+	parseutil.StartEndPos
+}
+
+func (t NegativeIntLiteralType) Walk(visitor Visitor) {
+	visitor.Enter(t)
+	visitor.Exit(t)
+}
+
+func (NegativeIntLiteralType) String() string {
+	return "NegativeIntLiteralType"
+}
+
+func (NegativeIntLiteralType) Equals(other Type) bool {
+	_, ok := other.(NegativeIntLiteralType)
+	return ok
+}
+
+func (NegativeIntLiteralType) IsSubTypeOf(other Type) bool {
+	switch other.(type) {
+	case NegativeIntLiteralType:
+		return true
+	case SignedIntType:
 		return true
 	default:
 		return false
@@ -177,57 +241,86 @@ func validateUsableType(typeExpr Type, emitter *parseutil.Emitter) {
 	switch typeExpr.(type) {
 	case ErrorType:
 		emitter.Emit(typeExpr.Loc(), "cannot use ErrorType as return type")
-	case IntLiteralType:
-		emitter.Emit(typeExpr.Loc(), "cannot use IntLiteralType as return type")
+	case PositiveIntLiteralType:
+		emitter.Emit(
+			typeExpr.Loc(),
+			"cannot use PositiveIntLiteralType as return type")
+	case NegativeIntLiteralType:
+		emitter.Emit(
+			typeExpr.Loc(),
+			"cannot use NegativeIntLiteralType as return type")
 	case FloatLiteralType:
 		emitter.Emit(typeExpr.Loc(), "cannot use FloatLiteralType as return type")
 	default: // ok
 	}
 }
 
-type IntTypeKind string
+type SignedIntTypeKind string
 
 const (
-	I8  = IntTypeKind("I8")
-	I16 = IntTypeKind("I16")
-	I32 = IntTypeKind("I32")
-	I64 = IntTypeKind("I64")
-
-	U8  = IntTypeKind("U8")
-	U16 = IntTypeKind("U16")
-	U32 = IntTypeKind("U32")
-	U64 = IntTypeKind("U64")
+	I8  = SignedIntTypeKind("I8")
+	I16 = SignedIntTypeKind("I16")
+	I32 = SignedIntTypeKind("I32")
+	I64 = SignedIntTypeKind("I64")
 )
 
-type IntType struct {
+type SignedIntType struct {
 	isType
 	parseutil.StartEndPos
 
-	Kind IntTypeKind
+	Kind SignedIntTypeKind
 }
 
-var _ Type = IntType{}
-var _ Validator = IntType{}
+func NewI8(pos parseutil.StartEndPos) Type {
+	return SignedIntType{
+		StartEndPos: pos,
+		Kind:        I8,
+	}
+}
 
-func (intType IntType) Walk(visitor Visitor) {
+func NewI16(pos parseutil.StartEndPos) Type {
+	return SignedIntType{
+		StartEndPos: pos,
+		Kind:        I16,
+	}
+}
+
+func NewI32(pos parseutil.StartEndPos) Type {
+	return SignedIntType{
+		StartEndPos: pos,
+		Kind:        I32,
+	}
+}
+
+func NewI64(pos parseutil.StartEndPos) Type {
+	return SignedIntType{
+		StartEndPos: pos,
+		Kind:        I64,
+	}
+}
+
+var _ Type = SignedIntType{}
+var _ Validator = SignedIntType{}
+
+func (intType SignedIntType) Walk(visitor Visitor) {
 	visitor.Enter(intType)
 	visitor.Exit(intType)
 }
 
-func (intType IntType) Validate(emitter *parseutil.Emitter) {
+func (intType SignedIntType) Validate(emitter *parseutil.Emitter) {
 	switch intType.Kind {
-	case I8, I16, I32, I64, U8, U16, U32, U64: // ok
+	case I8, I16, I32, I64: // ok
 	default:
-		emitter.Emit(intType.Loc(), "unexpected int type (%s)", intType.Kind)
+		emitter.Emit(intType.Loc(), "unexpected signed int type (%s)", intType.Kind)
 	}
 }
 
-func (intType IntType) String() string {
+func (intType SignedIntType) String() string {
 	return string(intType.Kind)
 }
 
-func (intType IntType) Equals(other Type) bool {
-	otherType, ok := other.(IntType)
+func (intType SignedIntType) Equals(other Type) bool {
+	otherType, ok := other.(SignedIntType)
 	if !ok {
 		return false
 	}
@@ -235,7 +328,88 @@ func (intType IntType) Equals(other Type) bool {
 	return intType.Kind == otherType.Kind
 }
 
-func (intType IntType) IsSubTypeOf(other Type) bool {
+func (intType SignedIntType) IsSubTypeOf(other Type) bool {
+	// Int types must be explicitly converted.
+	return intType.Equals(other)
+}
+
+type UnsignedIntTypeKind string
+
+const (
+	U8  = UnsignedIntTypeKind("U8")
+	U16 = UnsignedIntTypeKind("U16")
+	U32 = UnsignedIntTypeKind("U32")
+	U64 = UnsignedIntTypeKind("U64")
+)
+
+type UnsignedIntType struct {
+	isType
+	parseutil.StartEndPos
+
+	Kind UnsignedIntTypeKind
+}
+
+func NewU8(pos parseutil.StartEndPos) Type {
+	return UnsignedIntType{
+		StartEndPos: pos,
+		Kind:        U8,
+	}
+}
+
+func NewU16(pos parseutil.StartEndPos) Type {
+	return UnsignedIntType{
+		StartEndPos: pos,
+		Kind:        U16,
+	}
+}
+
+func NewU32(pos parseutil.StartEndPos) Type {
+	return UnsignedIntType{
+		StartEndPos: pos,
+		Kind:        U32,
+	}
+}
+
+func NewU64(pos parseutil.StartEndPos) Type {
+	return UnsignedIntType{
+		StartEndPos: pos,
+		Kind:        U64,
+	}
+}
+
+var _ Type = UnsignedIntType{}
+var _ Validator = UnsignedIntType{}
+
+func (intType UnsignedIntType) Walk(visitor Visitor) {
+	visitor.Enter(intType)
+	visitor.Exit(intType)
+}
+
+func (intType UnsignedIntType) Validate(emitter *parseutil.Emitter) {
+	switch intType.Kind {
+	case U8, U16, U32, U64: // ok
+	default:
+		emitter.Emit(
+			intType.Loc(),
+			"unexpected unsigned int type (%s)",
+			intType.Kind)
+	}
+}
+
+func (intType UnsignedIntType) String() string {
+	return string(intType.Kind)
+}
+
+func (intType UnsignedIntType) Equals(other Type) bool {
+	otherType, ok := other.(UnsignedIntType)
+	if !ok {
+		return false
+	}
+
+	return intType.Kind == otherType.Kind
+}
+
+func (intType UnsignedIntType) IsSubTypeOf(other Type) bool {
 	// Int types must be explicitly converted.
 	return intType.Equals(other)
 }
@@ -252,6 +426,20 @@ type FloatType struct {
 	parseutil.StartEndPos
 
 	Kind FloatTypeKind
+}
+
+func NewF32(pos parseutil.StartEndPos) Type {
+	return FloatType{
+		StartEndPos: pos,
+		Kind:        F32,
+	}
+}
+
+func NewF64(pos parseutil.StartEndPos) Type {
+	return FloatType{
+		StartEndPos: pos,
+		Kind:        F64,
+	}
 }
 
 var _ Type = FloatType{}

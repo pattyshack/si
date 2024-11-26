@@ -116,19 +116,61 @@ func (checker *typeChecker) evaluateUnaryOperation(
 		return opType
 	}
 
-	if ast.IsIntSubType(opType) {
-		return opType
-	}
-
-	if ast.IsFloatSubType(opType) {
-		switch inst.Kind {
-		case ast.Neg:
+	switch inst.Kind {
+	case ast.Neg:
+		if ast.IsSignedIntSubType(opType) {
 			return opType
 		}
+	case ast.Not:
+		if ast.IsIntSubType(opType) {
+			return opType
+		}
+	case ast.ToI8:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewI8(inst.StartEnd())
+		}
+	case ast.ToI16:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewI16(inst.StartEnd())
+		}
+	case ast.ToI32:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewI32(inst.StartEnd())
+		}
+	case ast.ToI64:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewI64(inst.StartEnd())
+		}
+	case ast.ToU8:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewU8(inst.StartEnd())
+		}
+	case ast.ToU16:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewU16(inst.StartEnd())
+		}
+	case ast.ToU32:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewU32(inst.StartEnd())
+		}
+	case ast.ToU64:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewU64(inst.StartEnd())
+		}
+	case ast.ToF32:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewF32(inst.StartEnd())
+		}
+	case ast.ToF64:
+		if ast.IsNumberSubType(opType) {
+			return ast.NewF64(inst.StartEnd())
+		}
+	default:
+		panic(fmt.Sprintf("unhandled unary operation kind (%s)", inst.Kind))
 	}
 
 	checker.Emit(
-		inst.Loc(),
+		inst.Src.Loc(),
 		"cannot use type %s on unary operation (%s)",
 		opType,
 		inst.Kind)
@@ -174,7 +216,7 @@ func (checker *typeChecker) evaluateBinaryOperation(
 	}
 
 	checker.Emit(
-		inst.Loc(),
+		opType.Loc(),
 		"cannot use type %s on binary operation (%s)",
 		opType,
 		inst.Kind)
@@ -198,7 +240,7 @@ func (checker *typeChecker) evaluateCall(
 	funcType, ok := fType.(ast.FunctionType)
 	if !ok {
 		checker.Emit(
-			inst.Loc(),
+			fType.Loc(),
 			"calling invalid function, expected func type, found %s",
 			fType)
 		return ast.NewErrorType(inst.StartEnd())
@@ -214,7 +256,8 @@ func (checker *typeChecker) evaluateCall(
 
 	foundError := false
 	for idx, paramType := range funcType.ParameterTypes {
-		argType := inst.Args[idx].Type()
+		arg := inst.Args[idx]
+		argType := arg.Type()
 		if ast.IsErrorType(argType) {
 			foundError = true
 			continue
@@ -222,7 +265,7 @@ func (checker *typeChecker) evaluateCall(
 
 		if !argType.IsSubTypeOf(paramType) {
 			checker.Emit(
-				inst.Loc(),
+				arg.Loc(),
 				"invalid %d-th argument, expected %s found %s",
 				idx,
 				paramType,
@@ -298,7 +341,8 @@ func (checker *typeChecker) evaluateTerminal(
 			checker.Emit(
 				inst.Loc(),
 				"invalid return value type %s, expected %s",
-				retType)
+				retType,
+				funcRetType)
 		}
 	case ast.Exit:
 		retType := inst.Src.Type()
@@ -320,7 +364,14 @@ func (checker *typeChecker) processDestination(
 ) {
 	if dest.Type == nil {
 		switch evalType.(type) {
-		case ast.IntLiteralType:
+		case ast.PositiveIntLiteralType:
+			checker.Emit(
+				dest.Loc(),
+				"cannot infer register type from int immediate, "+
+					"destination (%s) must be explicitly typed",
+				dest.Name)
+			dest.Type = ast.NewErrorType(evalType.StartEnd())
+		case ast.NegativeIntLiteralType:
 			checker.Emit(
 				dest.Loc(),
 				"cannot infer register type from int immediate, "+
@@ -359,7 +410,9 @@ func (checker *typeChecker) checkRedefinition(
 	dest *ast.RegisterDefinition,
 ) {
 	switch dest.Type.(type) {
-	case ast.IntLiteralType:
+	case ast.PositiveIntLiteralType:
+		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))
+	case ast.NegativeIntLiteralType:
 		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))
 	case ast.FloatLiteralType:
 		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))

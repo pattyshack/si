@@ -154,7 +154,11 @@ func (printer *treePrinter) Enter(n Node) {
 			printer.write("\n%sType: %s", printer.indent, node.Signature.Type())
 		}
 	case *IntImmediate:
-		printer.write("[IntImmediate: Value=%d]", node.Value)
+		sign := ""
+		if node.IsNegative {
+			sign = "-"
+		}
+		printer.write("[IntImmediate: Value=%s%d]", sign, node.Value)
 	case *FloatImmediate:
 		printer.write("[FloatImmediate: Value=%e]", node.Value)
 
@@ -186,12 +190,16 @@ func (printer *treePrinter) Enter(n Node) {
 
 	case ErrorType:
 		printer.write("[ErrorType]")
-	case IntLiteralType:
-		printer.write("[IntLiteralType]")
+	case PositiveIntLiteralType:
+		printer.write("[PositiveIntLiteralType]")
+	case NegativeIntLiteralType:
+		printer.write("[NegativeIntLiteralType]")
 	case FloatLiteralType:
 		printer.write("[FloatLiteralType]")
-	case IntType:
-		printer.write("[IntType: Kind=%s]", node.Kind)
+	case SignedIntType:
+		printer.write("[SignedIntType: Kind=%s]", node.Kind)
+	case UnsignedIntType:
+		printer.write("[UnsignedIntType: Kind=%s]", node.Kind)
 	case FloatType:
 		printer.write("[FloatType: Kind=%s]", node.Kind)
 	case FunctionType:

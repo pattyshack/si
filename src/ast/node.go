@@ -253,7 +253,8 @@ type IntImmediate struct {
 	value
 	parseutil.StartEndPos
 
-	Value int64
+	Value      uint64
+	IsNegative bool
 }
 
 var _ Value = &IntImmediate{}
@@ -283,8 +284,14 @@ func (imm *IntImmediate) Walk(visitor Visitor) {
 }
 
 func (imm *IntImmediate) Type() Type {
-	return IntLiteralType{
-		StartEndPos: imm.StartEndPos,
+	if imm.IsNegative {
+		return NegativeIntLiteralType{
+			StartEndPos: imm.StartEndPos,
+		}
+	} else {
+		return PositiveIntLiteralType{
+			StartEndPos: imm.StartEndPos,
+		}
 	}
 }
 
