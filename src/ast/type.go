@@ -9,6 +9,8 @@ type Type interface {
 	isTypeExpr()
 
 	String() string
+
+	Equals(Type) bool
 }
 
 type isType struct{}
@@ -37,6 +39,10 @@ func (ErrorType) String() string {
 	return "ErrorType"
 }
 
+func (ErrorType) Equals(Type) bool {
+	return false
+}
+
 // Internal use only. Compatible with all sign/unsigned int types.
 type IntLiteralType struct {
 	isType
@@ -52,6 +58,11 @@ func (IntLiteralType) String() string {
 	return "IntLiteralType"
 }
 
+func (IntLiteralType) Equals(other Type) bool {
+	_, ok := other.(IntLiteralType)
+	return ok
+}
+
 // Internal use only. Compatible with all sign/unsigned float types.
 type FloatLiteralType struct {
 	isType
@@ -65,6 +76,11 @@ func (t FloatLiteralType) Walk(visitor Visitor) {
 
 func (FloatLiteralType) String() string {
 	return "FloatLiteralType"
+}
+
+func (FloatLiteralType) Equals(other Type) bool {
+	_, ok := other.(FloatLiteralType)
+	return ok
 }
 
 func validateUsableType(typeExpr Type, emitter *parseutil.Emitter) {
@@ -123,6 +139,15 @@ func (numType NumberType) String() string {
 	return string(numType.Kind)
 }
 
+func (numType NumberType) Equals(other Type) bool {
+	otherNumType, ok := other.(NumberType)
+	if !ok {
+		return false
+	}
+
+	return numType.Kind == otherNumType.Kind
+}
+
 type FunctionType struct {
 	isType
 	parseutil.StartEndPos
@@ -161,4 +186,24 @@ func (funcType FunctionType) String() string {
 	}
 	result += ") " + funcType.ReturnType.String()
 	return result
+}
+
+func (funcType FunctionType) Equals(other Type) bool {
+	otherFuncType, ok := other.(FunctionType)
+	if !ok {
+		return false
+	}
+
+	if len(funcType.ParameterTypes) != len(otherFuncType.ParameterTypes) {
+		return false
+	}
+
+	for idx, paramType := range funcType.ParameterTypes {
+		otherParamType := otherFuncType.ParameterTypes[idx]
+		if !paramType.Equals(otherParamType) {
+			return false
+		}
+	}
+
+	return funcType.ReturnType.Equals(otherFuncType.ReturnType)
 }
