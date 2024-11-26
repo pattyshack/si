@@ -1,6 +1,8 @@
 package reducer
 
 import (
+	"strings"
+
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/ast"
@@ -13,10 +15,17 @@ func (Reducer) ToNumberType(
 	ast.Type,
 	error,
 ) {
-	return ast.NumberType{
-		StartEndPos: token.StartEndPos,
-		Kind:        ast.NumberTypeKind(token.Value),
-	}, nil
+	if strings.HasPrefix(token.Value, "F") {
+		return ast.FloatType{
+			StartEndPos: token.StartEndPos,
+			Kind:        ast.FloatTypeKind(token.Value),
+		}, nil
+	} else {
+		return ast.IntType{
+			StartEndPos: token.StartEndPos,
+			Kind:        ast.IntTypeKind(token.Value),
+		}, nil
+	}
 }
 
 func (Reducer) ToFuncType(

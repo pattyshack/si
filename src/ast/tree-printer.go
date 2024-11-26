@@ -190,8 +190,10 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[IntLiteralType]")
 	case FloatLiteralType:
 		printer.write("[FloatLiteralType]")
-	case NumberType:
-		printer.write("[NumberType: Kind=%s]", node.Kind)
+	case IntType:
+		printer.write("[IntType: Kind=%s]", node.Kind)
+	case FloatType:
+		printer.write("[FloatType: Kind=%s]", node.Kind)
 	case FunctionType:
 		printer.list(
 			"[FunctionType",
