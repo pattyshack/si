@@ -30,7 +30,10 @@ func (binder *globalLabelReferenceBinder) Process(entry ast.SourceEntry) {
 
 	for _, block := range funcDef.Blocks {
 		for _, inst := range block.Instructions {
+			inst.SetParentBlock(block)
 			for _, src := range inst.Sources() {
+				src.SetParent(inst)
+
 				ref, ok := src.(*ast.GlobalLabelReference)
 				if !ok {
 					continue

@@ -83,10 +83,7 @@ func (constructor *ssaConstructor) processBlock(
 	}
 
 	for _, inst := range block.Instructions {
-		inst.SetParentBlock(block)
 		for _, src := range inst.Sources() {
-			src.SetParent(inst)
-
 			ref, ok := src.(*ast.RegisterReference)
 			if !ok {
 				continue
