@@ -41,7 +41,7 @@ func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
 				{InitializeControlFlowGraph(entryEmitter)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
-				//{CheckTypes(entryEmitter)},
+				{CheckTypes(entryEmitter)},
 			}
 
 			return func(entry ast.SourceEntry) {

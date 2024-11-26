@@ -135,7 +135,6 @@ const (
 	Shl = BinaryOperationKind("shl")
 	// uint uses logical shift shr, int uses arithmetic shift sar
 	Shr = BinaryOperationKind("shr")
-	Slt = BinaryOperationKind("slt") // dest = (src1 < src2)? 1 : 0
 )
 
 // Instructions of the form: <dest> = <type> <src1>, <src2>
@@ -188,7 +187,7 @@ func (binary *BinaryOperation) Walk(visitor Visitor) {
 
 func (binary *BinaryOperation) Validate(emitter *parseutil.Emitter) {
 	switch binary.Kind {
-	case Add, Sub, Mul, Div, Rem, Xor, Or, And, Shl, Shr, Slt: // ok
+	case Add, Sub, Mul, Div, Rem, Xor, Or, And, Shl, Shr: // ok
 	default:
 		emitter.Emit(binary.Loc(), "unexpected binary operation (%s)", binary.Kind)
 	}

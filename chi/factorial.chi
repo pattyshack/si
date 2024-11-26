@@ -29,7 +29,7 @@ define func @tail_factorial_helper(
 }
 
 define func @loop_factorial(%i I32) I32 {
-  %acc = 1
+  %acc I32 = 1
 :loop
   jlt :"non-identifier-return-label!!!", %i, 2
   %acc = mul %i, %acc
@@ -40,7 +40,7 @@ define func @loop_factorial(%i I32) I32 {
 }
 
 define func @loop_factorial2(%i I32) I32 {
-  %acc = 1
+  %acc I32 = 1
   %val = call @loop_factorial2_helper(%i, %acc)
   ret %val
 }

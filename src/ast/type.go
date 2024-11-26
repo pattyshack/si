@@ -26,6 +26,61 @@ func IsErrorType(t Type) bool {
 	return ok
 }
 
+// int or int literal
+func IsIntSubType(t Type) bool {
+	switch t.(type) {
+	case IntLiteralType:
+		return true
+	case IntType:
+		return true
+	default:
+		return false
+	}
+}
+
+// float or float literal
+func IsFloatSubType(t Type) bool {
+	switch t.(type) {
+	case FloatLiteralType:
+		return true
+	case FloatType:
+		return true
+	default:
+		return false
+	}
+}
+
+// == and !=
+// NOTE: float is not comparable
+func IsComparableType(t Type) bool {
+	switch t.(type) {
+	case IntLiteralType:
+		return true
+	case IntType:
+		return true
+	case FunctionType:
+		return true
+	default:
+		return false
+	}
+}
+
+// < and >=
+func IsOrderedType(t Type) bool {
+	switch t.(type) {
+	case IntLiteralType:
+		return true
+	case IntType:
+		return true
+	case FloatLiteralType:
+		return true
+	case FloatType:
+		return true
+	default:
+		return false
+	}
+}
+
 // Internal use only.  Used by type checker to indicate an definition with
 // unspecified/inferred type failed type checking.
 type ErrorType struct {
