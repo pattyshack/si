@@ -9,13 +9,14 @@ import (
 type ssaConstructor struct {
 	*parseutil.Emitter
 
-	liveOuts map[*ast.Block]map[string]*ast.RegisterDefinition
+	// reachable definitions
+	defOuts map[*ast.Block]map[string]*ast.RegisterDefinition
 }
 
 func ConstructSSA(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
 	return &ssaConstructor{
-		Emitter:  emitter,
-		liveOuts: map[*ast.Block]map[string]*ast.RegisterDefinition{},
+		Emitter: emitter,
+		defOuts: map[*ast.Block]map[string]*ast.RegisterDefinition{},
 	}
 }
 
@@ -25,11 +26,11 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	initLiveIn := map[string]*ast.RegisterDefinition{}
+	initDefIn := map[string]*ast.RegisterDefinition{}
 	for _, param := range funcDef.Parameters {
-		initLiveIn[param.Name] = param
+		initDefIn[param.Name] = param
 	}
-	constructor.liveOuts[funcDef.Blocks[0]] = initLiveIn
+	constructor.defOuts[funcDef.Blocks[0]] = initDefIn
 
 	processed := map[*ast.Block]struct{}{}
 	queue := []*ast.Block{funcDef.Blocks[0]}
@@ -43,8 +44,8 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		}
 		processed[block] = struct{}{}
 
-		liveOut := constructor.processBlock(block)
-		constructor.populateChildrenPhis(block, liveOut)
+		defOut := constructor.processBlock(block)
+		constructor.populateChildrenPhis(block, defOut)
 
 		queue = append(queue, block.Children...)
 	}
@@ -52,10 +53,6 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 	// In theory, this should never happen since the graph is reducible, but
 	// it doesn't hurt to double check.
 	for _, block := range funcDef.Blocks {
-		if len(block.Parents) < 2 {
-			continue
-		}
-
 		for _, phi := range block.Phis {
 			if len(phi.Dest.DefUses) > 0 && len(phi.Srcs) != len(block.Parents) {
 				for ref, _ := range phi.Dest.DefUses {
@@ -74,11 +71,11 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 func (constructor *ssaConstructor) processBlock(
 	block *ast.Block,
 ) map[string]*ast.RegisterDefinition {
-	liveOut, ok := constructor.liveOuts[block]
+	defOut, ok := constructor.defOuts[block]
 	if !ok {
-		liveOut = map[string]*ast.RegisterDefinition{}
+		defOut = map[string]*ast.RegisterDefinition{}
 		for name, phi := range block.Phis {
-			liveOut[name] = phi.Dest
+			defOut[name] = phi.Dest
 		}
 	}
 
@@ -89,7 +86,7 @@ func (constructor *ssaConstructor) processBlock(
 				continue
 			}
 
-			def, ok := liveOut[ref.Name]
+			def, ok := defOut[ref.Name]
 			if !ok {
 				constructor.Emit(
 					ref.Loc(),
@@ -107,28 +104,28 @@ func (constructor *ssaConstructor) processBlock(
 		}
 
 		dest.Parent = inst
-		liveOut[dest.Name] = dest
+		defOut[dest.Name] = dest
 	}
 
-	return liveOut
+	return defOut
 }
 
 func (constructor *ssaConstructor) populateChildrenPhis(
 	block *ast.Block,
-	liveOut map[string]*ast.RegisterDefinition,
+	defOut map[string]*ast.RegisterDefinition,
 ) {
 	for _, child := range block.Children {
 		if len(child.Parents) == 1 {
 			// Skip populating phis since there won't be any left after pruning
-			liveIn := make(map[string]*ast.RegisterDefinition, len(liveOut))
-			for name, def := range liveOut {
-				liveIn[name] = def
+			defIn := make(map[string]*ast.RegisterDefinition, len(defOut))
+			for name, def := range defOut {
+				defIn[name] = def
 			}
-			constructor.liveOuts[child] = liveIn
+			constructor.defOuts[child] = defIn
 			continue
 		}
 
-		for _, def := range liveOut {
+		for _, def := range defOut {
 			child.AddToPhis(block, def)
 		}
 	}
