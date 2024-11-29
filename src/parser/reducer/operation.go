@@ -8,7 +8,7 @@ import (
 )
 
 func (Reducer) AssignToOperationInstruction(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 	equal *lr.TokenValue,
 	src ast.Value,
 ) (
@@ -23,7 +23,7 @@ func (Reducer) AssignToOperationInstruction(
 }
 
 func (Reducer) UnaryToOperationInstruction(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 	equal *lr.TokenValue,
 	op *lr.TokenValue,
 	src ast.Value,
@@ -40,7 +40,7 @@ func (Reducer) UnaryToOperationInstruction(
 }
 
 func (Reducer) BinaryToOperationInstruction(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 	equal *lr.TokenValue,
 	op *lr.TokenValue,
 	src1 ast.Value,
@@ -60,7 +60,7 @@ func (Reducer) BinaryToOperationInstruction(
 }
 
 func (Reducer) CallToOperationInstruction(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 	equal *lr.TokenValue,
 	callKind *lr.TokenValue,
 	funcLoc ast.Value,

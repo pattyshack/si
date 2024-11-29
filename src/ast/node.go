@@ -40,7 +40,7 @@ func (sourceEntry) isSourceEntry() {}
 
 // %-prefixed local register variable definition.  Note that the '%' prefix is
 // not part of the name and is only used by the parser.
-type RegisterDefinition struct {
+type VariableDefinition struct {
 	parseutil.StartEndPos
 
 	Name string // require
@@ -49,19 +49,19 @@ type RegisterDefinition struct {
 
 	// Internal (set during ssa construction)
 	Parent  Instruction // nil for phi and func parameters
-	DefUses map[*RegisterReference]struct{}
+	DefUses map[*VariableReference]struct{}
 }
 
-var _ Node = &RegisterDefinition{}
-var _ Validator = &RegisterDefinition{}
+var _ Node = &VariableDefinition{}
+var _ Validator = &VariableDefinition{}
 
-func (def *RegisterDefinition) ReplaceReferencesWith(value Value) {
+func (def *VariableDefinition) ReplaceReferencesWith(value Value) {
 	for ref, _ := range def.DefUses {
 		ref.ReplaceWith(value)
 	}
 }
 
-func (def *RegisterDefinition) Walk(visitor Visitor) {
+func (def *VariableDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
 	if def.Type != nil {
 		def.Type.Walk(visitor)
@@ -69,7 +69,7 @@ func (def *RegisterDefinition) Walk(visitor Visitor) {
 	visitor.Exit(def)
 }
 
-func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
+func (def *VariableDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Name == "" {
 		emitter.Emit(def.Loc(), "empty register definition name")
 	}
@@ -79,19 +79,19 @@ func (def *RegisterDefinition) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-func (def *RegisterDefinition) AddRef(ref *RegisterReference) {
+func (def *VariableDefinition) AddRef(ref *VariableReference) {
 	if def.DefUses == nil {
-		def.DefUses = map[*RegisterReference]struct{}{}
+		def.DefUses = map[*VariableReference]struct{}{}
 	}
 
 	def.DefUses[ref] = struct{}{}
 	ref.UseDef = def
 }
 
-func (def *RegisterDefinition) NewRef(
+func (def *VariableDefinition) NewRef(
 	pos parseutil.StartEndPos,
-) *RegisterReference {
-	ref := &RegisterReference{
+) *VariableReference {
+	ref := &VariableReference{
 		StartEndPos: pos,
 		Name:        def.Name,
 	}
@@ -107,7 +107,7 @@ type Value interface {
 	// Internal
 
 	// What this reference refers to.  For now:
-	// - register reference returns a *RegisterDefinition
+	// - register reference returns a *VariableDefinition
 	// - global label reference returns a string
 	// - immediate returns an int / float
 	Definition() interface{}
@@ -194,55 +194,55 @@ func (ref *GlobalLabelReference) Type() Type {
 
 // %-prefixed local register variable reference.  Note that the '%' prefix is
 // not part of the name and is only used by the parser.
-type RegisterReference struct {
+type VariableReference struct {
 	value
 	parseutil.StartEndPos
 
 	Name string // require
 
 	// Internal (set during ssa construction)
-	UseDef *RegisterDefinition
+	UseDef *VariableDefinition
 }
 
-var _ Node = &RegisterReference{}
-var _ Validator = &RegisterReference{}
-var _ Value = &RegisterReference{}
+var _ Node = &VariableReference{}
+var _ Validator = &VariableReference{}
+var _ Value = &VariableReference{}
 
-func (RegisterReference) isValue() {}
+func (VariableReference) isValue() {}
 
-func (ref *RegisterReference) Definition() interface{} {
+func (ref *VariableReference) Definition() interface{} {
 	return ref.UseDef
 }
 
-func (ref *RegisterReference) ReplaceWith(newVal Value) {
+func (ref *VariableReference) ReplaceWith(newVal Value) {
 	newVal = newVal.Copy(ref.StartEnd())
 	newVal.SetParent(ref.Parent)
 	ref.Parent.replaceSource(ref, newVal)
 	ref.Discard()
 }
 
-func (ref *RegisterReference) Copy(pos parseutil.StartEndPos) Value {
+func (ref *VariableReference) Copy(pos parseutil.StartEndPos) Value {
 	return ref.UseDef.NewRef(pos)
 }
 
-func (ref *RegisterReference) Discard() {
+func (ref *VariableReference) Discard() {
 	delete(ref.UseDef.DefUses, ref)
 	ref.UseDef = nil
 	ref.Parent = nil
 }
 
-func (ref *RegisterReference) Walk(visitor Visitor) {
+func (ref *VariableReference) Walk(visitor Visitor) {
 	visitor.Enter(ref)
 	visitor.Exit(ref)
 }
 
-func (ref *RegisterReference) Validate(emitter *parseutil.Emitter) {
+func (ref *VariableReference) Validate(emitter *parseutil.Emitter) {
 	if ref.Name == "" {
 		emitter.Emit(ref.Loc(), "empty register reference name")
 	}
 }
 
-func (ref *RegisterReference) Type() Type {
+func (ref *VariableReference) Type() Type {
 	if ref.UseDef == nil { // failed named binding
 		return NewErrorType(ref.StartEndPos)
 	}

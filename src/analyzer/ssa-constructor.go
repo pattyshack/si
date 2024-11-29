@@ -10,13 +10,13 @@ type ssaConstructor struct {
 	*parseutil.Emitter
 
 	// reachable definitions
-	defOuts map[*ast.Block]map[string]*ast.RegisterDefinition
+	defOuts map[*ast.Block]map[string]*ast.VariableDefinition
 }
 
 func ConstructSSA(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
 	return &ssaConstructor{
 		Emitter: emitter,
-		defOuts: map[*ast.Block]map[string]*ast.RegisterDefinition{},
+		defOuts: map[*ast.Block]map[string]*ast.VariableDefinition{},
 	}
 }
 
@@ -26,7 +26,7 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	initDefIn := map[string]*ast.RegisterDefinition{}
+	initDefIn := map[string]*ast.VariableDefinition{}
 	for _, param := range funcDef.Parameters {
 		initDefIn[param.Name] = param
 	}
@@ -70,10 +70,10 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 
 func (constructor *ssaConstructor) processBlock(
 	block *ast.Block,
-) map[string]*ast.RegisterDefinition {
+) map[string]*ast.VariableDefinition {
 	defOut, ok := constructor.defOuts[block]
 	if !ok {
-		defOut = map[string]*ast.RegisterDefinition{}
+		defOut = map[string]*ast.VariableDefinition{}
 		for name, phi := range block.Phis {
 			defOut[name] = phi.Dest
 		}
@@ -81,7 +81,7 @@ func (constructor *ssaConstructor) processBlock(
 
 	for _, inst := range block.Instructions {
 		for _, src := range inst.Sources() {
-			ref, ok := src.(*ast.RegisterReference)
+			ref, ok := src.(*ast.VariableReference)
 			if !ok {
 				continue
 			}
@@ -112,12 +112,12 @@ func (constructor *ssaConstructor) processBlock(
 
 func (constructor *ssaConstructor) populateChildrenPhis(
 	block *ast.Block,
-	defOut map[string]*ast.RegisterDefinition,
+	defOut map[string]*ast.VariableDefinition,
 ) {
 	for _, child := range block.Children {
 		if len(child.Parents) == 1 {
 			// Skip populating phis since there won't be any left after pruning
-			defIn := make(map[string]*ast.RegisterDefinition, len(defOut))
+			defIn := make(map[string]*ast.VariableDefinition, len(defOut))
 			for name, def := range defOut {
 				defIn[name] = def
 			}
@@ -157,7 +157,7 @@ func (constructor *ssaConstructor) prunePhis(blocks []*ast.Block) {
 		for _, src := range phi.Srcs {
 			def := src.Definition()
 
-			regDef, ok := def.(*ast.RegisterDefinition)
+			regDef, ok := def.(*ast.VariableDefinition)
 			if ok && regDef == phi.Dest { // ignore self reference
 				continue
 			}

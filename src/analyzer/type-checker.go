@@ -359,7 +359,7 @@ func (checker *typeChecker) evaluateTerminal(
 }
 
 func (checker *typeChecker) processDestination(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 	evalType ast.Type,
 ) {
 	if dest.Type == nil {
@@ -407,7 +407,7 @@ func (checker *typeChecker) processDestination(
 }
 
 func (checker *typeChecker) checkRedefinition(
-	dest *ast.RegisterDefinition,
+	dest *ast.VariableDefinition,
 ) {
 	switch dest.Type.(type) {
 	case ast.PositiveIntLiteralType:

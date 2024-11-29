@@ -110,8 +110,8 @@ func (printer *treePrinter) Enter(n Node) {
 	printer.writeLabel()
 
 	switch node := n.(type) {
-	case *RegisterDefinition:
-		printer.write("[RegisterDefinition: Name=%s Loc=%s", node.Name, node.Loc())
+	case *VariableDefinition:
+		printer.write("[VariableDefinition: Name=%s Loc=%s", node.Name, node.Loc())
 		if node.Type != nil {
 			printer.push("Type=")
 		} else {
@@ -129,8 +129,8 @@ func (printer *treePrinter) Enter(n Node) {
 			}
 			printer.write("\n%s  %s: %s", printer.indent, parent, ref.Loc())
 		}
-	case *RegisterReference:
-		printer.write("[RegisterReference: Name=%s Loc=%s", node.Name, node.Loc())
+	case *VariableReference:
+		printer.write("[VariableReference: Name=%s Loc=%s", node.Name, node.Loc())
 		printer.push()
 
 		if node.UseDef != nil && node.UseDef.Type != nil {
@@ -241,9 +241,9 @@ func (printer *treePrinter) Enter(n Node) {
 
 func (printer *treePrinter) Exit(n Node) {
 	switch node := n.(type) {
-	case *RegisterDefinition:
+	case *VariableDefinition:
 		printer.endNode()
-	case *RegisterReference:
+	case *VariableReference:
 		printer.endNode()
 
 	case *AssignOperation:

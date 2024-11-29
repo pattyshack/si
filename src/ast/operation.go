@@ -15,7 +15,7 @@ type Instruction interface {
 	replaceSource(oldSrc Value, newSrc Value)
 
 	Sources() []Value                 // empty if there are no src dependencies
-	Destination() *RegisterDefinition // nil if instruction has no destination
+	Destination() *VariableDefinition // nil if instruction has no destination
 }
 
 type instruction struct {
@@ -38,7 +38,7 @@ type AssignOperation struct {
 
 	parseutil.StartEndPos
 
-	Dest *RegisterDefinition
+	Dest *VariableDefinition
 	Src  Value
 }
 
@@ -56,7 +56,7 @@ func (assign *AssignOperation) Sources() []Value {
 	return []Value{assign.Src}
 }
 
-func (assign *AssignOperation) Destination() *RegisterDefinition {
+func (assign *AssignOperation) Destination() *VariableDefinition {
 	return assign.Dest
 }
 
@@ -92,7 +92,7 @@ type UnaryOperation struct {
 
 	Kind UnaryOperationKind
 
-	Dest *RegisterDefinition
+	Dest *VariableDefinition
 	Src  Value
 }
 
@@ -111,7 +111,7 @@ func (unary *UnaryOperation) Sources() []Value {
 	return []Value{unary.Src}
 }
 
-func (unary *UnaryOperation) Destination() *RegisterDefinition {
+func (unary *UnaryOperation) Destination() *VariableDefinition {
 	return unary.Dest
 }
 
@@ -158,7 +158,7 @@ type BinaryOperation struct {
 
 	Kind BinaryOperationKind
 
-	Dest *RegisterDefinition
+	Dest *VariableDefinition
 	Src1 Value
 	Src2 Value
 }
@@ -186,7 +186,7 @@ func (binary *BinaryOperation) Sources() []Value {
 	return []Value{binary.Src1, binary.Src2}
 }
 
-func (binary *BinaryOperation) Destination() *RegisterDefinition {
+func (binary *BinaryOperation) Destination() *VariableDefinition {
 	return binary.Dest
 }
 
@@ -224,7 +224,7 @@ type FuncCall struct {
 
 	Kind FuncCallKind
 
-	Dest *RegisterDefinition
+	Dest *VariableDefinition
 	Func Value
 	Args []Value
 }
@@ -250,7 +250,7 @@ func (call *FuncCall) Sources() []Value {
 	return append([]Value{call.Func}, call.Args...)
 }
 
-func (call *FuncCall) Destination() *RegisterDefinition {
+func (call *FuncCall) Destination() *VariableDefinition {
 	return call.Dest
 }
 

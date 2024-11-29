@@ -6,40 +6,40 @@ import (
 )
 
 func (Reducer) ImproperToParameters(
-	list []*ast.RegisterDefinition,
+	list []*ast.VariableDefinition,
 	comma *lr.TokenValue,
 ) (
-	[]*ast.RegisterDefinition,
+	[]*ast.VariableDefinition,
 	error,
 ) {
 	return list, nil
 }
 
 func (Reducer) NilToParameters() (
-	[]*ast.RegisterDefinition,
+	[]*ast.VariableDefinition,
 	error,
 ) {
 	return nil, nil
 }
 
 func (Reducer) AddToProperParameters(
-	list []*ast.RegisterDefinition,
+	list []*ast.VariableDefinition,
 	comma *lr.TokenValue,
-	def *ast.RegisterDefinition,
+	def *ast.VariableDefinition,
 ) (
-	[]*ast.RegisterDefinition,
+	[]*ast.VariableDefinition,
 	error,
 ) {
 	return append(list, def), nil
 }
 
 func (Reducer) NewToProperParameters(
-	def *ast.RegisterDefinition,
+	def *ast.VariableDefinition,
 ) (
-	[]*ast.RegisterDefinition,
+	[]*ast.VariableDefinition,
 	error,
 ) {
-	return []*ast.RegisterDefinition{def}, nil
+	return []*ast.VariableDefinition{def}, nil
 }
 
 func (Reducer) ImproperToArguments(

@@ -46,7 +46,7 @@ func (Jump) Sources() []Value {
 	return nil
 }
 
-func (Jump) Destination() *RegisterDefinition {
+func (Jump) Destination() *VariableDefinition {
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (jump *ConditionalJump) Sources() []Value {
 	return []Value{jump.Src1, jump.Src2}
 }
 
-func (ConditionalJump) Destination() *RegisterDefinition {
+func (ConditionalJump) Destination() *VariableDefinition {
 	return nil
 }
 
@@ -164,7 +164,7 @@ func (term *Terminal) Sources() []Value {
 	return []Value{term.Src}
 }
 
-func (Terminal) Destination() *RegisterDefinition {
+func (Terminal) Destination() *VariableDefinition {
 	return nil
 }
 

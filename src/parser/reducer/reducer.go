@@ -18,7 +18,7 @@ func (Reducer) FuncToDefinition(
 	funcKW *lr.TokenValue,
 	label *ast.GlobalLabelReference,
 	lparen *lr.TokenValue,
-	parameters []*ast.RegisterDefinition,
+	parameters []*ast.VariableDefinition,
 	rparen *lr.TokenValue,
 	retType ast.Type,
 	lbrace *lr.TokenValue,
@@ -45,26 +45,26 @@ func (Reducer) ToRbrace(
 	}, nil
 }
 
-func (Reducer) InferredToRegisterDefinition(
-	ref *ast.RegisterReference,
+func (Reducer) InferredToVariableDefinition(
+	ref *ast.VariableReference,
 ) (
-	*ast.RegisterDefinition,
+	*ast.VariableDefinition,
 	error,
 ) {
-	return &ast.RegisterDefinition{
+	return &ast.VariableDefinition{
 		StartEndPos: ref.StartEndPos,
 		Name:        ref.Name,
 	}, nil
 }
 
-func (Reducer) ToTypedRegisterDefinition(
-	ref *ast.RegisterReference,
+func (Reducer) ToTypedVariableDefinition(
+	ref *ast.VariableReference,
 	typeExpr ast.Type,
 ) (
-	*ast.RegisterDefinition,
+	*ast.VariableDefinition,
 	error,
 ) {
-	return &ast.RegisterDefinition{
+	return &ast.VariableDefinition{
 		StartEndPos: parseutil.NewStartEndPos(ref.Loc(), typeExpr.End()),
 		Name:        ref.Name,
 		Type:        typeExpr,
@@ -97,14 +97,14 @@ func (Reducer) ToLocalLabel(
 	}, nil
 }
 
-func (Reducer) ToRegisterReference(
+func (Reducer) ToVariableReference(
 	percent *lr.TokenValue,
 	identifier *lr.TokenValue,
 ) (
-	*ast.RegisterReference,
+	*ast.VariableReference,
 	error,
 ) {
-	return &ast.RegisterReference{
+	return &ast.VariableReference{
 		StartEndPos: parseutil.NewStartEndPos(percent.StartPos, identifier.EndPos),
 		Name:        identifier.Value,
 	}, nil

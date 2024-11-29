@@ -26,14 +26,14 @@ definition<Line> ->
 rbrace<Line> -> RBRACE
 
 //
-// Labels, registers, and immediate
+// Labels, variables, and immediate
 //
 
 global_label<GlobalLabelReference> -> AT identifier
 
 local_label<LocalLabel> -> COLON identifier
 
-register_reference<RegisterReference> -> PERCENT identifier
+variable_reference<VariableReference> -> PERCENT identifier
 
 identifier<Value> ->
   = IDENTIFIER |
@@ -47,14 +47,14 @@ int_immediate<OpValue> -> INTEGER_LITERAL
 
 float_immediate<OpValue> -> FLOAT_LITERAL
 
-typed_register_definition<RegisterDefinition> -> register_reference type
+typed_variable_definition<VariableDefinition> -> variable_reference type
 
-register_definition<RegisterDefinition> ->
-  = typed_register_definition |
-  inferred: register_reference
+variable_definition<VariableDefinition> ->
+  = typed_variable_definition |
+  inferred: variable_reference
 
 value<OpValue> ->
-  = register_reference |
+  = variable_reference |
   = global_label |
   = immediate
 
@@ -68,8 +68,8 @@ parameters<Parameters> ->
   nil:
 
 proper_parameters<Parameters> ->
-  add: proper_parameters COMMA typed_register_definition |
-  new: typed_register_definition
+  add: proper_parameters COMMA typed_variable_definition |
+  new: typed_variable_definition
 
 arguments<Arguments> ->
   = proper_arguments |
@@ -94,10 +94,10 @@ proper_types<Types> ->
 //
 
 operation_instruction<Instruction> ->
-  assign: register_definition EQUAL value |
-  unary: register_definition EQUAL IDENTIFIER value |
-  binary: register_definition EQUAL IDENTIFIER value COMMA value |
-  call: register_definition EQUAL IDENTIFIER value LPAREN arguments RPAREN
+  assign: variable_definition EQUAL value |
+  unary: variable_definition EQUAL IDENTIFIER value |
+  binary: variable_definition EQUAL IDENTIFIER value COMMA value |
+  call: variable_definition EQUAL IDENTIFIER value LPAREN arguments RPAREN
 
 control_flow_instruction<Instruction> ->
   unconditional: IDENTIFIER local_label |
@@ -130,9 +130,9 @@ go:
     LocalLabel: "ParsedLocalLabel"
     Instruction: "github.com/pattyshack/chickadee/ast.Instruction"
     Arguments: "[]github.com/pattyshack/chickadee/ast.Value"
-    Parameters: "[]*github.com/pattyshack/chickadee/ast.RegisterDefinition"
-    RegisterDefinition: "*github.com/pattyshack/chickadee/ast.RegisterDefinition"
-    RegisterReference: "*github.com/pattyshack/chickadee/ast.RegisterReference"
+    Parameters: "[]*github.com/pattyshack/chickadee/ast.VariableDefinition"
+    VariableDefinition: "*github.com/pattyshack/chickadee/ast.VariableDefinition"
+    VariableReference: "*github.com/pattyshack/chickadee/ast.VariableReference"
     OpValue: "github.com/pattyshack/chickadee/ast.Value"
 }%%
 

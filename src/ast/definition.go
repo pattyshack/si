@@ -12,7 +12,7 @@ type FuncDefinition struct {
 	ParseError error // only set by parser
 
 	Label      string
-	Parameters []*RegisterDefinition
+	Parameters []*VariableDefinition
 	ReturnType Type
 	Blocks     []*Block
 }
@@ -41,7 +41,7 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 		emitter.Emit(def.Loc(), "function definition must have at least one block")
 	}
 
-	names := map[string]*RegisterDefinition{}
+	names := map[string]*VariableDefinition{}
 	for _, param := range def.Parameters {
 		prev, ok := names[param.Name]
 		if ok {
@@ -135,7 +135,7 @@ func (block *Block) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
-func (block *Block) AddToPhis(parent *Block, def *RegisterDefinition) {
+func (block *Block) AddToPhis(parent *Block, def *VariableDefinition) {
 	if block.Phis == nil {
 		block.Phis = map[string]*Phi{}
 	}
@@ -145,7 +145,7 @@ func (block *Block) AddToPhis(parent *Block, def *RegisterDefinition) {
 		pos := parseutil.NewStartEndPos(block.Loc(), block.Loc())
 		phi = &Phi{
 			StartEndPos: pos,
-			Dest: &RegisterDefinition{
+			Dest: &VariableDefinition{
 				StartEndPos: pos,
 				Name:        def.Name,
 			},
@@ -164,7 +164,7 @@ type Phi struct {
 
 	parseutil.StartEndPos
 
-	Dest *RegisterDefinition
+	Dest *VariableDefinition
 
 	// Value is usually a register reference, but could be constant after
 	// optimization.
@@ -204,11 +204,11 @@ func (phi *Phi) Sources() []Value {
 	return result
 }
 
-func (phi *Phi) Destination() *RegisterDefinition {
+func (phi *Phi) Destination() *VariableDefinition {
 	return phi.Dest
 }
 
-func (phi *Phi) Add(parent *Block, def *RegisterDefinition) {
+func (phi *Phi) Add(parent *Block, def *VariableDefinition) {
 	ref := def.NewRef(phi.StartEnd())
 	ref.SetParent(phi)
 	phi.Srcs[parent] = ref
