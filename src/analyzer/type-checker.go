@@ -6,10 +6,13 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/ast"
+	"github.com/pattyshack/chickadee/platform"
 )
 
 type typeChecker struct {
 	*parseutil.Emitter
+
+	sysCallSpec platform.SysCallTypeSpec
 
 	// For personal sanity / simplicity, all register definitions with the same
 	// name must have the same type, even through same name with different types
@@ -19,10 +22,12 @@ type typeChecker struct {
 
 func CheckTypes(
 	emitter *parseutil.Emitter,
+	sysCallSpec platform.SysCallTypeSpec,
 ) Pass[ast.SourceEntry] {
 	return &typeChecker{
-		Emitter:  emitter,
-		nameType: map[string]ast.Type{},
+		Emitter:     emitter,
+		sysCallSpec: sysCallSpec,
+		nameType:    map[string]ast.Type{},
 	}
 }
 
@@ -226,7 +231,43 @@ func (checker *typeChecker) evaluateBinaryOperation(
 func (checker *typeChecker) evaluateSysCall(
 	inst *ast.FuncCall,
 ) ast.Type {
-	panic("TODO syscall specification")
+	foundError := false
+	funcValueType := inst.Func.Type()
+	if ast.IsErrorType(funcValueType) {
+		foundError = true
+	} else if !checker.sysCallSpec.IsValidFuncValueType(funcValueType) {
+		foundError = true
+		checker.Emit(
+			funcValueType.Loc(),
+			"invalid syscall function value type, found %s",
+			funcValueType)
+	}
+
+	if len(inst.Args) > checker.sysCallSpec.MaxNumberOfArgs() {
+		foundError = true
+		checker.Emit(inst.Loc(), "too many syscall arguments")
+	}
+
+	for idx, arg := range inst.Args {
+		argType := arg.Type()
+		if ast.IsErrorType(argType) {
+			foundError = true
+			continue
+		} else if !checker.sysCallSpec.IsValidArgType(argType) {
+			foundError = true
+			checker.Emit(
+				arg.Loc(),
+				"invalid %d-th syscall argument type, found %s",
+				idx,
+				argType)
+		}
+	}
+
+	if foundError {
+		return ast.NewErrorType(inst.StartEnd())
+	}
+
+	return checker.sysCallSpec.ReturnType(inst.StartEnd())
 }
 
 func (checker *typeChecker) evaluateCall(
@@ -345,13 +386,17 @@ func (checker *typeChecker) evaluateTerminal(
 				funcRetType)
 		}
 	case ast.Exit:
-		retType := inst.Src.Type()
-		if ast.IsErrorType(retType) {
+		exitValueType := inst.Src.Type()
+		if ast.IsErrorType(exitValueType) {
 			return nil
 		}
 
-		panic("TODO exit syscall specification")
-
+		if !checker.sysCallSpec.IsValidExitArgType(exitValueType) {
+			checker.Emit(
+				inst.Loc(),
+				"invalid exit value type, found %s",
+				exitValueType)
+		}
 	default:
 		panic(fmt.Sprintf("unhandled terminal kind (%s)", inst.Kind))
 	}

@@ -6,9 +6,14 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/ast"
+	"github.com/pattyshack/chickadee/platform"
 )
 
-func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
+func Analyze(
+	sources []ast.SourceEntry,
+	targetPlatform platform.Platform,
+	emitter *parseutil.Emitter,
+) {
 	collector := NewSignatureCollector(emitter)
 
 	Process(
@@ -41,7 +46,7 @@ func Analyze(sources []ast.SourceEntry, emitter *parseutil.Emitter) {
 				{InitializeControlFlowGraph(entryEmitter)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
-				{CheckTypes(entryEmitter)},
+				{CheckTypes(entryEmitter, targetPlatform.SysCallTypeSpec())},
 			}
 
 			return func(entry ast.SourceEntry) {

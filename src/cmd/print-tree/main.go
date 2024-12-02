@@ -9,9 +9,13 @@ import (
 	"github.com/pattyshack/chickadee/analyzer"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/parser"
+	"github.com/pattyshack/chickadee/platform"
+	"github.com/pattyshack/chickadee/platform/amd64"
 )
 
 func main() {
+	targetPlatform := amd64.NewPlatform(platform.Linux)
+
 	for _, fileName := range os.Args[1:] {
 		fmt.Println("=====================")
 		fmt.Println("File name:", fileName)
@@ -29,7 +33,7 @@ func main() {
 				content),
 			emitter)
 
-		analyzer.Analyze(entries, emitter)
+		analyzer.Analyze(entries, targetPlatform, emitter)
 
 		for idx, entry := range entries {
 			fmt.Printf("Entry %d:\n", idx)
