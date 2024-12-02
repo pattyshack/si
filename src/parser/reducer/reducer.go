@@ -132,11 +132,7 @@ func (Reducer) ToIntImmediate(
 			err)
 	}
 
-	return &ast.IntImmediate{
-		StartEndPos: token.StartEndPos,
-		Value:       value,
-		IsNegative:  isNegative,
-	}, nil
+	return ast.NewIntImmediate(token.StartEnd(), value, isNegative), nil
 }
 
 func (Reducer) ToFloatImmediate(

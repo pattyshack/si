@@ -12,7 +12,7 @@ type SysCallTypeSpec interface {
 	// This is usually an int type (e.g., I32)
 	IsValidFuncValueType(ast.Type) bool
 
-	// Maximum number of arguments that syscall could take.  A weak check
+	// Maximum number of arguments that syscall could take.
 	MaxNumberOfArgs() int
 
 	// This usually consist of int and pointer types.
@@ -25,13 +25,14 @@ type SysCallTypeSpec interface {
 	ReturnType(parseutil.StartEndPos) ast.Type
 }
 
-func NewSysCallTypeSpec(os OperatingSystemName) SysCallTypeSpec {
-	switch os {
-	case Linux:
-		return LinuxSysCallTypeSpec{}
-	default:
-		panic("unsupported os: " + os)
-	}
+// OS and architecture dependent
+type SysCallSpec interface {
+	SysCallTypeSpec
+
+	// Exit syscall's func value.  Note that the same os on different
+	// architecture could have different exit syscall's func value (e.g.,
+	// 60 on amd64 linux, 93 on arm64 linux).
+	ExitSysCallFuncValue(parseutil.StartEndPos) ast.Value
 }
 
 // Resources:

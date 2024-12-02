@@ -13,7 +13,7 @@ type Platform interface {
 	ArchitectureName() ArchitectureName
 	OperatingSystemName() OperatingSystemName
 
-	SysCallTypeSpec() SysCallTypeSpec
+	SysCallSpec() SysCallSpec
 
 	ArchitectureRegisters() *ArchitectureRegisters
 }

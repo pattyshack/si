@@ -259,6 +259,18 @@ type IntImmediate struct {
 
 var _ Value = &IntImmediate{}
 
+func NewIntImmediate(
+	pos parseutil.StartEndPos,
+	value uint64,
+	isNegative bool,
+) *IntImmediate {
+	return &IntImmediate{
+		StartEndPos: pos,
+		Value:       value,
+		IsNegative:  isNegative,
+	}
+}
+
 func (IntImmediate) isValue() {}
 
 func (imm *IntImmediate) Definition() interface{} {

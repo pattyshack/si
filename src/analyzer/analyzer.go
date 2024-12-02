@@ -46,7 +46,7 @@ func Analyze(
 				{InitializeControlFlowGraph(entryEmitter)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
-				{CheckTypes(entryEmitter, targetPlatform.SysCallTypeSpec())},
+				{CheckTypes(entryEmitter, targetPlatform.SysCallSpec())},
 			}
 
 			return func(entry ast.SourceEntry) {

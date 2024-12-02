@@ -5,14 +5,14 @@ import (
 )
 
 type Platform struct {
-	os              platform.OperatingSystemName
-	sysCallTypeSpec platform.SysCallTypeSpec
+	os          platform.OperatingSystemName
+	sysCallSpec platform.SysCallSpec
 }
 
 func NewPlatform(os platform.OperatingSystemName) platform.Platform {
 	return Platform{
-		os:              os,
-		sysCallTypeSpec: platform.NewSysCallTypeSpec(os),
+		os:          os,
+		sysCallSpec: newSysCallSpec(os),
 	}
 }
 
@@ -24,8 +24,8 @@ func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 	return p.os
 }
 
-func (p Platform) SysCallTypeSpec() platform.SysCallTypeSpec {
-	return p.sysCallTypeSpec
+func (p Platform) SysCallSpec() platform.SysCallSpec {
+	return p.sysCallSpec
 }
 
 func (Platform) ArchitectureRegisters() *platform.ArchitectureRegisters {
