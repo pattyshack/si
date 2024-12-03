@@ -38,12 +38,6 @@ func NewFloatRegister(name string) *Register {
 	}
 }
 
-type RegisterSet map[*Register]struct{}
-
-func (set RegisterSet) Add(reg *Register) {
-	set[reg] = struct{}{}
-}
-
 // Assumptions (probably needs visiting):
 //
 // 1. When a portion (e.g., AX) of a register is used, the entire
@@ -62,22 +56,18 @@ type ArchitectureRegisters struct {
 	StackPointer *Register
 
 	// The set of registers usable for signed/unsigned int and pointer operations.
-	General RegisterSet
+	General []*Register
 
 	// The set of registers usable for float operations.
-	Float RegisterSet
+	Float []*Register
 
 	// All non-stack-pointer general/float registers, usable for temporary data
 	// storage and register spilling.
-	Data RegisterSet
+	Data []*Register
 }
 
 func NewArchitectureRegisters(registers ...*Register) *ArchitectureRegisters {
-	set := &ArchitectureRegisters{
-		General: RegisterSet{},
-		Float:   RegisterSet{},
-		Data:    RegisterSet{},
-	}
+	set := &ArchitectureRegisters{}
 
 	names := map[string]struct{}{}
 	for _, register := range registers {
@@ -118,13 +108,13 @@ func (set *ArchitectureRegisters) add(register *Register) {
 		panic("added unusable register")
 	}
 
-	set.Data.Add(register)
+	set.Data = append(set.Data, register)
 
 	if register.AllowGeneralOp {
-		set.General.Add(register)
+		set.General = append(set.General, register)
 	}
 
 	if register.AllowFloatOp {
-		set.Float.Add(register)
+		set.Float = append(set.Float, register)
 	}
 }
