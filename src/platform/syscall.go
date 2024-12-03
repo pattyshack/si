@@ -39,6 +39,8 @@ type SysCallSpec interface {
 //
 // x86-64 call convention: https://refspecs.linuxfoundation.org/elf/x86_64-abi-0.99.pdf
 //
+// (https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build)
+//
 // caller-saved:  rax rcx r11
 // system number: rax
 // arguments:     rdi rsi rdx r10 r8 r9
