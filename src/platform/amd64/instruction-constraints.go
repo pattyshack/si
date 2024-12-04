@@ -34,8 +34,8 @@ func newConditionalJumpConstraints(
 
 	// Conditional jump compare two source registers without clobbering them.
 	// There's no destination register.
-	constraints.AddSource(constraints.Select(false, candidates...))
-	constraints.AddSource(constraints.Select(false, candidates...))
+	constraints.AddRegisterSource(constraints.Select(false, candidates...))
+	constraints.AddRegisterSource(constraints.Select(false, candidates...))
 
 	return constraints
 }
@@ -46,8 +46,8 @@ func newAssignOpConstraints(
 	constraints := platform.NewInstructionConstraints()
 
 	// Copy from source to destination without clobbering the source register.
-	constraints.AddSource(constraints.Select(false, candidates...))
-	constraints.SetDestination(constraints.Select(true, candidates...))
+	constraints.AddRegisterSource(constraints.Select(false, candidates...))
+	constraints.SetRegisterDestination(constraints.Select(true, candidates...))
 
 	return constraints
 }
@@ -59,8 +59,8 @@ func newUnaryOpConstraints(
 
 	// Destination reuses the source register.
 	reg := constraints.Select(true, candidates...)
-	constraints.AddSource(reg)
-	constraints.SetDestination(reg)
+	constraints.AddRegisterSource(reg)
+	constraints.SetRegisterDestination(reg)
 
 	return constraints
 }
@@ -73,9 +73,9 @@ func newBinaryOpConstraints(
 	// Destination reuses the first source register, the second source register is
 	// not clobbered.
 	src1 := constraints.Select(true, candidates...)
-	constraints.AddSource(src1)
-	constraints.SetDestination(src1)
-	constraints.AddSource(constraints.Select(false, candidates...))
+	constraints.AddRegisterSource(src1)
+	constraints.SetRegisterDestination(src1)
+	constraints.AddRegisterSource(constraints.Select(false, candidates...))
 
 	return constraints
 }

@@ -4,8 +4,8 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-// Where the data is located.  The data location is either a *SelectedRegister,
-// a *MultiRegisterLocation, or a *StackSlot.
+// Where the data is located.  The data location is either a *RegisterSlot, or
+// a *StackSlot.
 //
 // Assumptions: A value must either be completely on register, or completely
 // on stack.
@@ -20,22 +20,18 @@ type SelectedRegister struct {
 	Candidates []*Register
 }
 
-var _ DataLocation = &SelectedRegister{}
-
-func (*SelectedRegister) isDataLocation() {}
-
-type MultiRegisterLocation struct {
-	// The value is stored in an "array" formed by a list of registers.
+type RegisterSlot struct {
+	// The value is stored in an "array" formed by a list of registers.  The list
+	// could be empty to indicate a zero-sized type (e.g., empty struct)
 	Registers []*SelectedRegister
 }
 
-var _ DataLocation = &MultiRegisterLocation{}
+var _ DataLocation = &RegisterSlot{}
 
-func (*MultiRegisterLocation) isDataLocation() {}
+func (*RegisterSlot) isDataLocation() {}
 
 type StackSlot struct {
-	Initialized bool // false when the slot is not used by any source value
-	Type        ast.Type
+	Type ast.Type
 }
 
 var _ DataLocation = &StackSlot{}
@@ -52,17 +48,18 @@ type InstructionConstraints struct {
 	// The unordered set of registers used by this instruction.  Entries are
 	// created by Select.  Note that this set may include registers not used by
 	// sources and destination.
-	Used []*SelectedRegister
+	UsedRegisters []*SelectedRegister
 
-	// Which sources/destination values should be on stack.  The layout is
-	// specified from bottom to top.  Note: The stack layout depends on
-	// AddStackSlot calls order.
+	// Which sources/destination values should be on stack.  The sources layout is
+	// specified from top to bottom (stack destination is always at the bottom).
+	// Note: The stack layout depends on AddStackSource calls order.
 	//
 	// Source value are copied into the stack slots, and destination's stack slot
 	// is initialized to zeros.
-	StackLayout []*StackSlot
+	SourceSlots     []*StackSlot
+	DestinationSlot *StackSlot // nil if the destination fits on registers
 
-	FuncValue DataLocation // only set by FuncCall
+	FuncValue *SelectedRegister // only set by FuncCall
 	// Source data locations are in the same order as the instruction's sources.
 	Sources     []DataLocation
 	Destination DataLocation // not set by control flow instructions
@@ -95,91 +92,77 @@ func (constraints *InstructionConstraints) Select(
 		Clobbered:  clobbered,
 		Candidates: candidates,
 	}
-	constraints.Used = append(constraints.Used, reg)
+	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
 	return reg
 }
 
-func (constraints *InstructionConstraints) AddStackSlot(
-	valueType ast.Type,
-) *StackSlot {
-	slot := &StackSlot{
-		Type: valueType,
-	}
-	constraints.StackLayout = append(constraints.StackLayout, slot)
-	return slot
-}
-
 func (constraints *InstructionConstraints) listToLocation(
-	list []DataLocation,
+	list []*SelectedRegister,
 	isDest bool,
 ) DataLocation {
-	slotCount := 0
-	selected := []*SelectedRegister{}
-	for _, loc := range list {
-		switch entry := loc.(type) {
-		case *SelectedRegister:
-			if isDest {
-				entry.Clobbered = true
-			}
-			selected = append(selected, entry)
-		case *StackSlot:
-			if !isDest {
-				entry.Initialized = true
-			}
-			slotCount++
-		default:
-			panic("invalid input")
+	for _, entry := range list {
+		if isDest {
+			entry.Clobbered = true
 		}
 	}
 
-	var dest DataLocation
-	if len(selected) > 0 {
-		if slotCount > 0 {
-			panic("mixing stack slot with register")
-		} else if len(selected) == 1 {
-			dest = selected[0]
-		} else {
-			dest = &MultiRegisterLocation{
-				Registers: selected,
-			}
-		}
-	} else if slotCount == 0 {
-		panic("no data location specified")
-	} else if slotCount > 1 {
-		panic("multiple stack slot specified")
-	} else {
-		dest = list[0]
+	return &RegisterSlot{
+		Registers: list,
 	}
-
-	return dest
 }
 
 func (constraints *InstructionConstraints) SetFuncValue(
-	regListOrSlot ...DataLocation,
+	register *SelectedRegister,
 ) {
 	if constraints.FuncValue != nil {
 		panic("func value already set")
 	}
-	constraints.FuncValue = constraints.listToLocation(regListOrSlot, false)
+	constraints.FuncValue = register
 }
 
 // The data location list must either be a single stack slot entry, or a list
-// of selected registers.
-func (constraints *InstructionConstraints) AddSource(
-	regListOrSlot ...DataLocation,
+// of selected registers (the list could be empty if source value does not
+// occupy any space, e.g., empty struct)
+func (constraints *InstructionConstraints) AddRegisterSource(
+	registers ...*SelectedRegister,
 ) {
 	constraints.Sources = append(
 		constraints.Sources,
-		constraints.listToLocation(regListOrSlot, false))
+		constraints.listToLocation(registers, false))
+}
+
+func (constraints *InstructionConstraints) AddStackSource(
+	srcType ast.Type,
+) {
+	slot := &StackSlot{
+		Type: srcType,
+	}
+	constraints.SourceSlots = append(constraints.SourceSlots, slot)
+	constraints.Sources = append(constraints.Sources, slot)
 }
 
 // The data location list must either be a single stack slot entry, or a list
-// of selected registers.
-func (constraints *InstructionConstraints) SetDestination(
-	regListOrSlot ...DataLocation,
+// of selected registers (the list could be empty if the destination value
+// does not occupy any space, e.g., empty struct)
+func (constraints *InstructionConstraints) SetRegisterDestination(
+	registers ...*SelectedRegister,
 ) {
 	if constraints.Destination != nil {
 		panic("destination already set")
 	}
-	constraints.Destination = constraints.listToLocation(regListOrSlot, true)
+	constraints.Destination = constraints.listToLocation(registers, true)
+}
+
+func (constraints *InstructionConstraints) SetStackDestination(
+	destType ast.Type,
+) {
+	if constraints.Destination != nil {
+		panic("destination already set")
+	}
+
+	slot := &StackSlot{
+		Type: destType,
+	}
+	constraints.DestinationSlot = slot
+	constraints.Destination = slot
 }

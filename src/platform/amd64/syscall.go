@@ -50,12 +50,12 @@ func newLinuxSysCallConstraints(
 	// Syscall number and return value
 	ret := constraints.Select(true, rax)
 	constraints.SetFuncValue(ret)
-	constraints.SetDestination(ret)
+	constraints.SetRegisterDestination(ret)
 
 	// Syscall arguments
 	calleeSavedArguments := []*platform.Register{rdi, rsi, rdx, r10, r8, r9}
 	for _, register := range calleeSavedArguments[:numArgs] {
-		constraints.AddSource(constraints.Select(false, register))
+		constraints.AddRegisterSource(constraints.Select(false, register))
 	}
 
 	return constraints
