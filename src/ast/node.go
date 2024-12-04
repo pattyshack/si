@@ -48,8 +48,8 @@ type VariableDefinition struct {
 	Type Type // optional. Type is check/inferred during type checking
 
 	// Internal (set during ssa construction)
-	Parent  Instruction // nil for phi and func parameters
-	DefUses map[*VariableReference]struct{}
+	ParentInstruction Instruction // nil for phi and func parameters
+	DefUses           map[*VariableReference]struct{}
 }
 
 var _ Node = &VariableDefinition{}
@@ -120,22 +120,22 @@ type Value interface {
 	Copy(pos parseutil.StartEndPos) Value
 	Discard() // clear graph node references
 
-	SetParent(Instruction)
+	SetParentInstruction(Instruction)
 
 	Type() Type
 }
 
 type value struct {
 	// Internal (set during ssa construction)
-	Parent Instruction
+	ParentInstruction Instruction
 }
 
 func (val *value) Discard() {
-	val.Parent = nil
+	val.ParentInstruction = nil
 }
 
-func (val *value) SetParent(ins Instruction) {
-	val.Parent = ins
+func (val *value) SetParentInstruction(ins Instruction) {
+	val.ParentInstruction = ins
 }
 
 // @-prefixed label for various definitions/declarations.  Note that the '@'
@@ -163,8 +163,8 @@ func (ref *GlobalLabelReference) Definition() interface{} {
 
 func (ref *GlobalLabelReference) ReplaceWith(newVal Value) {
 	newVal = newVal.Copy(ref.StartEnd())
-	newVal.SetParent(ref.Parent)
-	ref.Parent.replaceSource(ref, newVal)
+	newVal.SetParentInstruction(ref.ParentInstruction)
+	ref.ParentInstruction.replaceSource(ref, newVal)
 	ref.Discard()
 }
 
@@ -216,8 +216,8 @@ func (ref *VariableReference) Definition() interface{} {
 
 func (ref *VariableReference) ReplaceWith(newVal Value) {
 	newVal = newVal.Copy(ref.StartEnd())
-	newVal.SetParent(ref.Parent)
-	ref.Parent.replaceSource(ref, newVal)
+	newVal.SetParentInstruction(ref.ParentInstruction)
+	ref.ParentInstruction.replaceSource(ref, newVal)
 	ref.Discard()
 }
 
@@ -228,7 +228,7 @@ func (ref *VariableReference) Copy(pos parseutil.StartEndPos) Value {
 func (ref *VariableReference) Discard() {
 	delete(ref.UseDef.DefUses, ref)
 	ref.UseDef = nil
-	ref.Parent = nil
+	ref.ParentInstruction = nil
 }
 
 func (ref *VariableReference) Walk(visitor Visitor) {
@@ -279,8 +279,8 @@ func (imm *IntImmediate) Definition() interface{} {
 
 func (imm *IntImmediate) ReplaceWith(newVal Value) {
 	newVal = newVal.Copy(imm.StartEnd())
-	newVal.SetParent(imm.Parent)
-	imm.Parent.replaceSource(imm, newVal)
+	newVal.SetParentInstruction(imm.ParentInstruction)
+	imm.ParentInstruction.replaceSource(imm, newVal)
 	imm.Discard()
 }
 
@@ -324,8 +324,8 @@ func (imm *FloatImmediate) Definition() interface{} {
 
 func (imm *FloatImmediate) ReplaceWith(newVal Value) {
 	newVal = newVal.Copy(imm.StartEnd())
-	newVal.SetParent(imm.Parent)
-	imm.Parent.replaceSource(imm, newVal)
+	newVal.SetParentInstruction(imm.ParentInstruction)
+	imm.ParentInstruction.replaceSource(imm, newVal)
 	imm.Discard()
 }
 

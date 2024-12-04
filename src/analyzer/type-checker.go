@@ -12,7 +12,7 @@ import (
 type typeChecker struct {
 	*parseutil.Emitter
 
-	sysCallSpec platform.SysCallTypeSpec
+	platform platform.Platform
 
 	// For personal sanity / simplicity, all register definitions with the same
 	// name must have the same type, even through same name with different types
@@ -22,12 +22,12 @@ type typeChecker struct {
 
 func CheckTypes(
 	emitter *parseutil.Emitter,
-	sysCallSpec platform.SysCallTypeSpec,
+	targetPlatform platform.Platform,
 ) Pass[ast.SourceEntry] {
 	return &typeChecker{
-		Emitter:     emitter,
-		sysCallSpec: sysCallSpec,
-		nameType:    map[string]ast.Type{},
+		Emitter:  emitter,
+		platform: targetPlatform,
+		nameType: map[string]ast.Type{},
 	}
 }
 
@@ -69,7 +69,7 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		}
 
 		for _, inst := range block.Instructions {
-			evalType := checker.evaluateInstruction(inst, funcDef.ReturnType)
+			evalType := checker.evaluateInstruction(inst)
 
 			dest := inst.Destination()
 			if dest != nil {
@@ -84,7 +84,6 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 
 func (checker *typeChecker) evaluateInstruction(
 	in ast.Instruction,
-	funcRetType ast.Type,
 ) ast.Type {
 	switch inst := in.(type) {
 	case *ast.AssignOperation:
@@ -107,7 +106,7 @@ func (checker *typeChecker) evaluateInstruction(
 	case *ast.ConditionalJump:
 		return checker.evaluateConditionalJump(inst)
 	case *ast.Terminal:
-		return checker.evaluateTerminal(inst, funcRetType)
+		return checker.evaluateTerminal(inst)
 	default:
 		panic(fmt.Sprintf("unhandled instruction type (%s)", in.Loc()))
 	}
@@ -231,11 +230,12 @@ func (checker *typeChecker) evaluateBinaryOperation(
 func (checker *typeChecker) evaluateSysCall(
 	inst *ast.FuncCall,
 ) ast.Type {
+	sysCallSpec := checker.platform.SysCallSpec()
 	foundError := false
 	funcValueType := inst.Func.Type()
 	if ast.IsErrorType(funcValueType) {
 		foundError = true
-	} else if !checker.sysCallSpec.IsValidFuncValueType(funcValueType) {
+	} else if !sysCallSpec.IsValidFuncValueType(funcValueType) {
 		foundError = true
 		checker.Emit(
 			funcValueType.Loc(),
@@ -243,7 +243,7 @@ func (checker *typeChecker) evaluateSysCall(
 			funcValueType)
 	}
 
-	if len(inst.Args) > checker.sysCallSpec.MaxNumberOfArgs() {
+	if len(inst.Args) > sysCallSpec.MaxNumberOfArgs() {
 		foundError = true
 		checker.Emit(inst.Loc(), "too many syscall arguments")
 	}
@@ -253,7 +253,7 @@ func (checker *typeChecker) evaluateSysCall(
 		if ast.IsErrorType(argType) {
 			foundError = true
 			continue
-		} else if !checker.sysCallSpec.IsValidArgType(argType) {
+		} else if !sysCallSpec.IsValidArgType(argType) {
 			foundError = true
 			checker.Emit(
 				arg.Loc(),
@@ -267,7 +267,7 @@ func (checker *typeChecker) evaluateSysCall(
 		return ast.NewErrorType(inst.StartEnd())
 	}
 
-	return checker.sysCallSpec.ReturnType(inst.StartEnd())
+	return sysCallSpec.ReturnType(inst.StartEnd())
 }
 
 func (checker *typeChecker) evaluateCall(
@@ -369,7 +369,6 @@ func (checker *typeChecker) evaluateConditionalJump(
 
 func (checker *typeChecker) evaluateTerminal(
 	inst *ast.Terminal,
-	funcRetType ast.Type,
 ) ast.Type {
 	switch inst.Kind {
 	case ast.Ret:
@@ -378,6 +377,7 @@ func (checker *typeChecker) evaluateTerminal(
 			return nil
 		}
 
+		funcRetType := inst.ParentBlock.ParentFuncDef.ReturnType
 		if !retType.IsSubTypeOf(funcRetType) {
 			checker.Emit(
 				inst.Loc(),
@@ -391,7 +391,7 @@ func (checker *typeChecker) evaluateTerminal(
 			return nil
 		}
 
-		if !checker.sysCallSpec.IsValidExitArgType(exitValueType) {
+		if !checker.platform.SysCallSpec().IsValidExitArgType(exitValueType) {
 			checker.Emit(
 				inst.Loc(),
 				"invalid exit value type, found %s",

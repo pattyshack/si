@@ -9,8 +9,6 @@ type FuncDefinition struct {
 
 	parseutil.StartEndPos
 
-	ParseError error // only set by parser
-
 	Label      string
 	Parameters []*VariableDefinition
 	ReturnType Type
@@ -92,6 +90,8 @@ type Block struct {
 
 	// internal
 
+	ParentFuncDef *FuncDefinition
+
 	// Populated by ControlFlowGraphInitializer.
 	Parents  []*Block
 	Children []*Block
@@ -151,7 +151,7 @@ func (block *Block) AddToPhis(parent *Block, def *VariableDefinition) {
 			},
 			Srcs: map[*Block]Value{},
 		}
-		phi.Parent = block
+		phi.ParentBlock = block
 		block.Phis[def.Name] = phi
 	}
 

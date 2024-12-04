@@ -103,7 +103,7 @@ func (constructor *ssaConstructor) processBlock(
 			continue
 		}
 
-		dest.Parent = inst
+		dest.ParentInstruction = inst
 		defOut[dest.Name] = dest
 	}
 
@@ -175,7 +175,7 @@ func (constructor *ssaConstructor) prunePhis(blocks []*ast.Block) {
 		}
 
 		for ref, _ := range phi.Dest.DefUses {
-			otherPhi, ok := ref.Parent.(*ast.Phi)
+			otherPhi, ok := ref.ParentInstruction.(*ast.Phi)
 			if ok && otherPhi != phi {
 				// Removing the current phi may enable us to remove the otherPhi
 				toCheck[otherPhi] = struct{}{}

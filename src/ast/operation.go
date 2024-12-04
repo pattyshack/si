@@ -8,7 +8,6 @@ type Instruction interface {
 	Node
 	Line
 
-	ParentBlock() *Block
 	SetParentBlock(*Block)
 
 	// NOTE: caller is responsible for copying newSrc and discarding oldSrc.
@@ -20,17 +19,13 @@ type Instruction interface {
 
 type instruction struct {
 	// Internal (set during ssa construction)
-	Parent *Block
+	ParentBlock *Block
 }
 
 func (instruction) IsLine() {}
 
-func (ins *instruction) ParentBlock() *Block {
-	return ins.Parent
-}
-
 func (ins *instruction) SetParentBlock(block *Block) {
-	ins.Parent = block
+	ins.ParentBlock = block
 }
 
 type AssignOperation struct {

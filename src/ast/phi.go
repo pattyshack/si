@@ -56,12 +56,12 @@ func (phi *Phi) Destination() *VariableDefinition {
 
 func (phi *Phi) Add(parent *Block, def *VariableDefinition) {
 	ref := def.NewRef(phi.StartEnd())
-	ref.SetParent(phi)
+	ref.SetParentInstruction(phi)
 	phi.Srcs[parent] = ref
 }
 
 func (phi *Phi) Discard() {
-	delete(phi.Parent.Phis, phi.Dest.Name)
+	delete(phi.ParentBlock.Phis, phi.Dest.Name)
 	for _, src := range phi.Srcs {
 		src.Discard()
 	}

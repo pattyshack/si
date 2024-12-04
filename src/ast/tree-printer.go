@@ -120,9 +120,9 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("\n%sDefUses:", printer.indent)
 		for ref, _ := range node.DefUses {
 			parent := ""
-			if ref.Parent != nil {
+			if ref.ParentInstruction != nil {
 				parent = "(ins)"
-				_, ok := ref.Parent.(*Phi)
+				_, ok := ref.ParentInstruction.(*Phi)
 				if ok {
 					parent = "(phi)"
 				}
@@ -138,9 +138,9 @@ func (printer *treePrinter) Enter(n Node) {
 		}
 		parent := "(nil)"
 		if node.UseDef != nil {
-			if node.UseDef.Parent != nil {
+			if node.UseDef.ParentInstruction != nil {
 				parent = "(ins) "
-				_, ok := node.UseDef.Parent.(*Phi)
+				_, ok := node.UseDef.ParentInstruction.(*Phi)
 				if ok {
 					parent = "(phi) "
 				}
