@@ -4,10 +4,34 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
+type CallConvention string
+
+const (
+	// NOTE: C / System V ABI compatibility is not a priority.  It is needlessly
+	// complicated for our purpose (e.g., 128 int/float, aggregate type
+	// classification/splitting, vararg, etc.).  We'll just pick something
+	// simple to implement for now.
+	UnstableCallConvention = CallConvention("unstable")
+
+	DefaultCallConvention = UnstableCallConvention
+)
+
+func (call CallConvention) isValid() bool {
+	switch call {
+	case UnstableCallConvention:
+		return true
+	default:
+		return false
+	}
+}
+
 type FuncDefinition struct {
 	sourceEntry
 
 	parseutil.StartEndPos
+
+	// TODO: add option to specify call convention via lr grammar
+	CallConvention
 
 	Label      string
 	Parameters []*VariableDefinition
@@ -33,6 +57,13 @@ func (def *FuncDefinition) Walk(visitor Visitor) {
 func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Label == "" {
 		emitter.Emit(def.Loc(), "empty function definition label string")
+	}
+
+	if !def.CallConvention.isValid() {
+		emitter.Emit(
+			def.Loc(),
+			"unsupported call convention (%s)",
+			def.CallConvention)
 	}
 
 	if len(def.Blocks) == 0 {
@@ -71,6 +102,7 @@ func (def *FuncDefinition) Type() Type {
 
 	return FunctionType{
 		StartEndPos:    def.StartEndPos,
+		CallConvention: def.CallConvention,
 		ReturnType:     def.ReturnType,
 		ParameterTypes: paramTypes,
 	}

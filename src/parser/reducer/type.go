@@ -44,7 +44,9 @@ func (Reducer) ToFuncType(
 	error,
 ) {
 	return ast.FunctionType{
-		StartEndPos:    parseutil.NewStartEndPos(funcKW.Loc(), retType.End()),
+		StartEndPos: parseutil.NewStartEndPos(funcKW.Loc(), retType.End()),
+		// TODO: make call convention configurable
+		CallConvention: ast.DefaultCallConvention,
 		ParameterTypes: parameterTypes,
 		ReturnType:     retType,
 	}, nil

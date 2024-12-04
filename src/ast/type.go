@@ -480,6 +480,8 @@ type FunctionType struct {
 	isType
 	parseutil.StartEndPos
 
+	CallConvention
+
 	ReturnType     Type
 	ParameterTypes []Type
 }
@@ -497,6 +499,13 @@ func (funcType FunctionType) Walk(visitor Visitor) {
 }
 
 func (funcType FunctionType) Validate(emitter *parseutil.Emitter) {
+	if !funcType.CallConvention.isValid() {
+		emitter.Emit(
+			funcType.Loc(),
+			"unsupported call convention (%s)",
+			funcType.CallConvention)
+	}
+
 	validateUsableType(funcType.ReturnType, emitter)
 	for _, paramType := range funcType.ParameterTypes {
 		validateUsableType(paramType, emitter)
@@ -504,7 +513,7 @@ func (funcType FunctionType) Validate(emitter *parseutil.Emitter) {
 }
 
 func (funcType FunctionType) String() string {
-	result := "func("
+	result := "func{" + string(funcType.CallConvention) + "}("
 	for idx, param := range funcType.ParameterTypes {
 		if idx == 0 {
 			result += param.String()
@@ -519,6 +528,10 @@ func (funcType FunctionType) String() string {
 func (funcType FunctionType) Equals(other Type) bool {
 	otherFuncType, ok := other.(FunctionType)
 	if !ok {
+		return false
+	}
+
+	if funcType.CallConvention != otherFuncType.CallConvention {
 		return false
 	}
 
