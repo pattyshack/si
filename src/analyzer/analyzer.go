@@ -14,33 +14,36 @@ func Analyze(
 	targetPlatform platform.Platform,
 	emitter *parseutil.Emitter,
 ) {
-	collector := NewSignatureCollector(emitter)
-
-	Process(
-		sources,
-		[][]Pass[[]ast.SourceEntry]{
-			{
-				ValidateAstSyntax(emitter),
-				collector,
-			},
-		},
-		nil)
-	if emitter.HasErrors() {
-		return
-	}
-
-	signatures := collector.Signatures()
-
 	_, abort := context.WithCancel(context.Background())
 	// TODO
 	//abortCtx, abort := context.WithCancel(context.Background())
 
-	entryEmitters := []*parseutil.Emitter{}
+	entryEmitters := map[ast.SourceEntry]*parseutil.Emitter{}
+	for _, entry := range sources {
+		entryEmitters[entry] = &parseutil.Emitter{}
+	}
+
 	ParallelProcess(
 		sources,
 		func(entry ast.SourceEntry) func() {
-			entryEmitter := &parseutil.Emitter{}
-			entryEmitters = append(entryEmitters, entryEmitter)
+			return func() {
+				ValidateAstSyntax(entry, entryEmitters[entry])
+			}
+		})
+
+	collector := NewSignatureCollector(emitter)
+	collector.Process(sources)
+
+	if emitter.HasErrors() {
+		abort()
+	}
+
+	signatures := collector.Signatures()
+
+	ParallelProcess(
+		sources,
+		func(entry ast.SourceEntry) func() {
+			entryEmitter := entryEmitters[entry]
 
 			passes := [][]Pass[ast.SourceEntry]{
 				{InitializeControlFlowGraph(entryEmitter)},
@@ -50,6 +53,11 @@ func Analyze(
 			}
 
 			return func() {
+				if entryEmitter.HasErrors() { // Has syntax error
+					abort()
+					return
+				}
+
 				Process(entry, passes, nil)
 				if entryEmitter.HasErrors() {
 					abort()
