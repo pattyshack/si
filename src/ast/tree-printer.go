@@ -209,9 +209,9 @@ func (printer *treePrinter) Enter(n Node) {
 			len(node.ParameterTypes),
 			"ReturnType=")
 
-	case *FuncDefinition:
+	case *FunctionDefinition:
 		printer.write(
-			"[FuncDefinition: Label=%s CallConvention=%s",
+			"[FunctionDefinition: Label=%s CallConvention=%s",
 			node.Label,
 			node.CallConvention)
 		labels := []string{}
@@ -266,7 +266,7 @@ func (printer *treePrinter) Exit(n Node) {
 	case FunctionType:
 		printer.endList(len(node.ParameterTypes))
 
-	case *FuncDefinition:
+	case *FunctionDefinition:
 		printer.endNode()
 	case *Block:
 		printer.endNode()

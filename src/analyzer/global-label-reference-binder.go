@@ -23,7 +23,7 @@ func BindGlobalLabelReferences(
 }
 
 func (binder *globalLabelReferenceBinder) Process(entry ast.SourceEntry) {
-	funcDef, ok := entry.(*ast.FuncDefinition)
+	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
 	}

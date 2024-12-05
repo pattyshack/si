@@ -21,7 +21,7 @@ func ConstructSSA(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
 }
 
 func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
-	funcDef, ok := entry.(*ast.FuncDefinition)
+	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
 	}

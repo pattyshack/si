@@ -26,7 +26,7 @@ func (Reducer) FuncToDefinition(
 	ast.Line,
 	error,
 ) {
-	return &ast.FuncDefinition{
+	return &ast.FunctionDefinition{
 		StartEndPos: parseutil.NewStartEndPos(define.Loc(), lbrace.End()),
 		// TODO: make call convention configurable
 		CallConvention: ast.DefaultCallConvention,

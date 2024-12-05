@@ -38,7 +38,7 @@ func (call CallConvention) isValid() bool {
 	}
 }
 
-type FuncDefinition struct {
+type FunctionDefinition struct {
 	sourceEntry
 
 	parseutil.StartEndPos
@@ -52,10 +52,10 @@ type FuncDefinition struct {
 	Blocks     []*Block
 }
 
-var _ SourceEntry = &FuncDefinition{}
-var _ Validator = &FuncDefinition{}
+var _ SourceEntry = &FunctionDefinition{}
+var _ Validator = &FunctionDefinition{}
 
-func (def *FuncDefinition) Walk(visitor Visitor) {
+func (def *FunctionDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
 	for _, param := range def.Parameters {
 		param.Walk(visitor)
@@ -67,7 +67,7 @@ func (def *FuncDefinition) Walk(visitor Visitor) {
 	visitor.Exit(def)
 }
 
-func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
+func (def *FunctionDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Label == "" {
 		emitter.Emit(def.Loc(), "empty function definition label string")
 	}
@@ -107,7 +107,7 @@ func (def *FuncDefinition) Validate(emitter *parseutil.Emitter) {
 	validateUsableType(def.ReturnType, emitter)
 }
 
-func (def *FuncDefinition) Type() Type {
+func (def *FunctionDefinition) Type() Type {
 	paramTypes := []Type{}
 	for _, param := range def.Parameters {
 		paramTypes = append(paramTypes, param.Type)
@@ -135,7 +135,7 @@ type Block struct {
 
 	// internal
 
-	ParentFuncDef *FuncDefinition
+	ParentFuncDef *FunctionDefinition
 
 	// Populated by ControlFlowGraphInitializer.
 	Parents  []*Block

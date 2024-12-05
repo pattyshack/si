@@ -23,7 +23,7 @@ func InitializeControlFlowGraph(
 func (initializer *controlFlowGraphInitializer) Process(
 	entry ast.SourceEntry,
 ) {
-	def, ok := entry.(*ast.FuncDefinition)
+	def, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
 	}
@@ -119,7 +119,7 @@ func (initializer *controlFlowGraphInitializer) Process(
 }
 
 func (initializer *controlFlowGraphInitializer) checkForUnreachableBlocks(
-	def *ast.FuncDefinition,
+	def *ast.FunctionDefinition,
 ) {
 	reachable := map[*ast.Block]struct{}{
 		def.Blocks[0]: struct{}{},

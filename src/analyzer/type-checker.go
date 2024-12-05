@@ -32,7 +32,7 @@ func CheckTypes(
 }
 
 func (checker *typeChecker) Process(entry ast.SourceEntry) {
-	funcDef, ok := entry.(*ast.FuncDefinition)
+	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
 	}

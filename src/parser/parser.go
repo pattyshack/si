@@ -47,7 +47,7 @@ func (parser *parser) readLine() ([]lr.Token, error) {
 }
 
 func (parser *parser) parse() []ast.SourceEntry {
-	var currentFuncDef *ast.FuncDefinition
+	var currentFuncDef *ast.FunctionDefinition
 	var currentBlock *ast.Block
 	result := []ast.SourceEntry{}
 	for {
@@ -85,7 +85,7 @@ func (parser *parser) parse() []ast.SourceEntry {
 			}
 			result = append(result, stmt)
 
-			funcDef, ok := stmt.(*ast.FuncDefinition)
+			funcDef, ok := stmt.(*ast.FunctionDefinition)
 			if ok {
 				currentFuncDef = funcDef
 			}
