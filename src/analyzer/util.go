@@ -35,15 +35,15 @@ func Process[T any](
 
 func ParallelProcess[Node ast.Node](
 	list []Node,
-	newProcessor func(Node) func(Node),
+	newProcessor func(Node) func(),
 ) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(list))
 	for _, item := range list {
-		go func(process func(Node), node Node) {
-			process(node)
+		go func(process func()) {
+			process()
 			wg.Done()
-		}(newProcessor(item), item)
+		}(newProcessor(item))
 	}
 	wg.Wait()
 }

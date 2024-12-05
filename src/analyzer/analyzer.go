@@ -38,7 +38,7 @@ func Analyze(
 	entryEmitters := []*parseutil.Emitter{}
 	ParallelProcess(
 		sources,
-		func(ast.SourceEntry) func(ast.SourceEntry) {
+		func(entry ast.SourceEntry) func() {
 			entryEmitter := &parseutil.Emitter{}
 			entryEmitters = append(entryEmitters, entryEmitter)
 
@@ -49,7 +49,7 @@ func Analyze(
 				{CheckTypes(entryEmitter, targetPlatform)},
 			}
 
-			return func(entry ast.SourceEntry) {
+			return func() {
 				Process(entry, passes, nil)
 				if entryEmitter.HasErrors() {
 					abort()

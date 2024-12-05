@@ -19,8 +19,8 @@ func ValidateAstSyntax(emitter *parseutil.Emitter) Pass[[]ast.SourceEntry] {
 func (validator astSyntaxValidator) Process(entries []ast.SourceEntry) {
 	ParallelProcess(
 		entries,
-		func(ast.SourceEntry) func(ast.SourceEntry) {
-			return func(entry ast.SourceEntry) { entry.Walk(validator) }
+		func(entry ast.SourceEntry) func() {
+			return func() { entry.Walk(validator) }
 		})
 }
 
