@@ -26,12 +26,12 @@ func (collector *SignatureCollector) Signatures() map[string]ast.SourceEntry {
 
 func (collector *SignatureCollector) Process(entries []ast.SourceEntry) {
 	for _, source := range entries {
+		if source.HasDeclarationSyntaxError() {
+			continue
+		}
+
 		switch entry := source.(type) {
 		case *ast.FunctionDefinition:
-			if entry.Label == "" { // error emitted by ast syntax validator
-				continue
-			}
-
 			prev, ok := collector.signatures[entry.Label]
 			if ok {
 				collector.Emit(

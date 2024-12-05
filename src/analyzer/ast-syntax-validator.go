@@ -19,6 +19,14 @@ func ValidateAstSyntax(entry ast.SourceEntry, emitter *parseutil.Emitter) {
 
 func (validator astSyntaxValidator) Enter(n ast.Node) {
 	switch node := n.(type) {
+	case ast.SourceEntry:
+		if validator.Emitter.HasErrors() {
+			panic("should never happen since source entries are roots")
+		}
+		node.Validate(validator.Emitter)
+		if validator.Emitter.HasErrors() {
+			node.SetHasDeclarationSyntaxError(true)
+		}
 	case ast.Validator:
 		node.Validate(validator.Emitter)
 	}

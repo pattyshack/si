@@ -25,18 +25,31 @@ type Line interface { // used only by the parser
 type SourceEntry interface {
 	Node
 	Line
+	Validator
 	isSourceEntry()
 
 	// Internal
+
+	HasDeclarationSyntaxError() bool
+	SetHasDeclarationSyntaxError(bool)
 
 	Type() Type
 }
 
 type sourceEntry struct {
+	hasDeclarationSyntaxError bool
 }
 
 func (sourceEntry) IsLine()        {}
 func (sourceEntry) isSourceEntry() {}
+
+func (entry *sourceEntry) HasDeclarationSyntaxError() bool {
+	return entry.hasDeclarationSyntaxError
+}
+
+func (entry *sourceEntry) SetHasDeclarationSyntaxError(val bool) {
+	entry.hasDeclarationSyntaxError = val
+}
 
 // %-prefixed local register variable definition.  Note that the '%' prefix is
 // not part of the name and is only used by the parser.
