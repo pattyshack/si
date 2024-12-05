@@ -37,14 +37,14 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	callTypeSpec := checker.platform.CallTypeSpec(funcDef.CallConvention)
+	callSpec := checker.platform.CallSpec(funcDef.CallConvention)
 	for _, def := range funcDef.Parameters {
 		if def.Type == nil {
 			panic("should never happen") // error previously emitted.
 		}
 		checker.nameType[def.Name] = def.Type
 
-		if !callTypeSpec.IsValidArgType(def.Type) {
+		if !callSpec.IsValidArgType(def.Type) {
 			checker.Emit(
 				def.Type.Loc(),
 				"%s call convention does not support %s argument type",
@@ -53,7 +53,7 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		}
 	}
 
-	if !callTypeSpec.IsValidReturnType(funcDef.ReturnType) {
+	if !callSpec.IsValidReturnType(funcDef.ReturnType) {
 		checker.Emit(
 			funcDef.ReturnType.Loc(),
 			"%s call convention does not support %s return type",

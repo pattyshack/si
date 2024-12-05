@@ -11,7 +11,22 @@ const (
 	registerSize = 8
 )
 
-func newInternalCallConstraints(
+func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
+	switch convention {
+	case ast.InternalCallConvention:
+		return internalCallSpec{}
+	case ast.SystemVLiteCallConvention:
+		return systemVLiteCallSpec{}
+	default: // Error emitted by ast syntax validator
+		return internalCallSpec{}
+	}
+}
+
+type internalCallSpec struct {
+	platform.InternalCallTypeSpec
+}
+
+func (internalCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
 ) *platform.InstructionConstraints {
 	constraints := platform.NewInstructionConstraints()
@@ -145,7 +160,11 @@ func (picker *internalCallRegisterPicker) Pick(
 	}
 }
 
-func newSystemVLiteCallConstraints(
+type systemVLiteCallSpec struct {
+	platform.SystemVLiteCallTypeSpec
+}
+
+func (systemVLiteCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
 ) *platform.InstructionConstraints {
 	constraints := platform.NewInstructionConstraints()

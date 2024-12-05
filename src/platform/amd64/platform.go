@@ -25,10 +25,10 @@ func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 	return p.os
 }
 
-func (Platform) CallTypeSpec(
+func (Platform) CallSpec(
 	convention ast.CallConvention,
-) platform.CallTypeSpec {
-	return platform.NewCallTypeSpec(convention)
+) platform.CallSpec {
+	return NewCallSpec(convention)
 }
 
 func (p Platform) SysCallSpec() platform.SysCallSpec {

@@ -12,22 +12,17 @@ type CallTypeSpec interface {
 	IsValidReturnType(ast.Type) bool
 }
 
-func NewCallTypeSpec(convention ast.CallConvention) CallTypeSpec {
-	switch convention {
-	case ast.InternalCallConvention:
-		return noOpCallTypeSpec{}
-	case ast.SystemVLiteCallConvention:
-		return systemVLiteCallTypeSpec{}
-	default:
-		// This is an ast syntax error.  The error is emitted by Validate.
-		return noOpCallTypeSpec{}
-	}
+type CallSpec interface {
+	CallTypeSpec
+
+	// Used by both call and ret instructions.
+	CallRetConstraints(funcType ast.FunctionType) *InstructionConstraints
 }
 
-type noOpCallTypeSpec struct{}
+type InternalCallTypeSpec struct{}
 
-func (noOpCallTypeSpec) IsValidArgType(ast.Type) bool    { return true }
-func (noOpCallTypeSpec) IsValidReturnType(ast.Type) bool { return true }
+func (InternalCallTypeSpec) IsValidArgType(ast.Type) bool    { return true }
+func (InternalCallTypeSpec) IsValidReturnType(ast.Type) bool { return true }
 
 func isPrimitiveType(t ast.Type) bool {
 	if ast.IsIntSubType(t) || ast.IsFloatSubType(t) {
@@ -38,13 +33,13 @@ func isPrimitiveType(t ast.Type) bool {
 	return false
 }
 
-type systemVLiteCallTypeSpec struct {
+type SystemVLiteCallTypeSpec struct {
 }
 
-func (systemVLiteCallTypeSpec) IsValidArgType(t ast.Type) bool {
+func (SystemVLiteCallTypeSpec) IsValidArgType(t ast.Type) bool {
 	return isPrimitiveType(t)
 }
 
-func (systemVLiteCallTypeSpec) IsValidReturnType(t ast.Type) bool {
+func (SystemVLiteCallTypeSpec) IsValidReturnType(t ast.Type) bool {
 	return isPrimitiveType(t)
 }
