@@ -25,9 +25,11 @@ func Analyze(
 
 	ParallelProcess(
 		sources,
-		func(entry ast.SourceEntry) func() {
-			return func() {
-				ValidateAstSyntax(entry, entryEmitters[entry])
+		func(entry ast.SourceEntry) {
+			entryEmitter := entryEmitters[entry]
+			ValidateAstSyntax(entry, entryEmitter)
+			if entryEmitter.HasErrors() {
+				abort()
 			}
 		})
 
@@ -42,8 +44,11 @@ func Analyze(
 
 	ParallelProcess(
 		sources,
-		func(entry ast.SourceEntry) func() {
+		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
+			if entryEmitter.HasErrors() { // Entry has syntax error
+				return
+			}
 
 			passes := [][]Pass[ast.SourceEntry]{
 				{InitializeControlFlowGraph(entryEmitter)},
@@ -52,16 +57,9 @@ func Analyze(
 				{CheckTypes(entryEmitter, targetPlatform)},
 			}
 
-			return func() {
-				if entryEmitter.HasErrors() { // Has syntax error
-					abort()
-					return
-				}
-
-				Process(entry, passes, nil)
-				if entryEmitter.HasErrors() {
-					abort()
-				}
+			Process(entry, passes, nil)
+			if entryEmitter.HasErrors() {
+				abort()
 			}
 		})
 
