@@ -10,15 +10,15 @@ const (
 	// NOTE: C / System V ABI compatibility is not a priority.  It is needlessly
 	// complicated for our purpose (e.g., 128 int/float, aggregate type
 	// classification/splitting, vararg, etc.).  We'll just pick something
-	// simple to implement for now.
-	UnstableCallConvention = CallConvention("unstable")
+	// simple to implement for now.  The convention is internal/unstable
+	InternalCallConvention = CallConvention("internal")
 
-	DefaultCallConvention = UnstableCallConvention
+	DefaultCallConvention = InternalCallConvention
 )
 
 func (call CallConvention) isValid() bool {
 	switch call {
-	case UnstableCallConvention:
+	case InternalCallConvention:
 		return true
 	default:
 		return false

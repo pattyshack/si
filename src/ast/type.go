@@ -4,6 +4,10 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
+const (
+	addressSize = 8
+)
+
 type Type interface {
 	Node
 	isTypeExpr()
@@ -15,6 +19,8 @@ type Type interface {
 	// type1.IsSubTypeOf(type2) returns true if a type1 value can be used as a
 	// type2 value.
 	IsSubTypeOf(Type) bool
+
+	Size() int // in bytes
 }
 
 type isType struct{}
@@ -69,6 +75,11 @@ func IsFloatSubType(t Type) bool {
 
 func IsNumberSubType(t Type) bool {
 	return IsIntSubType(t) || IsFloatSubType(t)
+}
+
+func IsFunctionType(t Type) bool {
+	_, ok := t.(FunctionType)
+	return ok
 }
 
 // == and !=
@@ -140,6 +151,10 @@ func (ErrorType) IsSubTypeOf(Type) bool {
 	return false
 }
 
+func (ErrorType) Size() int {
+	panic("error type has no size")
+}
+
 // Internal use only. Compatible with all signed/unsigned int types.
 type PositiveIntLiteralType struct {
 	isType
@@ -175,6 +190,10 @@ func (PositiveIntLiteralType) IsSubTypeOf(other Type) bool {
 	}
 }
 
+func (PositiveIntLiteralType) Size() int {
+	panic("positive int literal type has no size")
+}
+
 // Internal use only. Compatible with all signed int types.
 type NegativeIntLiteralType struct {
 	isType
@@ -206,6 +225,10 @@ func (NegativeIntLiteralType) IsSubTypeOf(other Type) bool {
 	}
 }
 
+func (NegativeIntLiteralType) Size() int {
+	panic("negative int literal type has no size")
+}
+
 // Internal use only. Compatible with all sign/unsigned float types.
 type FloatLiteralType struct {
 	isType
@@ -235,6 +258,10 @@ func (FloatLiteralType) IsSubTypeOf(other Type) bool {
 	default:
 		return false
 	}
+}
+
+func (FloatLiteralType) Size() int {
+	panic("float literal type has no size")
 }
 
 func validateUsableType(typeExpr Type, emitter *parseutil.Emitter) {
@@ -333,6 +360,21 @@ func (intType SignedIntType) IsSubTypeOf(other Type) bool {
 	return intType.Equals(other)
 }
 
+func (intType SignedIntType) Size() int {
+	switch intType.Kind {
+	case I8:
+		return 1
+	case I16:
+		return 2
+	case I32:
+		return 4
+	case I64:
+		return 8
+	default:
+		panic("should never reach here")
+	}
+}
+
 type UnsignedIntTypeKind string
 
 const (
@@ -414,6 +456,21 @@ func (intType UnsignedIntType) IsSubTypeOf(other Type) bool {
 	return intType.Equals(other)
 }
 
+func (intType UnsignedIntType) Size() int {
+	switch intType.Kind {
+	case U8:
+		return 1
+	case U16:
+		return 2
+	case U32:
+		return 4
+	case U64:
+		return 8
+	default:
+		panic("should never reach here")
+	}
+}
+
 type FloatTypeKind string
 
 const (
@@ -474,6 +531,17 @@ func (floatType FloatType) Equals(other Type) bool {
 func (floatType FloatType) IsSubTypeOf(other Type) bool {
 	// Float types must be explicitly converted.
 	return floatType.Equals(other)
+}
+
+func (floatType FloatType) Size() int {
+	switch floatType.Kind {
+	case F32:
+		return 4
+	case F64:
+		return 8
+	default:
+		panic("should never reach here")
+	}
 }
 
 type FunctionType struct {
@@ -551,4 +619,8 @@ func (funcType FunctionType) Equals(other Type) bool {
 
 func (funcType FunctionType) IsSubTypeOf(other Type) bool {
 	return funcType.Equals(other)
+}
+
+func (funcType FunctionType) Size() int {
+	return addressSize
 }
