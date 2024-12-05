@@ -37,11 +37,28 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		return
 	}
 
+	callTypeSpec := checker.platform.CallTypeSpec(funcDef.CallConvention)
 	for _, def := range funcDef.Parameters {
 		if def.Type == nil {
 			panic("should never happen") // error previously emitted.
 		}
 		checker.nameType[def.Name] = def.Type
+
+		if !callTypeSpec.IsValidArgType(def.Type) {
+			checker.Emit(
+				def.Type.Loc(),
+				"%s call convention does not support %s argument type",
+				funcDef.CallConvention,
+				def.Type)
+		}
+	}
+
+	if !callTypeSpec.IsValidReturnType(funcDef.ReturnType) {
+		checker.Emit(
+			funcDef.ReturnType.Loc(),
+			"%s call convention does not support %s return type",
+			funcDef.CallConvention,
+			funcDef.ReturnType)
 	}
 
 	processed := map[*ast.Block]struct{}{}

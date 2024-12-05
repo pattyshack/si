@@ -52,7 +52,7 @@ func newInternalCallConstraints(
 	}
 	sort.Ints(sortedNumNeeded)
 
-	argumentRegisterPicker := &registerPicker{
+	argumentRegisterPicker := &internalCallRegisterPicker{
 		availableGeneral: general[1:],
 		availableFloat:   float,
 	}
@@ -83,7 +83,7 @@ func newInternalCallConstraints(
 		}
 	}
 
-	destinationRegisterPicker := &registerPicker{
+	destinationRegisterPicker := &internalCallRegisterPicker{
 		availableGeneral: general,
 		availableFloat:   float,
 	}
@@ -101,14 +101,14 @@ func newInternalCallConstraints(
 	return constraints
 }
 
-type registerPicker struct {
+type internalCallRegisterPicker struct {
 	availableGeneral []*platform.SelectedRegister
 	availableFloat   []*platform.SelectedRegister
 }
 
 // This return nil if the value should be on memory, empty list if the value
 // occupies no space, or a non-empty list if value fits in memory.
-func (picker *registerPicker) Pick(
+func (picker *internalCallRegisterPicker) Pick(
 	valueType ast.Type,
 	numNeeded int,
 ) []*platform.SelectedRegister {
@@ -142,5 +142,87 @@ func (picker *registerPicker) Pick(
 		return result
 	} else {
 		panic("unhandled type")
+	}
+}
+
+func newSystemVLiteCallConstraints(
+	funcType ast.FunctionType,
+) *platform.InstructionConstraints {
+	constraints := platform.NewInstructionConstraints()
+
+	// See Figure 3.4 Register Usage in
+	// https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
+
+	// General argument registers are caller-saved.
+	general := []*platform.SelectedRegister{}
+	for _, reg := range []*platform.Register{rdi, rsi, rdx, rcx, r8, r9} {
+		general = append(general, constraints.Select(true, reg))
+	}
+
+	// All xmm registers are caller-saved.
+	float := []*platform.SelectedRegister{}
+	for _, reg := range ArchitectureRegisters.Float {
+		float = append(float, constraints.Select(true, reg))
+	}
+
+	picker := &systemVLiteCallRegisterPicker{
+		availableGeneral: general,
+		availableFloat:   float[:8], // Only xmm0-xmm7 are usable for argument
+	}
+
+	for _, paramType := range funcType.ParameterTypes {
+		register := picker.Pick(paramType)
+		if register == nil { // need to be on memory
+			constraints.AddStackSource(paramType)
+		} else {
+			constraints.AddRegisterSource(register)
+		}
+	}
+
+	// r10 and r11 are caller-saved temporary registers.  r10 is sometimes a
+	// hidden argument for passing static chain pointer.
+	//
+	// We'll use r11 for func location value since it has no hidden meaning.
+	constraints.Select(true, r10)
+	constraints.SetFuncValue(constraints.Select(true, r11))
+
+	// rax is the caller-saved int return value register.  It's also a hidden
+	// argument register for vararg.
+	generalRet := constraints.Select(true, rax)
+
+	if ast.IsFloatSubType(funcType.ReturnType) {
+		// xmm0 is also the float return register
+		constraints.SetRegisterDestination(float[0])
+	} else {
+		constraints.SetRegisterDestination(generalRet)
+	}
+
+	return constraints
+}
+
+type systemVLiteCallRegisterPicker struct {
+	availableGeneral []*platform.SelectedRegister
+	availableFloat   []*platform.SelectedRegister
+}
+
+func (picker *systemVLiteCallRegisterPicker) Pick(
+	valueType ast.Type,
+) *platform.SelectedRegister {
+	if ast.IsFloatSubType(valueType) {
+		if len(picker.availableFloat) == 0 {
+			return nil
+		}
+
+		result := picker.availableFloat[0]
+		picker.availableFloat = picker.availableFloat[1:]
+		return result
+	} else {
+		if len(picker.availableGeneral) == 0 {
+			return nil
+		}
+
+		result := picker.availableGeneral[0]
+		picker.availableGeneral = picker.availableGeneral[1:]
+		return result
 	}
 }

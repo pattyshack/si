@@ -1,6 +1,7 @@
 package amd64
 
 import (
+	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
 
@@ -22,6 +23,12 @@ func (Platform) ArchitectureName() platform.ArchitectureName {
 
 func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 	return p.os
+}
+
+func (Platform) CallTypeSpec(
+	convention ast.CallConvention,
+) platform.CallTypeSpec {
+	return platform.NewCallTypeSpec(convention)
 }
 
 func (p Platform) SysCallSpec() platform.SysCallSpec {

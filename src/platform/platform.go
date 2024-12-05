@@ -1,5 +1,9 @@
 package platform
 
+import (
+	"github.com/pattyshack/chickadee/ast"
+)
+
 type ArchitectureName string
 type OperatingSystemName string
 
@@ -12,6 +16,8 @@ const (
 type Platform interface {
 	ArchitectureName() ArchitectureName
 	OperatingSystemName() OperatingSystemName
+
+	CallTypeSpec(ast.CallConvention) CallTypeSpec
 
 	SysCallSpec() SysCallSpec
 

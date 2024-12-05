@@ -7,18 +7,31 @@ import (
 type CallConvention string
 
 const (
-	// NOTE: C / System V ABI compatibility is not a priority.  It is needlessly
-	// complicated for our purpose (e.g., 128 int/float, aggregate type
-	// classification/splitting, vararg, etc.).  We'll just pick something
-	// simple to implement for now.  The convention is internal/unstable
+	DefaultCallConvention = InternalCallConvention
+
+	// NOTE: Full C / System V ABI compatibility is not a priority.  It is
+	// needlessly complicated for our purpose (e.g., 128 int/float, aggregate
+	// type	classification/splitting, vararg, etc.).  We'll just pick something
+	// simple to implement for now.  Note that the internal/default convention
+	// is unstable.
 	InternalCallConvention = CallConvention("internal")
 
-	DefaultCallConvention = InternalCallConvention
+	// This call convention implements a subset of the SystemV ABI; specifically,
+	// it only supports primitive argument and return types (ints, floats and
+	// pointers).  This in theory is the bare minimal needed for accessing C
+	// functions.
+	//
+	// The following features are not supported (the list is not exhastive):
+	// - 128 byte int/float value
+	// - aggregate type as argument / return value
+	// - c++ conventions
+	// - vararg
+	SystemVLiteCallConvention = CallConvention("SystemV-lite")
 )
 
 func (call CallConvention) isValid() bool {
 	switch call {
-	case InternalCallConvention:
+	case InternalCallConvention, SystemVLiteCallConvention:
 		return true
 	default:
 		return false
