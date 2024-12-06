@@ -28,7 +28,7 @@ func (ins *instruction) SetParentBlock(block *Block) {
 	ins.ParentBlock = block
 }
 
-type AssignOperation struct {
+type CopyOperation struct {
 	instruction
 
 	parseutil.StartEndPos
@@ -37,29 +37,29 @@ type AssignOperation struct {
 	Src  Value
 }
 
-var _ Instruction = &AssignOperation{}
+var _ Instruction = &CopyOperation{}
 
-func (assign *AssignOperation) replaceSource(oldVal Value, newVal Value) {
-	if assign.Src != oldVal {
+func (copyOp *CopyOperation) replaceSource(oldVal Value, newVal Value) {
+	if copyOp.Src != oldVal {
 		panic("should never happen")
 	}
 
-	assign.Src = newVal
+	copyOp.Src = newVal
 }
 
-func (assign *AssignOperation) Sources() []Value {
-	return []Value{assign.Src}
+func (copyOp *CopyOperation) Sources() []Value {
+	return []Value{copyOp.Src}
 }
 
-func (assign *AssignOperation) Destination() *VariableDefinition {
-	return assign.Dest
+func (copyOp *CopyOperation) Destination() *VariableDefinition {
+	return copyOp.Dest
 }
 
-func (assign *AssignOperation) Walk(visitor Visitor) {
-	visitor.Enter(assign)
-	assign.Dest.Walk(visitor)
-	assign.Src.Walk(visitor)
-	visitor.Exit(assign)
+func (copyOp *CopyOperation) Walk(visitor Visitor) {
+	visitor.Enter(copyOp)
+	copyOp.Dest.Walk(visitor)
+	copyOp.Src.Walk(visitor)
+	visitor.Exit(copyOp)
 }
 
 type UnaryOperationKind string

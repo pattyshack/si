@@ -103,7 +103,7 @@ func (checker *typeChecker) evaluateInstruction(
 	in ast.Instruction,
 ) ast.Type {
 	switch inst := in.(type) {
-	case *ast.AssignOperation:
+	case *ast.CopyOperation:
 		return inst.Src.Type()
 	case *ast.UnaryOperation:
 		return checker.evaluateUnaryOperation(inst)

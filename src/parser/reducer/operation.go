@@ -15,7 +15,7 @@ func (Reducer) AssignToOperationInstruction(
 	ast.Instruction,
 	error,
 ) {
-	return &ast.AssignOperation{
+	return &ast.CopyOperation{
 		StartEndPos: parseutil.NewStartEndPos(dest.Loc(), src.End()),
 		Dest:        dest,
 		Src:         src,

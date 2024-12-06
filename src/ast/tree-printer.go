@@ -162,8 +162,8 @@ func (printer *treePrinter) Enter(n Node) {
 	case *FloatImmediate:
 		printer.write("[FloatImmediate: Value=%e]", node.Value)
 
-	case *AssignOperation:
-		printer.write("[AssignOperation:")
+	case *CopyOperation:
+		printer.write("[CopyOperation:")
 		printer.push("Dest=", "Src=")
 	case *UnaryOperation:
 		printer.write("[UnaryOperation: Kind=%s", node.Kind)
@@ -249,7 +249,7 @@ func (printer *treePrinter) Exit(n Node) {
 	case *VariableReference:
 		printer.endNode()
 
-	case *AssignOperation:
+	case *CopyOperation:
 		printer.endNode()
 	case *UnaryOperation:
 		printer.endNode()
