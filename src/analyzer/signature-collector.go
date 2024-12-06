@@ -8,23 +8,11 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-type SignatureCollector struct {
-	*parseutil.Emitter
-	signatures map[string]ast.SourceEntry
-}
-
-func NewSignatureCollector(emitter *parseutil.Emitter) *SignatureCollector {
-	return &SignatureCollector{
-		Emitter:    emitter,
-		signatures: map[string]ast.SourceEntry{},
-	}
-}
-
-func (collector *SignatureCollector) Signatures() map[string]ast.SourceEntry {
-	return collector.signatures
-}
-
-func (collector *SignatureCollector) Process(entries []ast.SourceEntry) {
+func CollectSignatures(
+	entries []ast.SourceEntry,
+	emitter *parseutil.Emitter,
+) map[string]ast.SourceEntry {
+	result := map[string]ast.SourceEntry{}
 	for _, source := range entries {
 		if source.HasDeclarationSyntaxError() {
 			continue
@@ -32,9 +20,9 @@ func (collector *SignatureCollector) Process(entries []ast.SourceEntry) {
 
 		switch entry := source.(type) {
 		case *ast.FunctionDefinition:
-			prev, ok := collector.signatures[entry.Label]
+			prev, ok := result[entry.Label]
 			if ok {
-				collector.Emit(
+				emitter.Emit(
 					entry.Loc(),
 					"definition (%s) previously defined at (%s)",
 					entry.Label,
@@ -42,9 +30,11 @@ func (collector *SignatureCollector) Process(entries []ast.SourceEntry) {
 				continue
 			}
 
-			collector.signatures[entry.Label] = entry
+			result[entry.Label] = entry
 		default:
 			panic(fmt.Sprintf("%s: unhandled SourceEntry", source.Loc()))
 		}
 	}
+
+	return result
 }

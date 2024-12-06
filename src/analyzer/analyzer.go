@@ -33,10 +33,7 @@ func Analyze(
 			}
 		})
 
-	signatureCollector := NewSignatureCollector(emitter)
-	signatureCollector.Process(sources)
-	signatures := signatureCollector.Signatures()
-
+	signatures := CollectSignatures(sources, emitter)
 	if emitter.HasErrors() {
 		abort()
 	}
