@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/pattyshack/gt/parseutil"
@@ -25,8 +26,20 @@ func (collector *callRetConstraints) process(entry ast.SourceEntry) {
 	}
 
 	callSpec := collector.platform.CallSpec(funcDef.CallConvention)
-	funcDef.CallRetConstraints = callSpec.CallRetConstraints(
+	constraints, pseudoParams := callSpec.CallRetConstraints(
 		funcDef.Type().(ast.FunctionType))
+
+	for _, param := range pseudoParams {
+		if !strings.HasPrefix(param.Name, "%") {
+			// call spec implementation error
+			panic(fmt.Sprintf(
+				"(%s) call spec implementation error",
+				funcDef.CallConvention))
+		}
+	}
+
+	funcDef.PseudoParameters = pseudoParams
+	funcDef.CallRetConstraints = constraints
 }
 
 func (collector *callRetConstraints) Ready() {

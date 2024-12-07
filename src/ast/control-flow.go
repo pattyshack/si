@@ -147,6 +147,14 @@ type Terminal struct {
 	Kind TerminalKind
 
 	Src Value
+
+	// Internal
+
+	// Used by ret instruction, not used by exit instruction.
+	//
+	// Callee-saved register values must be restore to their original register
+	// before returning.
+	PseudoSources []Value
 }
 
 var _ Instruction = &Terminal{}
@@ -161,7 +169,7 @@ func (term *Terminal) replaceSource(oldSrc Value, newSrc Value) {
 }
 
 func (term *Terminal) Sources() []Value {
-	return []Value{term.Src}
+	return append([]Value{term.Src}, term.PseudoSources...)
 }
 
 func (Terminal) Destination() *VariableDefinition {
@@ -171,6 +179,9 @@ func (Terminal) Destination() *VariableDefinition {
 func (term *Terminal) Walk(visitor Visitor) {
 	visitor.Enter(term)
 	term.Src.Walk(visitor)
+	for _, src := range term.PseudoSources {
+		src.Walk(visitor)
+	}
 	visitor.Exit(term)
 }
 

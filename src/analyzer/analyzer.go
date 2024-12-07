@@ -14,9 +14,15 @@ func Analyze(
 	targetPlatform platform.Platform,
 	emitter *parseutil.Emitter,
 ) {
-	_, abort := context.WithCancel(context.Background())
-	// TODO
-	//abortCtx, abort := context.WithCancel(context.Background())
+	abortBuildCtx, abortBuild := context.WithCancel(context.Background())
+	shouldAbortBuild := func() bool {
+		select {
+		case <-abortBuildCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}
 
 	entryEmitters := map[ast.SourceEntry]*parseutil.Emitter{}
 	for _, entry := range sources {
@@ -29,7 +35,7 @@ func Analyze(
 			entryEmitter := entryEmitters[entry]
 			ValidateAstSyntax(entry, entryEmitter)
 			if entryEmitter.HasErrors() {
-				abort()
+				abortBuild()
 			}
 		})
 
@@ -38,7 +44,7 @@ func Analyze(
 		targetPlatform,
 		emitter)
 	if emitter.HasErrors() {
-		abort()
+		abortBuild()
 	}
 
 	ParallelProcess(
@@ -58,12 +64,19 @@ func Analyze(
 
 			Process(entry, passes, nil)
 			if entryEmitter.HasErrors() {
-				abort()
+				abortBuild()
 			}
 
-			callRetConstraints.Ready()
-			// TODO use in register allocation
-			// callRetConstraints := callRetConstraintsCollector.Constraints()
+			// At this point, the entry is well-form and no more error could occur.
+			if shouldAbortBuild() {
+				return
+			}
+
+			passes = [][]Pass[ast.SourceEntry]{
+				{PopulateRetPseudoSources(callRetConstraints)},
+			}
+
+			Process(entry, passes, shouldAbortBuild)
 		})
 
 	for _, entryEmitter := range entryEmitters {

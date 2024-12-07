@@ -29,7 +29,10 @@ type internalCallSpec struct {
 
 func (internalCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) *architecture.InstructionConstraints {
+) (
+	*architecture.InstructionConstraints,
+	[]*ast.VariableDefinition,
+) {
 	constraints := architecture.NewInstructionConstraints()
 
 	// The first general register is always used for function location value,
@@ -114,7 +117,35 @@ func (internalCallSpec) CallRetConstraints(
 		constraints.SetRegisterDestination(registers...)
 	}
 
-	return constraints
+	// Create pseudo parameter entries for callee-saved registers
+
+	calleeSaved := []*ast.VariableDefinition{}
+
+	for _, reg := range RegisterSet.General[9:] {
+		constraints.AddRegisterSource(constraints.Select(false, reg))
+		calleeSaved = append(
+			calleeSaved,
+			&ast.VariableDefinition{
+				StartEndPos: funcType.StartEnd(),
+				Name:        "%" + reg.Name,
+				Type:        ast.NewU64(funcType.StartEnd()),
+				DefUses:     map[*ast.VariableReference]struct{}{},
+			})
+	}
+
+	for _, reg := range RegisterSet.Float[8:] {
+		constraints.AddRegisterSource(constraints.Select(false, reg))
+		calleeSaved = append(
+			calleeSaved,
+			&ast.VariableDefinition{
+				StartEndPos: funcType.StartEnd(),
+				Name:        "%" + reg.Name,
+				Type:        ast.NewF64(funcType.StartEnd()),
+				DefUses:     map[*ast.VariableReference]struct{}{},
+			})
+	}
+
+	return constraints, calleeSaved
 }
 
 type internalCallRegisterPicker struct {
@@ -167,7 +198,10 @@ type systemVLiteCallSpec struct {
 
 func (systemVLiteCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) *architecture.InstructionConstraints {
+) (
+	*architecture.InstructionConstraints,
+	[]*ast.VariableDefinition,
+) {
 	constraints := architecture.NewInstructionConstraints()
 
 	// See Figure 3.4 Register Usage in
@@ -217,7 +251,23 @@ func (systemVLiteCallSpec) CallRetConstraints(
 		constraints.SetRegisterDestination(generalRet)
 	}
 
-	return constraints
+	// Create pseudo parameter entries for callee-saved registers
+
+	calleeSaved := []*ast.VariableDefinition{}
+
+	for _, reg := range []*architecture.Register{rbx, rbp, r12, r13, r14, r15} {
+		constraints.AddRegisterSource(constraints.Select(false, reg))
+		calleeSaved = append(
+			calleeSaved,
+			&ast.VariableDefinition{
+				StartEndPos: funcType.StartEnd(),
+				Name:        "%" + reg.Name,
+				Type:        ast.NewU64(funcType.StartEnd()),
+				DefUses:     map[*ast.VariableReference]struct{}{},
+			})
+	}
+
+	return constraints, calleeSaved
 }
 
 type systemVLiteCallRegisterPicker struct {

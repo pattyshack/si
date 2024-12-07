@@ -84,6 +84,13 @@ func (constraints *InstructionConstraints) Select(
 	if len(candidates) == 0 {
 		panic("empty candidate list")
 	}
+
+	for _, reg := range candidates {
+		if reg.IsStackPointer {
+			panic("cannot select stack pointer")
+		}
+	}
+
 	reg := &RegisterCandidate{
 		Clobbered:  clobbered,
 		Candidates: candidates,

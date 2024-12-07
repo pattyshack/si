@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/pattyshack/gt/parseutil"
 )
 
@@ -85,6 +87,10 @@ func (def *VariableDefinition) Walk(visitor Visitor) {
 func (def *VariableDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Name == "" {
 		emitter.Emit(def.Loc(), "empty variable definition name")
+	}
+
+	if strings.HasPrefix(def.Name, "%") {
+		emitter.Emit(def.Loc(), "%%-prefixed name is reserved for internal use")
 	}
 
 	if def.Type != nil {
@@ -252,6 +258,10 @@ func (ref *VariableReference) Walk(visitor Visitor) {
 func (ref *VariableReference) Validate(emitter *parseutil.Emitter) {
 	if ref.Name == "" {
 		emitter.Emit(ref.Loc(), "empty variable reference name")
+	}
+
+	if strings.HasPrefix(ref.Name, "%") {
+		emitter.Emit(ref.Loc(), "%%-prefixed name is reserved for internal use")
 	}
 }
 

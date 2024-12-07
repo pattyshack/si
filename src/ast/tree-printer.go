@@ -185,8 +185,11 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[ConditionalJump: Kind=%s Label=%s", node.Kind, node.Label)
 		printer.push("Src1=", "Src2=")
 	case *Terminal:
-		printer.write("[Terminal: Kind=%s", node.Kind)
-		printer.push("Src=")
+		printer.list(
+			fmt.Sprintf("[Terminal: Kind=%s", node.Kind),
+			"PseudoSource",
+			len(node.PseudoSources),
+			"Src=")
 
 	case ErrorType:
 		printer.write("[ErrorType]")
@@ -217,6 +220,9 @@ func (printer *treePrinter) Enter(n Node) {
 		labels := []string{}
 		for idx, _ := range node.Parameters {
 			labels = append(labels, fmt.Sprintf("Parameter%d=", idx))
+		}
+		for idx, _ := range node.PseudoParameters {
+			labels = append(labels, fmt.Sprintf("PseudoParameter%d=", idx))
 		}
 		labels = append(labels, "ReturnType=")
 		for idx, _ := range node.Blocks {

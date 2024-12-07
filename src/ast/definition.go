@@ -55,6 +55,10 @@ type FunctionDefinition struct {
 
 	// Internal
 
+	// Callee-saved registers are treated as pseudo/hidden parameters that are
+	// alive for the entire function execution, and are "returned" as	part of
+	// the ret instruction.
+	PseudoParameters   []*VariableDefinition
 	CallRetConstraints *architecture.InstructionConstraints
 }
 
@@ -64,6 +68,9 @@ var _ Validator = &FunctionDefinition{}
 func (def *FunctionDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
 	for _, param := range def.Parameters {
+		param.Walk(visitor)
+	}
+	for _, param := range def.PseudoParameters {
 		param.Walk(visitor)
 	}
 	def.ReturnType.Walk(visitor)
