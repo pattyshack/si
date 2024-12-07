@@ -33,14 +33,13 @@ func Analyze(
 			}
 		})
 
-	signatures := CollectSignatures(sources, emitter)
+	signatures, callRetConstraints := CollectSignaturesAndCallRetConstraints(
+		sources,
+		targetPlatform,
+		emitter)
 	if emitter.HasErrors() {
 		abort()
 	}
-
-	callRetConstraintsCollector := NewCallRetConstraintsCollector(
-		targetPlatform,
-		len(sources))
 
 	ParallelProcess(
 		sources,
@@ -54,10 +53,7 @@ func Analyze(
 				{InitializeControlFlowGraph(entryEmitter)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
-				{
-					CheckTypes(entryEmitter, targetPlatform),
-					callRetConstraintsCollector,
-				},
+				{CheckTypes(entryEmitter, targetPlatform)},
 			}
 
 			Process(entry, passes, nil)
@@ -65,7 +61,7 @@ func Analyze(
 				abort()
 			}
 
-			callRetConstraintsCollector.Constraints()
+			callRetConstraints.Get()
 			// TODO use in register allocation
 			// callRetConstraints := callRetConstraintsCollector.Constraints()
 		})
