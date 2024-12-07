@@ -14,7 +14,7 @@ type DataLocation interface {
 }
 
 // A yet to be determined register, selected from the candidates set.
-type SelectedRegister struct {
+type RegisterCandidate struct {
 	// Clobbered registers are caller-saved; registers are callee-saved otherwise.
 	Clobbered  bool
 	Candidates []*Register
@@ -23,7 +23,7 @@ type SelectedRegister struct {
 type RegisterSlot struct {
 	// The value is stored in an "array" formed by a list of registers.  The list
 	// could be empty to indicate a zero-sized type (e.g., empty struct)
-	Registers []*SelectedRegister
+	Registers []*RegisterCandidate
 }
 
 var _ DataLocation = &RegisterSlot{}
@@ -48,7 +48,7 @@ type InstructionConstraints struct {
 	// The unordered set of registers used by this instruction.  Entries are
 	// created by Select.  Note that this set may include registers not used by
 	// sources and destination.
-	UsedRegisters []*SelectedRegister
+	UsedRegisters []*RegisterCandidate
 
 	// Which sources/destination values should be on stack.  The sources layout is
 	// specified from top to bottom (stack destination is always at the bottom).
@@ -59,7 +59,7 @@ type InstructionConstraints struct {
 	SourceSlots     []*StackSlot
 	DestinationSlot *StackSlot // nil if the destination fits on registers
 
-	FuncValue *SelectedRegister // only set by FuncCall
+	FuncValue *RegisterCandidate // only set by FuncCall
 	// Source data locations are in the same order as the instruction's sources.
 	Sources     []DataLocation
 	Destination DataLocation // not set by control flow instructions
@@ -84,11 +84,11 @@ func NewInstructionConstraints() *InstructionConstraints {
 func (constraints *InstructionConstraints) Select(
 	clobbered bool,
 	candidates ...*Register,
-) *SelectedRegister {
+) *RegisterCandidate {
 	if len(candidates) == 0 {
 		panic("empty candidate list")
 	}
-	reg := &SelectedRegister{
+	reg := &RegisterCandidate{
 		Clobbered:  clobbered,
 		Candidates: candidates,
 	}
@@ -97,7 +97,7 @@ func (constraints *InstructionConstraints) Select(
 }
 
 func (constraints *InstructionConstraints) listToLocation(
-	list []*SelectedRegister,
+	list []*RegisterCandidate,
 	isDest bool,
 ) DataLocation {
 	for _, entry := range list {
@@ -112,7 +112,7 @@ func (constraints *InstructionConstraints) listToLocation(
 }
 
 func (constraints *InstructionConstraints) SetFuncValue(
-	register *SelectedRegister,
+	register *RegisterCandidate,
 ) {
 	if constraints.FuncValue != nil {
 		panic("func value already set")
@@ -124,7 +124,7 @@ func (constraints *InstructionConstraints) SetFuncValue(
 // of selected registers (the list could be empty if source value does not
 // occupy any space, e.g., empty struct)
 func (constraints *InstructionConstraints) AddRegisterSource(
-	registers ...*SelectedRegister,
+	registers ...*RegisterCandidate,
 ) {
 	constraints.Sources = append(
 		constraints.Sources,
@@ -145,7 +145,7 @@ func (constraints *InstructionConstraints) AddStackSource(
 // of selected registers (the list could be empty if the destination value
 // does not occupy any space, e.g., empty struct)
 func (constraints *InstructionConstraints) SetRegisterDestination(
-	registers ...*SelectedRegister,
+	registers ...*RegisterCandidate,
 ) {
 	if constraints.Destination != nil {
 		panic("destination already set")

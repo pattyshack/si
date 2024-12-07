@@ -40,12 +40,12 @@ func (internalCallSpec) CallRetConstraints(
 	// assignment algorithm, except the first general register is also usable for
 	// the return value.
 
-	general := []*platform.SelectedRegister{}
+	general := []*platform.RegisterCandidate{}
 	for _, reg := range ArchitectureRegisters.General[:9] {
 		general = append(general, constraints.Select(true, reg))
 	}
 
-	float := []*platform.SelectedRegister{}
+	float := []*platform.RegisterCandidate{}
 	for _, reg := range ArchitectureRegisters.Float[:8] {
 		float = append(float, constraints.Select(true, reg))
 	}
@@ -72,7 +72,7 @@ func (internalCallSpec) CallRetConstraints(
 		availableFloat:   float,
 	}
 
-	paramLocations := map[ast.Type][]*platform.SelectedRegister{}
+	paramLocations := map[ast.Type][]*platform.RegisterCandidate{}
 	for _, numNeeded := range sortedNumNeeded {
 		for _, paramType := range paramSizeGroups[numNeeded] {
 			registers := argumentRegisterPicker.Pick(paramType, numNeeded)
@@ -117,8 +117,8 @@ func (internalCallSpec) CallRetConstraints(
 }
 
 type internalCallRegisterPicker struct {
-	availableGeneral []*platform.SelectedRegister
-	availableFloat   []*platform.SelectedRegister
+	availableGeneral []*platform.RegisterCandidate
+	availableFloat   []*platform.RegisterCandidate
 }
 
 // This return nil if the value should be on memory, empty list if the value
@@ -126,33 +126,33 @@ type internalCallRegisterPicker struct {
 func (picker *internalCallRegisterPicker) Pick(
 	valueType ast.Type,
 	numNeeded int,
-) []*platform.SelectedRegister {
+) []*platform.RegisterCandidate {
 	if len(picker.availableGeneral)+len(picker.availableFloat) < numNeeded {
 		return nil
 	}
 
 	if numNeeded == 0 {
-		return []*platform.SelectedRegister{}
+		return []*platform.RegisterCandidate{}
 	}
 
 	if ast.IsIntSubType(valueType) || ast.IsFunctionType(valueType) {
 		if len(picker.availableGeneral) > 0 {
-			result := []*platform.SelectedRegister{picker.availableGeneral[0]}
+			result := []*platform.RegisterCandidate{picker.availableGeneral[0]}
 			picker.availableGeneral = picker.availableGeneral[1:]
 			return result
 		}
 
-		result := []*platform.SelectedRegister{picker.availableFloat[0]}
+		result := []*platform.RegisterCandidate{picker.availableFloat[0]}
 		picker.availableFloat = picker.availableFloat[1:]
 		return result
 	} else if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) > 0 {
-			result := []*platform.SelectedRegister{picker.availableFloat[0]}
+			result := []*platform.RegisterCandidate{picker.availableFloat[0]}
 			picker.availableFloat = picker.availableFloat[1:]
 			return result
 		}
 
-		result := []*platform.SelectedRegister{picker.availableGeneral[0]}
+		result := []*platform.RegisterCandidate{picker.availableGeneral[0]}
 		picker.availableGeneral = picker.availableGeneral[1:]
 		return result
 	} else {
@@ -173,13 +173,13 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	// https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
 
 	// General argument registers are caller-saved.
-	general := []*platform.SelectedRegister{}
+	general := []*platform.RegisterCandidate{}
 	for _, reg := range []*platform.Register{rdi, rsi, rdx, rcx, r8, r9} {
 		general = append(general, constraints.Select(true, reg))
 	}
 
 	// All xmm registers are caller-saved.
-	float := []*platform.SelectedRegister{}
+	float := []*platform.RegisterCandidate{}
 	for _, reg := range ArchitectureRegisters.Float {
 		float = append(float, constraints.Select(true, reg))
 	}
@@ -220,13 +220,13 @@ func (systemVLiteCallSpec) CallRetConstraints(
 }
 
 type systemVLiteCallRegisterPicker struct {
-	availableGeneral []*platform.SelectedRegister
-	availableFloat   []*platform.SelectedRegister
+	availableGeneral []*platform.RegisterCandidate
+	availableFloat   []*platform.RegisterCandidate
 }
 
 func (picker *systemVLiteCallRegisterPicker) Pick(
 	valueType ast.Type,
-) *platform.SelectedRegister {
+) *platform.RegisterCandidate {
 	if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) == 0 {
 			return nil
