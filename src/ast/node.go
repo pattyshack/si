@@ -51,8 +51,8 @@ func (entry *sourceEntry) SetHasDeclarationSyntaxError(val bool) {
 	entry.hasDeclarationSyntaxError = val
 }
 
-// %-prefixed local register variable definition.  Note that the '%' prefix is
-// not part of the name and is only used by the parser.
+// %-prefixed local variable definition.  Note that the '%' prefix is not part
+// of the name and is only used by the parser.
 type VariableDefinition struct {
 	parseutil.StartEndPos
 
@@ -84,7 +84,7 @@ func (def *VariableDefinition) Walk(visitor Visitor) {
 
 func (def *VariableDefinition) Validate(emitter *parseutil.Emitter) {
 	if def.Name == "" {
-		emitter.Emit(def.Loc(), "empty register definition name")
+		emitter.Emit(def.Loc(), "empty variable definition name")
 	}
 
 	if def.Type != nil {
@@ -112,7 +112,7 @@ func (def *VariableDefinition) NewRef(
 	return ref
 }
 
-// Register, global label, or immediate
+// Local variable, global label, or immediate
 type Value interface {
 	Node
 	isValue()
@@ -120,7 +120,7 @@ type Value interface {
 	// Internal
 
 	// What this reference refers to.  For now:
-	// - register reference returns a *VariableDefinition
+	// - local variable reference returns a *VariableDefinition
 	// - global label reference returns a string
 	// - immediate returns an int / float
 	Definition() interface{}
@@ -205,8 +205,8 @@ func (ref *GlobalLabelReference) Type() Type {
 	return ref.Signature.Type()
 }
 
-// %-prefixed local register variable reference.  Note that the '%' prefix is
-// not part of the name and is only used by the parser.
+// %-prefixed local variable reference.  Note that the '%' prefix is not part
+// of the name and is only used by the parser.
 type VariableReference struct {
 	value
 	parseutil.StartEndPos
@@ -251,7 +251,7 @@ func (ref *VariableReference) Walk(visitor Visitor) {
 
 func (ref *VariableReference) Validate(emitter *parseutil.Emitter) {
 	if ref.Name == "" {
-		emitter.Emit(ref.Loc(), "empty register reference name")
+		emitter.Emit(ref.Loc(), "empty variable reference name")
 	}
 }
 

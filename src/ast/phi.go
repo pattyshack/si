@@ -12,7 +12,7 @@ type Phi struct {
 
 	Dest *VariableDefinition
 
-	// Value is usually a register reference, but could be constant after
+	// Value is usually a local variable reference, but could be constant after
 	// optimization.
 	Srcs map[*Block]Value
 }
