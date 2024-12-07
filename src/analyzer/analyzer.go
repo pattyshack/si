@@ -61,7 +61,7 @@ func Analyze(
 				abort()
 			}
 
-			callRetConstraints.Get()
+			callRetConstraints.Ready()
 			// TODO use in register allocation
 			// callRetConstraints := callRetConstraintsCollector.Constraints()
 		})

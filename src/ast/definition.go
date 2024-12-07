@@ -2,6 +2,8 @@ package ast
 
 import (
 	"github.com/pattyshack/gt/parseutil"
+
+	"github.com/pattyshack/chickadee/architecture"
 )
 
 type CallConvention string
@@ -50,6 +52,10 @@ type FunctionDefinition struct {
 	Parameters []*VariableDefinition
 	ReturnType Type
 	Blocks     []*Block
+
+	// Internal
+
+	CallRetConstraints *architecture.InstructionConstraints
 }
 
 var _ SourceEntry = &FunctionDefinition{}
