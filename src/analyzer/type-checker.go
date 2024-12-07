@@ -394,7 +394,7 @@ func (checker *typeChecker) evaluateTerminal(
 			return nil
 		}
 
-		funcRetType := inst.ParentBlock.ParentFuncDef.ReturnType
+		funcRetType := inst.ParentBlock().ParentFuncDef.ReturnType
 		if !retType.IsSubTypeOf(funcRetType) {
 			checker.Emit(
 				inst.Loc(),

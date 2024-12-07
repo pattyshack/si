@@ -61,7 +61,7 @@ func (phi *Phi) Add(parent *Block, def *VariableDefinition) {
 }
 
 func (phi *Phi) Discard() {
-	delete(phi.ParentBlock.Phis, phi.Dest.Name)
+	delete(phi.parentBlock.Phis, phi.Dest.Name)
 	for _, src := range phi.Srcs {
 		src.Discard()
 	}
