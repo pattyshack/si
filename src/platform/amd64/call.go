@@ -3,6 +3,7 @@ package amd64
 import (
 	"sort"
 
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -28,8 +29,8 @@ type internalCallSpec struct {
 
 func (internalCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) *platform.InstructionConstraints {
-	constraints := platform.NewInstructionConstraints()
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
 
 	// The first general register is always used for function location value,
 	// the next 8 general registers are usable for int/data arguments.  The first
@@ -40,13 +41,13 @@ func (internalCallSpec) CallRetConstraints(
 	// assignment algorithm, except the first general register is also usable for
 	// the return value.
 
-	general := []*platform.RegisterCandidate{}
-	for _, reg := range ArchitectureRegisters.General[:9] {
+	general := []*architecture.RegisterCandidate{}
+	for _, reg := range RegisterSet.General[:9] {
 		general = append(general, constraints.Select(true, reg))
 	}
 
-	float := []*platform.RegisterCandidate{}
-	for _, reg := range ArchitectureRegisters.Float[:8] {
+	float := []*architecture.RegisterCandidate{}
+	for _, reg := range RegisterSet.Float[:8] {
 		float = append(float, constraints.Select(true, reg))
 	}
 
@@ -72,7 +73,7 @@ func (internalCallSpec) CallRetConstraints(
 		availableFloat:   float,
 	}
 
-	paramLocations := map[ast.Type][]*platform.RegisterCandidate{}
+	paramLocations := map[ast.Type][]*architecture.RegisterCandidate{}
 	for _, numNeeded := range sortedNumNeeded {
 		for _, paramType := range paramSizeGroups[numNeeded] {
 			registers := argumentRegisterPicker.Pick(paramType, numNeeded)
@@ -117,8 +118,8 @@ func (internalCallSpec) CallRetConstraints(
 }
 
 type internalCallRegisterPicker struct {
-	availableGeneral []*platform.RegisterCandidate
-	availableFloat   []*platform.RegisterCandidate
+	availableGeneral []*architecture.RegisterCandidate
+	availableFloat   []*architecture.RegisterCandidate
 }
 
 // This return nil if the value should be on memory, empty list if the value
@@ -126,33 +127,33 @@ type internalCallRegisterPicker struct {
 func (picker *internalCallRegisterPicker) Pick(
 	valueType ast.Type,
 	numNeeded int,
-) []*platform.RegisterCandidate {
+) []*architecture.RegisterCandidate {
 	if len(picker.availableGeneral)+len(picker.availableFloat) < numNeeded {
 		return nil
 	}
 
 	if numNeeded == 0 {
-		return []*platform.RegisterCandidate{}
+		return []*architecture.RegisterCandidate{}
 	}
 
 	if ast.IsIntSubType(valueType) || ast.IsFunctionType(valueType) {
 		if len(picker.availableGeneral) > 0 {
-			result := []*platform.RegisterCandidate{picker.availableGeneral[0]}
+			result := []*architecture.RegisterCandidate{picker.availableGeneral[0]}
 			picker.availableGeneral = picker.availableGeneral[1:]
 			return result
 		}
 
-		result := []*platform.RegisterCandidate{picker.availableFloat[0]}
+		result := []*architecture.RegisterCandidate{picker.availableFloat[0]}
 		picker.availableFloat = picker.availableFloat[1:]
 		return result
 	} else if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) > 0 {
-			result := []*platform.RegisterCandidate{picker.availableFloat[0]}
+			result := []*architecture.RegisterCandidate{picker.availableFloat[0]}
 			picker.availableFloat = picker.availableFloat[1:]
 			return result
 		}
 
-		result := []*platform.RegisterCandidate{picker.availableGeneral[0]}
+		result := []*architecture.RegisterCandidate{picker.availableGeneral[0]}
 		picker.availableGeneral = picker.availableGeneral[1:]
 		return result
 	} else {
@@ -166,21 +167,21 @@ type systemVLiteCallSpec struct {
 
 func (systemVLiteCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) *platform.InstructionConstraints {
-	constraints := platform.NewInstructionConstraints()
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
 
 	// See Figure 3.4 Register Usage in
 	// https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
 
 	// General argument registers are caller-saved.
-	general := []*platform.RegisterCandidate{}
-	for _, reg := range []*platform.Register{rdi, rsi, rdx, rcx, r8, r9} {
+	general := []*architecture.RegisterCandidate{}
+	for _, reg := range []*architecture.Register{rdi, rsi, rdx, rcx, r8, r9} {
 		general = append(general, constraints.Select(true, reg))
 	}
 
 	// All xmm registers are caller-saved.
-	float := []*platform.RegisterCandidate{}
-	for _, reg := range ArchitectureRegisters.Float {
+	float := []*architecture.RegisterCandidate{}
+	for _, reg := range RegisterSet.Float {
 		float = append(float, constraints.Select(true, reg))
 	}
 
@@ -220,13 +221,13 @@ func (systemVLiteCallSpec) CallRetConstraints(
 }
 
 type systemVLiteCallRegisterPicker struct {
-	availableGeneral []*platform.RegisterCandidate
-	availableFloat   []*platform.RegisterCandidate
+	availableGeneral []*architecture.RegisterCandidate
+	availableFloat   []*architecture.RegisterCandidate
 }
 
 func (picker *systemVLiteCallRegisterPicker) Pick(
 	valueType ast.Type,
-) *platform.RegisterCandidate {
+) *architecture.RegisterCandidate {
 	if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) == 0 {
 			return nil

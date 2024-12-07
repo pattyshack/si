@@ -1,4 +1,4 @@
-package platform
+package architecture
 
 type Register struct {
 	Name string
@@ -52,7 +52,7 @@ func NewFloatRegister(name string) *Register {
 // pointer (e.g., RBP), and treat that register as callee-saved.
 //
 // 4. We can spill to any general/float register.
-type ArchitectureRegisters struct {
+type RegisterSet struct {
 	StackPointer *Register
 
 	// The set of registers usable for signed/unsigned int and pointer operations.
@@ -66,8 +66,8 @@ type ArchitectureRegisters struct {
 	Data []*Register
 }
 
-func NewArchitectureRegisters(registers ...*Register) *ArchitectureRegisters {
-	set := &ArchitectureRegisters{}
+func NewRegisterSet(registers ...*Register) *RegisterSet {
+	set := &RegisterSet{}
 
 	names := map[string]struct{}{}
 	for _, register := range registers {
@@ -91,7 +91,7 @@ func NewArchitectureRegisters(registers ...*Register) *ArchitectureRegisters {
 	return set
 }
 
-func (set *ArchitectureRegisters) add(register *Register) {
+func (set *RegisterSet) add(register *Register) {
 	if register.IsStackPointer {
 		if register.AllowGeneralOp || register.AllowFloatOp {
 			panic("stack pointer register cannot be general/float register")

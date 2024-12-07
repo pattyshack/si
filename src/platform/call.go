@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -16,7 +17,7 @@ type CallSpec interface {
 	CallTypeSpec
 
 	// Used by both call and ret instructions.
-	CallRetConstraints(funcType ast.FunctionType) *InstructionConstraints
+	CallRetConstraints(ast.FunctionType) *architecture.InstructionConstraints
 }
 
 type InternalCallTypeSpec struct{}

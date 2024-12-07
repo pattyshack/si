@@ -1,4 +1,4 @@
-package platform
+package architecture
 
 import (
 	"github.com/pattyshack/chickadee/ast"

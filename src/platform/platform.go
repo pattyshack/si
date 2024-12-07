@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -21,5 +22,5 @@ type Platform interface {
 
 	SysCallSpec() SysCallSpec
 
-	ArchitectureRegisters() *ArchitectureRegisters
+	ArchitectureRegisters() *architecture.RegisterSet
 }

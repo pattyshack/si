@@ -6,6 +6,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -16,7 +17,7 @@ type callRetConstraints struct {
 	sync.WaitGroup
 
 	mutex            sync.Mutex
-	entryConstraints map[ast.SourceEntry]*platform.InstructionConstraints
+	entryConstraints map[ast.SourceEntry]*architecture.InstructionConstraints
 }
 
 func (collector *callRetConstraints) process(entry ast.SourceEntry) {
@@ -36,7 +37,7 @@ func (collector *callRetConstraints) process(entry ast.SourceEntry) {
 	collector.entryConstraints[entry] = constraints
 }
 
-func (collector *callRetConstraints) Get() map[ast.SourceEntry]*platform.InstructionConstraints {
+func (collector *callRetConstraints) Get() map[ast.SourceEntry]*architecture.InstructionConstraints {
 	collector.Wait()
 	return collector.entryConstraints
 }
@@ -51,7 +52,7 @@ func CollectSignaturesAndCallRetConstraints(
 ) {
 	constraints := &callRetConstraints{
 		platform:         targetPlatform,
-		entryConstraints: map[ast.SourceEntry]*platform.InstructionConstraints{},
+		entryConstraints: map[ast.SourceEntry]*architecture.InstructionConstraints{},
 	}
 
 	result := map[string]ast.SourceEntry{}

@@ -1,6 +1,7 @@
 package amd64
 
 import (
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -35,6 +36,6 @@ func (p Platform) SysCallSpec() platform.SysCallSpec {
 	return p.sysCallSpec
 }
 
-func (Platform) ArchitectureRegisters() *platform.ArchitectureRegisters {
-	return ArchitectureRegisters
+func (Platform) ArchitectureRegisters() *architecture.RegisterSet {
+	return RegisterSet
 }

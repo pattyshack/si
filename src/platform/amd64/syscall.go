@@ -3,6 +3,7 @@ package amd64
 import (
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -29,7 +30,7 @@ func (linuxSysCallSpec) ExitSysCallFuncValue(
 func newSysCallConstraints(
 	os platform.OperatingSystemName,
 	call *ast.FuncCall,
-) *platform.InstructionConstraints {
+) *architecture.InstructionConstraints {
 	switch os {
 	case platform.Linux:
 		return newLinuxSysCallConstraints(len(call.Args))
@@ -40,8 +41,8 @@ func newSysCallConstraints(
 
 func newLinuxSysCallConstraints(
 	numArgs int,
-) *platform.InstructionConstraints {
-	constraints := platform.NewInstructionConstraints()
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
 
 	// Clobbered by syscall
 	constraints.Select(true, rcx)
@@ -53,7 +54,7 @@ func newLinuxSysCallConstraints(
 	constraints.SetRegisterDestination(ret)
 
 	// Syscall arguments
-	calleeSavedArguments := []*platform.Register{rdi, rsi, rdx, r10, r8, r9}
+	calleeSavedArguments := []*architecture.Register{rdi, rsi, rdx, r10, r8, r9}
 	for _, register := range calleeSavedArguments[:numArgs] {
 		constraints.AddRegisterSource(constraints.Select(false, register))
 	}
