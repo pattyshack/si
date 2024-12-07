@@ -1,9 +1,5 @@
 package architecture
 
-import (
-	"github.com/pattyshack/chickadee/ast"
-)
-
 // Where the data is located.  The data location is either a *RegisterSlot, or
 // a *StackSlot.
 //
@@ -31,7 +27,7 @@ var _ DataLocation = &RegisterSlot{}
 func (*RegisterSlot) isDataLocation() {}
 
 type StackSlot struct {
-	Type ast.Type
+	Size int // in bytes
 }
 
 var _ DataLocation = &StackSlot{}
@@ -132,10 +128,10 @@ func (constraints *InstructionConstraints) AddRegisterSource(
 }
 
 func (constraints *InstructionConstraints) AddStackSource(
-	srcType ast.Type,
+	size int,
 ) {
 	slot := &StackSlot{
-		Type: srcType,
+		Size: size,
 	}
 	constraints.SourceSlots = append(constraints.SourceSlots, slot)
 	constraints.Sources = append(constraints.Sources, slot)
@@ -154,14 +150,14 @@ func (constraints *InstructionConstraints) SetRegisterDestination(
 }
 
 func (constraints *InstructionConstraints) SetStackDestination(
-	destType ast.Type,
+	size int,
 ) {
 	if constraints.Destination != nil {
 		panic("destination already set")
 	}
 
 	slot := &StackSlot{
-		Type: destType,
+		Size: size,
 	}
 	constraints.DestinationSlot = slot
 	constraints.Destination = slot
