@@ -48,6 +48,11 @@ func (binder *globalLabelReferenceBinder) Process(entry ast.SourceEntry) {
 
 				ref.Signature = sig
 			}
+
+			dest := inst.Destination()
+			if dest != nil {
+				dest.ParentInstruction = inst
+			}
 		}
 	}
 }

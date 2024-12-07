@@ -197,6 +197,7 @@ func (block *Block) AddToPhis(parent *Block, def *VariableDefinition) {
 			Srcs: map[*Block]Value{},
 		}
 		phi.parentBlock = block
+		phi.Dest.ParentInstruction = phi
 		block.Phis[def.Name] = phi
 	}
 

@@ -1,6 +1,6 @@
 // thru is not phi-ed. i and acc is phi-ed
 define func @shared_loop_header(%thru I32, %i I32) I32 {
-  %acc = 0
+  %acc I32 = 0
 :loop_header
   jeq :odd, %i, 1
 :even
@@ -22,8 +22,8 @@ define func @shared_loop_header(%thru I32, %i I32) I32 {
 
 // thru and i are not phi-ed.  iter and count are phi-ed.
 define func @loop(%thru I32, %count I32) I32 {
-  %iter = 0
-  %i = 10
+  %iter I32 = 0
+  %i I32 = 10
 :loop
   jge :end, %iter, 10
 :loop_body
