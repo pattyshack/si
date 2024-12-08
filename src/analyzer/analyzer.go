@@ -73,7 +73,7 @@ func Analyze(
 			}
 
 			passes = [][]Pass[ast.SourceEntry]{
-				{PopulateRetPseudoSources(callRetConstraints)},
+				{PopulateTerminalPseudoEntries(targetPlatform, callRetConstraints)},
 				{PrintLiveness()},
 			}
 

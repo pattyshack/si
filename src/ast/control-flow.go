@@ -150,11 +150,14 @@ type Terminal struct {
 
 	// Internal
 
-	// Used by ret instruction, not used by exit instruction.
+	// Only used by ret instruction.
 	//
 	// Callee-saved register values must be restore to their original register
 	// before returning.
 	PseudoSources []Value
+
+	// Only used by exit instruction.
+	ExitSysCall *FuncCall
 }
 
 var _ Instruction = &Terminal{}
@@ -169,6 +172,10 @@ func (term *Terminal) replaceSource(oldSrc Value, newSrc Value) {
 }
 
 func (term *Terminal) Sources() []Value {
+	if term.ExitSysCall != nil {
+		return term.ExitSysCall.Sources()
+	}
+
 	return append([]Value{term.Src}, term.PseudoSources...)
 }
 
