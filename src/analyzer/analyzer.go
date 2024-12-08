@@ -74,6 +74,7 @@ func Analyze(
 
 			passes = [][]Pass[ast.SourceEntry]{
 				{PopulateRetPseudoSources(callRetConstraints)},
+				{PrintLiveness()},
 			}
 
 			Process(entry, passes, shouldAbortBuild)
