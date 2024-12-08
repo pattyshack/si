@@ -1,0 +1,15 @@
+define func @exit(%code I32) I32 {
+  exit %code
+}
+
+define func @local_exit(%code I32, %bool I8) I32 {
+  %function1 = @exit
+  %function2 func(I32) I32 = @exit
+  jne :func1, %bool, 0
+  %val = call %function1(%code)
+  jmp :never
+:func1
+  %val = call %function2(%code)
+:never
+  ret %val
+}

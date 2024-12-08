@@ -8,15 +8,13 @@ import (
 )
 
 type livenessPrinter struct {
-	livenessAnalyzer
+	*livenessAnalyzer
 }
 
 // This is only for debugging purpose.
 func PrintLiveness() Pass[ast.SourceEntry] {
 	return &livenessPrinter{
-		livenessAnalyzer: livenessAnalyzer{
-			live: map[*ast.Block]*liveInOut{},
-		},
+		livenessAnalyzer: NewLivenessAnalyzer(),
 	}
 }
 
@@ -44,9 +42,6 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 			}
 			result += fmt.Sprintf("      %s %d (%s)\n", def.Name, dist, def.Loc())
 		}
-		if calleeSavedCount != len(funcDef.PseudoParameters) {
-			panic("should never happen")
-		}
 
 		result += fmt.Sprintf("    LiveOut:\n")
 		calleeSavedCount = 0
@@ -56,10 +51,6 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 				continue
 			}
 			result += fmt.Sprintf("      %s %d (%s)\n", def.Name, dist, def.Loc())
-		}
-		if len(block.Children) > 0 &&
-			calleeSavedCount != len(funcDef.PseudoParameters) {
-			panic("should never happen")
 		}
 	}
 

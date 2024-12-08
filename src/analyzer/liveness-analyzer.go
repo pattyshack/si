@@ -67,8 +67,13 @@ type livenessAnalyzer struct {
 	funcParams map[*ast.VariableDefinition]struct{}
 }
 
-func AnalyzeLiveness() Pass[ast.SourceEntry] {
-	return &livenessAnalyzer{}
+var _ Pass[ast.SourceEntry] = &livenessAnalyzer{}
+
+func NewLivenessAnalyzer() *livenessAnalyzer {
+	return &livenessAnalyzer{
+		live:       map[*ast.Block]*liveInOut{},
+		funcParams: map[*ast.VariableDefinition]struct{}{},
+	}
 }
 
 func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
@@ -76,9 +81,6 @@ func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
 	if !ok {
 		return
 	}
-
-	analyzer.live = map[*ast.Block]*liveInOut{}
-	analyzer.funcParams = map[*ast.VariableDefinition]struct{}{}
 
 	for _, param := range funcDef.Parameters {
 		analyzer.funcParams[param] = struct{}{}
