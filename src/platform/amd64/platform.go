@@ -71,7 +71,17 @@ func (p Platform) InstructionConstraints(
 	case *ast.FuncCall:
 		switch inst.Kind {
 		case ast.Call:
-			panic("TODO")
+			switch value := inst.Func.(type) {
+			case *ast.VariableReference:
+				funcType := value.UseDef.Type.(ast.FunctionType)
+				callSpec := p.CallSpec(funcType.CallConvention)
+				constraints, _ := callSpec.CallRetConstraints(funcType)
+				return constraints
+			case *ast.GlobalLabelReference:
+				return value.Signature.(*ast.FunctionDefinition).CallRetConstraints
+			default: // immediate can't have func type
+				panic("This should never happen")
+			}
 		case ast.SysCall:
 			return newSysCallConstraints(p.os, inst)
 		default:
@@ -82,7 +92,7 @@ func (p Platform) InstructionConstraints(
 		case ast.Ret:
 			return inst.ParentBlock().ParentFuncDef.CallRetConstraints
 		case ast.Exit:
-			panic("TODO")
+			return newSysCallConstraints(p.os, inst.ExitSysCall)
 		default:
 			panic("unhandled terminal kind: " + inst.Kind)
 		}
