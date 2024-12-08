@@ -23,4 +23,8 @@ type Platform interface {
 	SysCallSpec() SysCallSpec
 
 	ArchitectureRegisters() *architecture.RegisterSet
+
+	InstructionConstraints(
+		ast.Instruction,
+	) *architecture.InstructionConstraints
 }

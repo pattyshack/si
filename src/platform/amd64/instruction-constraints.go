@@ -23,8 +23,6 @@ var (
 	intBinaryOpConstraints = newBinaryOpConstraints(
 		RegisterSet.General)
 	floatBinaryOpConstraints = newBinaryOpConstraints(RegisterSet.Float)
-
-	// TODO func call / ret constraints
 )
 
 func newConditionalJumpConstraints(
