@@ -45,9 +45,9 @@ func (p Platform) InstructionConstraints(
 ) *architecture.InstructionConstraints {
 	switch inst := in.(type) {
 	case *ast.Phi:
-		panic("TODO") // should use the same constraints as copy op
+		newCopyOpConstraints(inst.Dest.Type)
 	case *ast.CopyOperation:
-		panic("TODO")
+		newCopyOpConstraints(inst.Dest.Type)
 	case *ast.UnaryOperation:
 		if ast.IsFloatSubType(inst.Dest.Type) {
 			return floatUnaryOpConstraints

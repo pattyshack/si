@@ -9,6 +9,15 @@ type DataLocation interface {
 	isDataLocation()
 }
 
+// register or stack slot
+type AnySlot struct {
+	Size int // in bytes
+}
+
+var _ DataLocation = &AnySlot{}
+
+func (*AnySlot) isDataLocation() {}
+
 // A yet to be determined register, selected from the candidates set.
 type RegisterCandidate struct {
 	// Clobbered registers are caller-saved; registers are callee-saved otherwise.
@@ -121,6 +130,14 @@ func (constraints *InstructionConstraints) SetFuncValue(
 		panic("func value already set")
 	}
 	constraints.FuncValue = register
+}
+
+func (constraints *InstructionConstraints) AddAnySource(size int) {
+	constraints.Sources = append(
+		constraints.Sources,
+		&AnySlot{
+			Size: size,
+		})
 }
 
 // The data location list must either be a single stack slot entry, or a list

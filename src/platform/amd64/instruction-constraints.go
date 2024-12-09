@@ -2,6 +2,7 @@ package amd64
 
 import (
 	"github.com/pattyshack/chickadee/architecture"
+	"github.com/pattyshack/chickadee/ast"
 )
 
 var (
@@ -13,10 +14,6 @@ var (
 	floatConditionalJumpConstraints = newConditionalJumpConstraints(
 		RegisterSet.Float)
 
-	intAssignOpConstraint = newAssignOpConstraints(
-		RegisterSet.General)
-	floatAssignOpConstraint = newAssignOpConstraints(RegisterSet.Float)
-
 	intUnaryOpConstraints   = newUnaryOpConstraints(RegisterSet.General)
 	floatUnaryOpConstraints = newUnaryOpConstraints(RegisterSet.Float)
 
@@ -24,6 +21,58 @@ var (
 		RegisterSet.General)
 	floatBinaryOpConstraints = newBinaryOpConstraints(RegisterSet.Float)
 )
+
+// nil indicates the value should be in memory.  Otherwise, the return
+// list indicates the number of registers needed, and the corresponding class
+// of registers to choose form.
+func getRegisterClasses(
+	valueType ast.Type,
+) [][]*architecture.Register {
+	switch valueType.(type) {
+	case ast.ErrorType:
+		panic("should never happen")
+	case ast.PositiveIntLiteralType:
+		panic("should never happen")
+	case ast.NegativeIntLiteralType:
+		panic("should never happen")
+	case ast.FloatLiteralType:
+		panic("should never happen")
+
+	case ast.SignedIntType:
+		return [][]*architecture.Register{RegisterSet.General}
+	case ast.UnsignedIntType:
+		return [][]*architecture.Register{RegisterSet.General}
+	case ast.FunctionType:
+		return [][]*architecture.Register{RegisterSet.General}
+
+	case ast.FloatType:
+		return [][]*architecture.Register{RegisterSet.Float}
+
+	default:
+		panic("unhandled type")
+	}
+}
+
+func newCopyOpConstraints(
+	valueType ast.Type,
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
+
+	constraints.AddAnySource(valueType.Size())
+
+	classes := getRegisterClasses(valueType)
+	if classes == nil {
+		constraints.SetStackDestination(valueType.Size())
+	} else {
+		dest := []*architecture.RegisterCandidate{}
+		for _, class := range classes {
+			dest = append(dest, constraints.Select(true, class...))
+		}
+		constraints.SetRegisterDestination(dest...)
+	}
+
+	return constraints
+}
 
 func newConditionalJumpConstraints(
 	candidates []*architecture.Register,
@@ -34,18 +83,6 @@ func newConditionalJumpConstraints(
 	// There's no destination register.
 	constraints.AddRegisterSource(constraints.Select(false, candidates...))
 	constraints.AddRegisterSource(constraints.Select(false, candidates...))
-
-	return constraints
-}
-
-func newAssignOpConstraints(
-	candidates []*architecture.Register,
-) *architecture.InstructionConstraints {
-	constraints := architecture.NewInstructionConstraints()
-
-	// Copy from source to destination without clobbering the source register.
-	constraints.AddRegisterSource(constraints.Select(false, candidates...))
-	constraints.SetRegisterDestination(constraints.Select(true, candidates...))
 
 	return constraints
 }
