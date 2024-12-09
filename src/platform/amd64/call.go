@@ -122,7 +122,7 @@ func (internalCallSpec) CallRetConstraints(
 	calleeSaved := []*ast.VariableDefinition{}
 
 	for _, reg := range RegisterSet.General[9:] {
-		constraints.AddRegisterSource(constraints.SelectFrom(false, reg))
+		constraints.AddPseudoSource(reg)
 		calleeSaved = append(
 			calleeSaved,
 			&ast.VariableDefinition{
@@ -134,7 +134,7 @@ func (internalCallSpec) CallRetConstraints(
 	}
 
 	for _, reg := range RegisterSet.Float[8:] {
-		constraints.AddRegisterSource(constraints.SelectFrom(false, reg))
+		constraints.AddPseudoSource(reg)
 		calleeSaved = append(
 			calleeSaved,
 			&ast.VariableDefinition{
@@ -256,7 +256,7 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	calleeSaved := []*ast.VariableDefinition{}
 
 	for _, reg := range []*architecture.Register{rbx, rbp, r12, r13, r14, r15} {
-		constraints.AddRegisterSource(constraints.SelectFrom(false, reg))
+		constraints.AddPseudoSource(reg)
 		calleeSaved = append(
 			calleeSaved,
 			&ast.VariableDefinition{

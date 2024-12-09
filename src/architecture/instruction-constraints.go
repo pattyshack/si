@@ -50,11 +50,14 @@ func (StackSlot) isDataLocation() {}
 // and call convention's registers selection / stack layout.
 //
 // Note:
-// 1. it's safe to reuse the same constraints from multiple instructions.
-// 2. do not manually modify the fields. Use the provided methods instead.
+//  1. both call and ret instruction for the same function definition shares
+//     the same constraints. Ret derived its constraints from the call
+//     constraints' destination and pseudo sources.
+//  2. it's safe to reuse the same constraints from multiple instructions.
+//  3. do not manually modify the fields. Use the provided methods instead.
 type InstructionConstraints struct {
 	// The unordered set of registers used by this instruction.  Entries are
-	// created by Select.  Note that this set may include registers not used by
+	// created by Select*.  Note that this set may include registers not used by
 	// sources and destination.
 	UsedRegisters []*RegisterCandidate
 
@@ -69,8 +72,11 @@ type InstructionConstraints struct {
 
 	FuncValue *RegisterCandidate // only set by FuncCall
 	// Source data locations are in the same order as the instruction's sources.
-	Sources     []DataLocation
-	Destination DataLocation // not set by control flow instructions
+	Sources []DataLocation
+	// Pseudo sources are used to track callee-saved registers in call
+	// conventions.
+	PseudoSources []*RegisterCandidate
+	Destination   DataLocation // not set by control flow instructions
 
 	// TODO: add
 	//   ForceSpillToMemory(valueType ast.Type) (wrappedType ast.Type)
@@ -184,6 +190,13 @@ func (constraints *InstructionConstraints) AddStackSource(
 	}
 	constraints.SourceSlots = append(constraints.SourceSlots, slot)
 	constraints.Sources = append(constraints.Sources, slot)
+}
+
+func (constraints *InstructionConstraints) AddPseudoSource(
+	register *Register,
+) {
+	entry := constraints.SelectFrom(false, register)
+	constraints.PseudoSources = append(constraints.PseudoSources, entry)
 }
 
 // The data location list must either be a single stack slot entry, or a list
