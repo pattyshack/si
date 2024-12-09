@@ -21,7 +21,10 @@ func (*AnySlot) isDataLocation() {}
 // A yet to be determined register, selected from the candidates set.
 type RegisterCandidate struct {
 	// Clobbered registers are caller-saved; registers are callee-saved otherwise.
-	Clobbered  bool
+	Clobbered bool
+
+	AnyGeneral bool
+	AnyFloat   bool
 	Candidates []*Register
 }
 
@@ -86,7 +89,29 @@ func NewInstructionConstraints() *InstructionConstraints {
 	return &InstructionConstraints{}
 }
 
-func (constraints *InstructionConstraints) Select(
+func (constraints *InstructionConstraints) SelectAnyGeneral(
+	clobbered bool,
+) *RegisterCandidate {
+	reg := &RegisterCandidate{
+		Clobbered:  clobbered,
+		AnyGeneral: true,
+	}
+	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
+	return reg
+}
+
+func (constraints *InstructionConstraints) SelectAnyFloat(
+	clobbered bool,
+) *RegisterCandidate {
+	reg := &RegisterCandidate{
+		Clobbered: clobbered,
+		AnyFloat:  true,
+	}
+	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
+	return reg
+}
+
+func (constraints *InstructionConstraints) SelectFrom(
 	clobbered bool,
 	candidates ...*Register,
 ) *RegisterCandidate {

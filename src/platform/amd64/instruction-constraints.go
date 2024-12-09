@@ -9,32 +9,25 @@ var (
 	// Unconditional jump has no constraints
 	jumpConstraints = architecture.NewInstructionConstraints()
 
-	intConditionalJumpConstraints = newConditionalJumpConstraints(
-		RegisterSet.General)
-	floatConditionalJumpConstraints = newConditionalJumpConstraints(
-		RegisterSet.Float)
+	intConditionalJumpConstraints   = newConditionalJumpConstraints(false)
+	floatConditionalJumpConstraints = newConditionalJumpConstraints(true)
 
-	intUnaryOpConstraints   = newUnaryOpConstraints(RegisterSet.General)
-	floatUnaryOpConstraints = newUnaryOpConstraints(RegisterSet.Float)
+	intUnaryOpConstraints   = newUnaryOpConstraints(false)
+	floatUnaryOpConstraints = newUnaryOpConstraints(true)
 
-	floatToIntConstraints = newConversionUnaryOpConstraints(
-		RegisterSet.Float,
-		RegisterSet.General)
-	intToFloatConstraints = newConversionUnaryOpConstraints(
-		RegisterSet.General,
-		RegisterSet.Float)
+	floatToIntConstraints = newConversionUnaryOpConstraints(true)
+	intToFloatConstraints = newConversionUnaryOpConstraints(false)
 
-	intBinaryOpConstraints = newBinaryOpConstraints(
-		RegisterSet.General)
-	floatBinaryOpConstraints = newBinaryOpConstraints(RegisterSet.Float)
+	intBinaryOpConstraints   = newBinaryOpConstraints(false)
+	floatBinaryOpConstraints = newBinaryOpConstraints(true)
 )
 
 // nil indicates the value should be in memory.  Otherwise, the return
-// list indicates the number of registers needed, and the corresponding class
-// of registers to choose form.
+// list indicates the number of registers needed; true indicates any float
+// register while false indicates any general register.
 func getRegisterClasses(
 	valueType ast.Type,
-) [][]*architecture.Register {
+) []bool {
 	switch valueType.(type) {
 	case ast.ErrorType:
 		panic("should never happen")
@@ -46,14 +39,14 @@ func getRegisterClasses(
 		panic("should never happen")
 
 	case ast.SignedIntType:
-		return [][]*architecture.Register{RegisterSet.General}
+		return []bool{false}
 	case ast.UnsignedIntType:
-		return [][]*architecture.Register{RegisterSet.General}
+		return []bool{false}
 	case ast.FunctionType:
-		return [][]*architecture.Register{RegisterSet.General}
+		return []bool{false}
 
 	case ast.FloatType:
-		return [][]*architecture.Register{RegisterSet.Float}
+		return []bool{true}
 
 	default:
 		panic("unhandled type")
@@ -72,8 +65,12 @@ func newCopyOpConstraints(
 		constraints.SetStackDestination(valueType.Size())
 	} else {
 		dest := []*architecture.RegisterCandidate{}
-		for _, class := range classes {
-			dest = append(dest, constraints.Select(true, class...))
+		for _, anyFloat := range classes {
+			if anyFloat {
+				dest = append(dest, constraints.SelectAnyFloat(true))
+			} else {
+				dest = append(dest, constraints.SelectAnyGeneral(true))
+			}
 		}
 		constraints.SetRegisterDestination(dest...)
 	}
@@ -82,25 +79,35 @@ func newCopyOpConstraints(
 }
 
 func newConditionalJumpConstraints(
-	candidates []*architecture.Register,
+	isFloat bool,
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
 	// Conditional jump compare two source registers without clobbering them.
 	// There's no destination register.
-	constraints.AddRegisterSource(constraints.Select(false, candidates...))
-	constraints.AddRegisterSource(constraints.Select(false, candidates...))
+	if isFloat {
+		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
+		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
+	} else {
+		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+	}
 
 	return constraints
 }
 
 func newUnaryOpConstraints(
-	candidates []*architecture.Register,
+	isFloat bool,
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
 	// Destination reuses the source register.
-	reg := constraints.Select(true, candidates...)
+	var reg *architecture.RegisterCandidate
+	if isFloat {
+		reg = constraints.SelectAnyFloat(true)
+	} else {
+		reg = constraints.SelectAnyGeneral(true)
+	}
 	constraints.AddRegisterSource(reg)
 	constraints.SetRegisterDestination(reg)
 
@@ -108,28 +115,37 @@ func newUnaryOpConstraints(
 }
 
 func newConversionUnaryOpConstraints(
-	fromCandidates []*architecture.Register,
-	toCandidates []*architecture.Register,
+	fromFloat bool,
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
-	constraints.AddRegisterSource(constraints.Select(false, fromCandidates...))
-	constraints.SetRegisterDestination(constraints.Select(true, toCandidates...))
+	if fromFloat {
+		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
+		constraints.SetRegisterDestination(constraints.SelectAnyGeneral(true))
+	} else {
+		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+		constraints.SetRegisterDestination(constraints.SelectAnyFloat(true))
+	}
 
 	return constraints
 }
 
 func newBinaryOpConstraints(
-	candidates []*architecture.Register,
+	isFloat bool,
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
+	selectAny := constraints.SelectAnyGeneral
+	if isFloat {
+		selectAny = constraints.SelectAnyFloat
+	}
+
 	// Destination reuses the first source register, the second source register is
 	// not clobbered.
-	src1 := constraints.Select(true, candidates...)
+	src1 := selectAny(true)
 	constraints.AddRegisterSource(src1)
 	constraints.SetRegisterDestination(src1)
-	constraints.AddRegisterSource(constraints.Select(false, candidates...))
+	constraints.AddRegisterSource(selectAny(false))
 
 	return constraints
 }
