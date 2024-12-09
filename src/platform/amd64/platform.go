@@ -50,9 +50,21 @@ func (p Platform) InstructionConstraints(
 		newCopyOpConstraints(inst.Dest.Type)
 	case *ast.UnaryOperation:
 		if ast.IsFloatSubType(inst.Dest.Type) {
-			return floatUnaryOpConstraints
+			switch inst.Kind {
+			case ast.ToI8, ast.ToI16, ast.ToI32, ast.ToI64,
+				ast.ToU8, ast.ToU16, ast.ToU32, ast.ToU64:
+
+				return floatToIntConstraints
+			default:
+				return floatUnaryOpConstraints
+			}
 		} else {
-			return intUnaryOpConstraints
+			switch inst.Kind {
+			case ast.ToF32, ast.ToF64:
+				return intToFloatConstraints
+			default:
+				return intUnaryOpConstraints
+			}
 		}
 	case *ast.BinaryOperation:
 		if ast.IsFloatSubType(inst.Dest.Type) {

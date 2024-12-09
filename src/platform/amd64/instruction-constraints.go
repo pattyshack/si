@@ -17,6 +17,13 @@ var (
 	intUnaryOpConstraints   = newUnaryOpConstraints(RegisterSet.General)
 	floatUnaryOpConstraints = newUnaryOpConstraints(RegisterSet.Float)
 
+	floatToIntConstraints = newConversionUnaryOpConstraints(
+		RegisterSet.Float,
+		RegisterSet.General)
+	intToFloatConstraints = newConversionUnaryOpConstraints(
+		RegisterSet.General,
+		RegisterSet.Float)
+
 	intBinaryOpConstraints = newBinaryOpConstraints(
 		RegisterSet.General)
 	floatBinaryOpConstraints = newBinaryOpConstraints(RegisterSet.Float)
@@ -96,6 +103,18 @@ func newUnaryOpConstraints(
 	reg := constraints.Select(true, candidates...)
 	constraints.AddRegisterSource(reg)
 	constraints.SetRegisterDestination(reg)
+
+	return constraints
+}
+
+func newConversionUnaryOpConstraints(
+	fromCandidates []*architecture.Register,
+	toCandidates []*architecture.Register,
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
+
+	constraints.AddRegisterSource(constraints.Select(false, fromCandidates...))
+	constraints.SetRegisterDestination(constraints.Select(true, toCandidates...))
 
 	return constraints
 }
