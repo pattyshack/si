@@ -61,7 +61,7 @@ func (internalCallSpec) CallRetConstraints(
 	// greedily selected from the remaining available registers.
 	paramSizeGroups := map[int][]ast.Type{}
 	for _, paramType := range funcType.ParameterTypes {
-		numNeeded := (paramType.Size() + registerSize - 1) / registerSize
+		numNeeded := paramType.RegisterSize()
 		paramSizeGroups[numNeeded] = append(paramSizeGroups[numNeeded], paramType)
 	}
 
@@ -96,7 +96,7 @@ func (internalCallSpec) CallRetConstraints(
 		}
 
 		if registers == nil { // need to be on memory
-			constraints.AddStackSource(paramType.Size())
+			constraints.AddStackSource(paramType.ByteSize())
 		} else {
 			constraints.AddRegisterSource(registers...)
 		}
@@ -109,10 +109,10 @@ func (internalCallSpec) CallRetConstraints(
 
 	registers := destinationRegisterPicker.Pick(
 		funcType.ReturnType,
-		(funcType.ReturnType.Size()+registerSize-1)/registerSize)
+		funcType.ReturnType.RegisterSize())
 
 	if registers == nil { // need to be on memory
-		constraints.SetStackDestination(funcType.ReturnType.Size())
+		constraints.SetStackDestination(funcType.ReturnType.ByteSize())
 	} else {
 		constraints.SetRegisterDestination(registers...)
 	}
@@ -227,7 +227,7 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	for _, paramType := range funcType.ParameterTypes {
 		register := picker.Pick(paramType)
 		if register == nil { // need to be on memory
-			constraints.AddStackSource(paramType.Size())
+			constraints.AddStackSource(paramType.ByteSize())
 		} else {
 			constraints.AddRegisterSource(register)
 		}

@@ -58,11 +58,11 @@ func newCopyOpConstraints(
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
-	constraints.AddAnySource(valueType.Size())
+	constraints.AddAnySource(valueType.ByteSize())
 
 	classes := getRegisterClasses(valueType)
 	if classes == nil {
-		constraints.SetStackDestination(valueType.Size())
+		constraints.SetStackDestination(valueType.ByteSize())
 	} else {
 		dest := []*architecture.RegisterCandidate{}
 		for _, anyFloat := range classes {

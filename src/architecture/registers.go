@@ -1,5 +1,14 @@
 package architecture
 
+const (
+	// Assumption: we only support 64 bit architecture.
+	RegisterByteSize = 8
+)
+
+func NumRegisters(byteSize int) int {
+	return (byteSize + RegisterByteSize - 1) / RegisterByteSize
+}
+
 type Register struct {
 	Name string
 
