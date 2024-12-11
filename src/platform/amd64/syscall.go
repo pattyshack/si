@@ -45,18 +45,18 @@ func newLinuxSysCallConstraints(
 	constraints := architecture.NewInstructionConstraints()
 
 	// Clobbered by syscall
-	constraints.SelectFrom(true, rcx)
-	constraints.SelectFrom(true, r11)
+	constraints.Require(true, rcx)
+	constraints.Require(true, r11)
 
 	// Syscall number and return value
-	ret := constraints.SelectFrom(true, rax)
+	ret := constraints.Require(true, rax)
 	constraints.SetFuncValue(ret)
 	constraints.SetRegisterDestination(ret)
 
 	// Syscall arguments
 	calleeSavedArguments := []*architecture.Register{rdi, rsi, rdx, r10, r8, r9}
 	for _, register := range calleeSavedArguments[:numArgs] {
-		constraints.AddRegisterSource(constraints.SelectFrom(false, register))
+		constraints.AddRegisterSource(constraints.Require(false, register))
 	}
 
 	return constraints

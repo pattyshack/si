@@ -47,3 +47,34 @@ func ParallelProcess[Node ast.Node](
 	}
 	wg.Wait()
 }
+
+type dataflowWorkSet struct {
+	queue []*ast.Block
+	set   map[*ast.Block]struct{}
+}
+
+func newDataflowWorkSet() *dataflowWorkSet {
+	return &dataflowWorkSet{
+		set: map[*ast.Block]struct{}{},
+	}
+}
+
+func (set *dataflowWorkSet) isEmpty() bool {
+	return len(set.queue) == 0
+}
+
+func (set *dataflowWorkSet) push(block *ast.Block) {
+	_, ok := set.set[block]
+	if ok {
+		return
+	}
+	set.set[block] = struct{}{}
+	set.queue = append(set.queue, block)
+}
+
+func (set *dataflowWorkSet) pop() *ast.Block {
+	head := set.queue[0]
+	set.queue = set.queue[1:]
+	delete(set.set, head)
+	return head
+}

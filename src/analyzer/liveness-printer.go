@@ -35,7 +35,7 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 
 		result += fmt.Sprintf("    LiveIn:\n")
 		calleeSavedCount := 0
-		for def, dist := range printer.live[block].in {
+		for def, dist := range printer.liveIn[block] {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
@@ -45,7 +45,7 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 
 		result += fmt.Sprintf("    LiveOut:\n")
 		calleeSavedCount = 0
-		for def, dist := range printer.live[block].out {
+		for def, dist := range printer.liveOut[block] {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue

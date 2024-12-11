@@ -46,12 +46,12 @@ func (internalCallSpec) CallRetConstraints(
 
 	general := []*architecture.RegisterCandidate{}
 	for _, reg := range RegisterSet.General[:9] {
-		general = append(general, constraints.SelectFrom(true, reg))
+		general = append(general, constraints.Require(true, reg))
 	}
 
 	float := []*architecture.RegisterCandidate{}
 	for _, reg := range RegisterSet.Float[:8] {
-		float = append(float, constraints.SelectFrom(true, reg))
+		float = append(float, constraints.Require(true, reg))
 	}
 
 	constraints.SetFuncValue(general[0])
@@ -210,13 +210,13 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	// General argument registers are caller-saved.
 	general := []*architecture.RegisterCandidate{}
 	for _, reg := range []*architecture.Register{rdi, rsi, rdx, rcx, r8, r9} {
-		general = append(general, constraints.SelectFrom(true, reg))
+		general = append(general, constraints.Require(true, reg))
 	}
 
 	// All xmm registers are caller-saved.
 	float := []*architecture.RegisterCandidate{}
 	for _, reg := range RegisterSet.Float {
-		float = append(float, constraints.SelectFrom(true, reg))
+		float = append(float, constraints.Require(true, reg))
 	}
 
 	picker := &systemVLiteCallRegisterPicker{
@@ -237,12 +237,12 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	// hidden argument for passing static chain pointer.
 	//
 	// We'll use r11 for func location value since it has no hidden meaning.
-	constraints.SelectFrom(true, r10)
-	constraints.SetFuncValue(constraints.SelectFrom(true, r11))
+	constraints.Require(true, r10)
+	constraints.SetFuncValue(constraints.Require(true, r11))
 
 	// rax is the caller-saved int return value register.  It's also a hidden
 	// argument register for vararg.
-	generalRet := constraints.SelectFrom(true, rax)
+	generalRet := constraints.Require(true, rax)
 
 	if ast.IsFloatSubType(funcType.ReturnType) {
 		// xmm0 is also the float return register
