@@ -1,6 +1,8 @@
 package amd64
 
 import (
+	"fmt"
+
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
@@ -45,9 +47,9 @@ func (p Platform) InstructionConstraints(
 ) *architecture.InstructionConstraints {
 	switch inst := in.(type) {
 	case *ast.Phi:
-		newCopyOpConstraints(inst.Dest.Type)
+		return newCopyOpConstraints(inst.Dest.Type)
 	case *ast.CopyOperation:
-		newCopyOpConstraints(inst.Dest.Type)
+		return newCopyOpConstraints(inst.Dest.Type)
 	case *ast.UnaryOperation:
 		if ast.IsFloatSubType(inst.Dest.Type) {
 			switch inst.Kind {
@@ -110,5 +112,5 @@ func (p Platform) InstructionConstraints(
 		}
 	}
 
-	panic("should never reach here")
+	panic(fmt.Sprintf("should never reach here: %s", in.Loc()))
 }

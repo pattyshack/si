@@ -74,7 +74,13 @@ func Analyze(
 
 			passes = [][]Pass[ast.SourceEntry]{
 				{PopulateTerminalPseudoEntries(targetPlatform, callRetConstraints)},
-				{PrintLiveness()},
+				{
+					// these passes are only used for debugging the compiler
+					// implementation and should be removed or flag guarded once the
+					// compiler works.
+					PrintLiveness(),
+					ValidateInstructionConstraints(targetPlatform),
+				},
 			}
 
 			Process(entry, passes, shouldAbortBuild)
