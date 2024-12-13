@@ -115,10 +115,16 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 		convention.RetConstraints.AddPseudoSource(
 			convention.RetConstraints.Require(false, reg))
 
+		var regType ast.Type
+		if reg.AllowGeneralOp {
+			regType = ast.NewU64(pos)
+		} else {
+			regType = ast.NewF64(pos)
+		}
 		pseudoParam := &ast.VariableDefinition{
 			StartEndPos: pos,
 			Name:        "%" + reg.Name,
-			Type:        ast.NewU64(pos),
+			Type:        regType,
 			DefUses:     map[*ast.VariableReference]struct{}{},
 		}
 
