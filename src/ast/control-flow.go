@@ -135,10 +135,10 @@ const (
 	Exit = TerminalKind("exit")
 )
 
-// Exit instruction of the form: <op> <src>
+// Terminal instruction of the form: <op> <src>
 //
-// Note: this translates into a syscall instruction, but we've special cased
-// exit since it has semantic meaning in the control flow graph.
+// Note: exit instruction is translated into a syscall instruction immediately
+// after initializing the control flow graph, and serve no purpose afterward.
 type Terminal struct {
 	controlFlowInstruction
 
@@ -146,7 +146,7 @@ type Terminal struct {
 
 	Kind TerminalKind
 
-	Src Value
+	RetVal Value
 
 	// Internal
 
@@ -154,29 +154,22 @@ type Terminal struct {
 	//
 	// Callee-saved register values must be restore to their original register
 	// before returning.
-	PseudoSources []Value
-
-	// Only used by exit instruction.
-	ExitSysCall *FuncCall
+	CalleeSavedSources []Value
 }
 
 var _ Instruction = &Terminal{}
 var _ Validator = &Terminal{}
 
 func (term *Terminal) replaceSource(oldSrc Value, newSrc Value) {
-	if term.Src != oldSrc {
+	if term.RetVal != oldSrc {
 		panic("should never happen")
 	}
 
-	term.Src = newSrc
+	term.RetVal = newSrc
 }
 
 func (term *Terminal) Sources() []Value {
-	if term.ExitSysCall != nil {
-		return term.ExitSysCall.Sources()
-	}
-
-	return append([]Value{term.Src}, term.PseudoSources...)
+	return append([]Value{term.RetVal}, term.CalleeSavedSources...)
 }
 
 func (Terminal) Destination() *VariableDefinition {
@@ -185,8 +178,8 @@ func (Terminal) Destination() *VariableDefinition {
 
 func (term *Terminal) Walk(visitor Visitor) {
 	visitor.Enter(term)
-	term.Src.Walk(visitor)
-	for _, src := range term.PseudoSources {
+	term.RetVal.Walk(visitor)
+	for _, src := range term.CalleeSavedSources {
 		src.Walk(visitor)
 	}
 	visitor.Exit(term)

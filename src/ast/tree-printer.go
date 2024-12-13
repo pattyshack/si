@@ -187,9 +187,9 @@ func (printer *treePrinter) Enter(n Node) {
 	case *Terminal:
 		printer.list(
 			fmt.Sprintf("[Terminal: Kind=%s", node.Kind),
-			"PseudoSource",
-			len(node.PseudoSources),
-			"Src=")
+			"CalleeSavedSource",
+			len(node.CalleeSavedSources),
+			"RetVal=")
 
 	case ErrorType:
 		printer.write("[ErrorType]")

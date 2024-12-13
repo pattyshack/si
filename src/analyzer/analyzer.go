@@ -33,16 +33,21 @@ func Analyze(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
-			ValidateAstSyntax(entry, entryEmitter)
+
+			passes := [][]Pass[ast.SourceEntry]{
+				{ValidateAstSyntax(entryEmitter)},
+				// TODO: split call / ret constraints.  handle callee-save argument /
+				// pseudo sources correctly.
+				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
+			}
+
+			Process(entry, passes, nil)
 			if entryEmitter.HasErrors() {
 				abortBuild()
 			}
 		})
 
-	signatures, callRetConstraints := CollectSignaturesAndCallRetConstraints(
-		sources,
-		targetPlatform,
-		emitter)
+	signatures := CollectSignaturesAndCallRetConstraints(sources, emitter)
 	if emitter.HasErrors() {
 		abortBuild()
 	}
@@ -51,12 +56,13 @@ func Analyze(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
-			if entryEmitter.HasErrors() { // Entry has syntax error
+			if entryEmitter.HasErrors() { // Entry has syntax / func def type error
 				return
 			}
 
 			passes := [][]Pass[ast.SourceEntry]{
 				{InitializeControlFlowGraph(entryEmitter)},
+				{ModifyTerminals(targetPlatform)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
 				{CheckTypes(entryEmitter, targetPlatform)},
@@ -73,13 +79,12 @@ func Analyze(
 			}
 
 			passes = [][]Pass[ast.SourceEntry]{
-				{PopulateTerminalPseudoEntries(targetPlatform, callRetConstraints)},
 				{
 					// these passes are only used for debugging the compiler
 					// implementation and should be removed or flag guarded once the
 					// compiler works.
 					PrintLiveness(),
-					ValidateInstructionConstraints(targetPlatform),
+					//ValidateInstructionConstraints(targetPlatform),
 				},
 			}
 

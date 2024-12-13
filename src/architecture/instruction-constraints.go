@@ -53,6 +53,13 @@ type InstructionConstraints struct {
 	//
 	// Source value are copied into the stack slots, and destination's stack slot
 	// is initialized to zeros.
+	//
+	// All stack sources are "callee-saved" and retain the original value at
+	// the end of call's execution.  This is potentially less memory efficient,
+	// but does not leak data to caller.
+	//
+	// That ret instruction uses caller's preallocated stack location rather than
+	// initializing a new location.
 	SrcStackLocations []*LocationConstraint
 	// nil if the destination is on registers
 	DestStackLocation *LocationConstraint

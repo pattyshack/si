@@ -51,6 +51,6 @@ func (Reducer) TerminalToControlFlowInstruction(
 	return &ast.Terminal{
 		StartEndPos: parseutil.NewStartEndPos(op.Loc(), src.End()),
 		Kind:        ast.TerminalKind(op.Value),
-		Src:         src,
+		RetVal:      src,
 	}, nil
 }

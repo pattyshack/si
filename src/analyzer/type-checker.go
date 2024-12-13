@@ -37,28 +37,11 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	callSpec := checker.platform.CallSpec(funcDef.CallConvention)
 	for _, def := range funcDef.Parameters {
 		if def.Type == nil {
 			panic("should never happen") // error previously emitted.
 		}
 		checker.nameType[def.Name] = def.Type
-
-		if !callSpec.IsValidArgType(def.Type) {
-			checker.Emit(
-				def.Type.Loc(),
-				"%s call convention does not support %s argument type",
-				funcDef.CallConvention,
-				def.Type)
-		}
-	}
-
-	if !callSpec.IsValidReturnType(funcDef.ReturnType) {
-		checker.Emit(
-			funcDef.ReturnType.Loc(),
-			"%s call convention does not support %s return type",
-			funcDef.CallConvention,
-			funcDef.ReturnType)
 	}
 
 	processed := map[*ast.Block]struct{}{}
@@ -389,7 +372,7 @@ func (checker *typeChecker) evaluateTerminal(
 ) ast.Type {
 	switch inst.Kind {
 	case ast.Ret:
-		retType := inst.Src.Type()
+		retType := inst.RetVal.Type()
 		if ast.IsErrorType(retType) {
 			return nil
 		}
@@ -403,7 +386,7 @@ func (checker *typeChecker) evaluateTerminal(
 				funcRetType)
 		}
 	case ast.Exit:
-		exitValueType := inst.Src.Type()
+		exitValueType := inst.RetVal.Type()
 		if ast.IsErrorType(exitValueType) {
 			return nil
 		}

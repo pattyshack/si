@@ -58,7 +58,12 @@ type FunctionDefinition struct {
 	// Callee-saved registers are treated as pseudo/hidden parameters that are
 	// alive for the entire function execution, and are "returned" as	part of
 	// the ret instruction.
-	PseudoParameters   []*VariableDefinition
+	PseudoParameters []*VariableDefinition
+
+	// All callee-saved from Parameters and PseudoParameters
+	CalleeSavedParameters []*VariableDefinition
+
+	// TODO split call /ret constraints
 	CallRetConstraints *architecture.InstructionConstraints
 }
 

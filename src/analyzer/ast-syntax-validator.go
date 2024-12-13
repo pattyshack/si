@@ -10,14 +10,17 @@ type astSyntaxValidator struct {
 	*parseutil.Emitter
 }
 
-func ValidateAstSyntax(entry ast.SourceEntry, emitter *parseutil.Emitter) {
-	validator := astSyntaxValidator{
+func ValidateAstSyntax(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
+	return &astSyntaxValidator{
 		Emitter: emitter,
 	}
+}
+
+func (validator *astSyntaxValidator) Process(entry ast.SourceEntry) {
 	entry.Walk(validator)
 }
 
-func (validator astSyntaxValidator) Enter(n ast.Node) {
+func (validator *astSyntaxValidator) Enter(n ast.Node) {
 	switch node := n.(type) {
 	case ast.SourceEntry:
 		if validator.Emitter.HasErrors() {
@@ -32,5 +35,5 @@ func (validator astSyntaxValidator) Enter(n ast.Node) {
 	}
 }
 
-func (validator astSyntaxValidator) Exit(node ast.Node) {
+func (validator *astSyntaxValidator) Exit(node ast.Node) {
 }

@@ -106,7 +106,8 @@ func (p Platform) InstructionConstraints(
 		case ast.Ret:
 			return inst.ParentBlock().ParentFuncDef.CallRetConstraints
 		case ast.Exit:
-			return newSysCallConstraints(p.os, inst.ExitSysCall)
+			// exit is replaced by syscall immediately after cfg initialization
+			panic("should never happen")
 		default:
 			panic("unhandled terminal kind: " + inst.Kind)
 		}

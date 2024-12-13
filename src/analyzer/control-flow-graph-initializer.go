@@ -28,6 +28,21 @@ func (initializer *controlFlowGraphInitializer) Process(
 		return
 	}
 
+	firstBlock := def.Blocks[0]
+
+	// Always insert a pseudo entry block to copy callee-saved argument variables
+	// and ensures the first block is not a loop header.
+	entryBlock := &ast.Block{
+		StartEndPos: parseutil.NewStartEndPos(firstBlock.Loc(), firstBlock.Loc()),
+		Children:    []*ast.Block{firstBlock},
+	}
+
+	// TODO: copy rename callee-saved func def argument, and copy argument into
+	// entry block
+
+	firstBlock.Parents = []*ast.Block{entryBlock}
+	def.Blocks = append([]*ast.Block{entryBlock}, def.Blocks...)
+
 	labelled := map[string]*ast.Block{}
 	names := map[string]struct{}{}
 	for _, block := range def.Blocks {
@@ -38,6 +53,10 @@ func (initializer *controlFlowGraphInitializer) Process(
 	}
 
 	for idx, block := range def.Blocks {
+		if idx == 0 { // entry block is already initialized
+			continue
+		}
+
 		canFallthrough := true
 		last := block.Instructions[len(block.Instructions)-1]
 		switch jump := last.(type) {
@@ -81,19 +100,6 @@ func (initializer *controlFlowGraphInitializer) Process(
 
 		block.Children = append(block.Children, child)
 		child.Parents = append(child.Parents, block)
-	}
-
-	// Insert a pseudo entry block if the real entry block is also a loop header.
-	if len(def.Blocks[0].Parents) != 0 {
-		realBlock := def.Blocks[0]
-
-		entryBlock := &ast.Block{
-			StartEndPos: parseutil.NewStartEndPos(realBlock.Loc(), realBlock.Loc()),
-			Children:    []*ast.Block{realBlock},
-		}
-		realBlock.Parents = append([]*ast.Block{entryBlock}, realBlock.Parents...)
-
-		def.Blocks = append([]*ast.Block{entryBlock}, def.Blocks...)
 	}
 
 	initializer.checkForUnreachableBlocks(def)
