@@ -36,8 +36,6 @@ func Analyze(
 
 			passes := [][]Pass[ast.SourceEntry]{
 				{ValidateAstSyntax(entryEmitter)},
-				// TODO: split call / ret constraints.  handle callee-save argument /
-				// pseudo sources correctly.
 				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
 			}
 

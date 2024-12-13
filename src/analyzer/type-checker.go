@@ -43,6 +43,12 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		}
 		checker.nameType[def.Name] = def.Type
 	}
+	for _, def := range funcDef.PseudoParameters {
+		if def.Type == nil {
+			panic("should never happen") // error previously emitted.
+		}
+		checker.nameType[def.Name] = def.Type
+	}
 
 	processed := map[*ast.Block]struct{}{}
 	queue := []*ast.Block{funcDef.Blocks[0]}

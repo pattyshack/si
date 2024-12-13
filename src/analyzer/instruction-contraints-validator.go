@@ -1,5 +1,8 @@
 package analyzer
 
+/*
+TODO redo everything ...
+
 import (
 	"fmt"
 
@@ -189,3 +192,4 @@ func (validator *instructionConstraintsValidator) ValidateLocation(
 		}
 	}
 }
+*/

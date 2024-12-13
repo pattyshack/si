@@ -18,6 +18,13 @@ const (
 	// is unstable.
 	InternalCallConvention = CallConvention("internal")
 
+	// All except the first register are callee saved.  The return type is
+	// limited to the first register (and stack).  Mainly used for testing.
+	InternalCalleeSavedCallConvention = CallConvention("internal-callee-saved")
+
+	// All registers are caller saved.  Mainly used for testing.
+	InternalCallerSavedCallConvention = CallConvention("internal-caller-saved")
+
 	// This call convention implements a subset of the SystemV ABI; specifically,
 	// it only supports primitive argument and return types (ints, floats and
 	// pointers).  This in theory is the bare minimal needed for accessing C
@@ -33,7 +40,10 @@ const (
 
 func (call CallConvention) isValid() bool {
 	switch call {
-	case InternalCallConvention, SystemVLiteCallConvention:
+	case InternalCallConvention,
+		InternalCalleeSavedCallConvention,
+		InternalCallerSavedCallConvention,
+		SystemVLiteCallConvention:
 		return true
 	default:
 		return false
@@ -55,16 +65,15 @@ type FunctionDefinition struct {
 
 	// Internal
 
-	// Callee-saved registers are treated as pseudo/hidden parameters that are
-	// alive for the entire function execution, and are "returned" as	part of
-	// the ret instruction.
+	CallConventionSpec *architecture.CallConvention
+
+	// Non-argument callee-saved registers are treated as pseudo/hidden
+	// parameters that are alive for the entire function execution, and are
+	// "returned" as part of the ret instruction.
 	PseudoParameters []*VariableDefinition
 
-	// All callee-saved from Parameters and PseudoParameters
+	// All callee-saved variable definitions from Parameters and PseudoParameters
 	CalleeSavedParameters []*VariableDefinition
-
-	// TODO split call /ret constraints
-	CallRetConstraints *architecture.InstructionConstraints
 }
 
 var _ SourceEntry = &FunctionDefinition{}

@@ -161,11 +161,22 @@ var _ Instruction = &Terminal{}
 var _ Validator = &Terminal{}
 
 func (term *Terminal) replaceSource(oldSrc Value, newSrc Value) {
-	if term.RetVal != oldSrc {
-		panic("should never happen")
+	replaceCount := 0
+	if term.RetVal == oldSrc {
+		term.RetVal = newSrc
+		replaceCount++
 	}
 
-	term.RetVal = newSrc
+	for idx, src := range term.CalleeSavedSources {
+		if src == oldSrc {
+			term.CalleeSavedSources[idx] = newSrc
+			replaceCount++
+		}
+	}
+
+	if replaceCount != 1 {
+		panic("should never happen")
+	}
 }
 
 func (term *Terminal) Sources() []Value {

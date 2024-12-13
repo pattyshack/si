@@ -19,12 +19,7 @@ type CallSpec interface {
 	// Used by both call and ret instructions.
 	CallRetConstraints(
 		ast.FunctionType,
-	) (
-		*architecture.InstructionConstraints,
-		// pseudo parameters for callee-saved registers.  The definition names
-		// must be prefixed by %
-		[]*ast.VariableDefinition,
-	)
+	) *architecture.CallConvention
 }
 
 type InternalCallTypeSpec struct{}

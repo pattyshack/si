@@ -30,6 +30,9 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 	for _, param := range funcDef.Parameters {
 		initDefIn[param.Name] = param
 	}
+	for _, param := range funcDef.PseudoParameters {
+		initDefIn[param.Name] = param
+	}
 	constructor.defOuts[funcDef.Blocks[0]] = initDefIn
 
 	processed := map[*ast.Block]struct{}{}

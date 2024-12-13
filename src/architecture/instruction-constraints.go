@@ -35,17 +35,15 @@ type LocationConstraint struct {
 // and call convention's registers selection / stack layout.
 //
 // Note:
-//  1. both call and ret instruction for the same function definition shares
-//     the same constraints. Ret derived its constraints from the call
-//     constraints' destination and pseudo sources.
-//  2. it's safe to reuse the same constraints from multiple instructions.
+//  1. Source and destination LocationConstraint that share the same
+//     AnyGeneral/AnyFloat RegisterCandidate pointer shares the same selected
+//     register.
+//  2. it's safe to reuse the same instruction constraints for multiple
+//     instructions.
 //  3. do not manually modify the fields. Use the provided methods instead.
 type InstructionConstraints struct {
-	// The unordered set of registers used by this instruction.  Entries are
-	// created by Select*.  Note that this set may include registers not used by
-	// sources and destination.  LocationConstraint that share the same
-	// RegisterCandidate pointer shares the same selected register.
-	UsedRegisters []*RegisterCandidate
+	// Register -> clobbered.  This is mainly used by call convention.
+	RequiredRegisters map[*Register]bool
 
 	// Which sources/destination values should be on stack.  The layout is
 	// specified from top to bottom (stack destination is always at the bottom).
@@ -87,29 +85,27 @@ type InstructionConstraints struct {
 }
 
 func NewInstructionConstraints() *InstructionConstraints {
-	return &InstructionConstraints{}
+	return &InstructionConstraints{
+		RequiredRegisters: map[*Register]bool{},
+	}
 }
 
 func (constraints *InstructionConstraints) SelectAnyGeneral(
 	clobbered bool,
 ) *RegisterCandidate {
-	reg := &RegisterCandidate{
+	return &RegisterCandidate{
 		Clobbered:  clobbered,
 		AnyGeneral: true,
 	}
-	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
-	return reg
 }
 
 func (constraints *InstructionConstraints) SelectAnyFloat(
 	clobbered bool,
 ) *RegisterCandidate {
-	reg := &RegisterCandidate{
+	return &RegisterCandidate{
 		Clobbered: clobbered,
 		AnyFloat:  true,
 	}
-	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
-	return reg
 }
 
 func (constraints *InstructionConstraints) Require(
@@ -120,12 +116,19 @@ func (constraints *InstructionConstraints) Require(
 		panic("cannot select stack pointer")
 	}
 
-	reg := &RegisterCandidate{
+	orig, ok := constraints.RequiredRegisters[register]
+	if ok {
+		if orig != clobbered {
+			panic(register.Name + " cannot be both clobbered and not clobbered")
+		}
+	} else {
+		constraints.RequiredRegisters[register] = clobbered
+	}
+
+	return &RegisterCandidate{
 		Clobbered: clobbered,
 		Require:   register,
 	}
-	constraints.UsedRegisters = append(constraints.UsedRegisters, reg)
-	return reg
 }
 
 func (constraints *InstructionConstraints) registerLocation(
@@ -186,13 +189,11 @@ func (constraints *InstructionConstraints) AddStackSource(
 }
 
 func (constraints *InstructionConstraints) AddPseudoSource(
-	register *Register,
+	registers ...*RegisterCandidate,
 ) {
 	constraints.PseudoSources = append(
 		constraints.PseudoSources,
-		constraints.registerLocation(
-			false,
-			constraints.Require(false, register)))
+		constraints.registerLocation(false, registers...))
 }
 
 // The list could be empty if the destination value does not occupy any
@@ -220,4 +221,89 @@ func (constraints *InstructionConstraints) SetStackDestination(
 	}
 	constraints.DestStackLocation = loc
 	constraints.Destination = loc
+}
+
+type CallConvention struct {
+	CallConstraints          *InstructionConstraints
+	CalleeSavedSourceIndices []int // list of callee saved sources from call
+
+	RetConstraints *InstructionConstraints
+}
+
+func NewCallConvention(
+	funcValueClobbered bool,
+	funcValueRegister *Register,
+) *CallConvention {
+	con := &CallConvention{
+		CallConstraints: NewInstructionConstraints(),
+		RetConstraints:  NewInstructionConstraints(),
+	}
+
+	con.CallConstraints.SetFuncValue(
+		con.CallConstraints.Require(funcValueClobbered, funcValueRegister))
+
+	return con
+}
+
+func (con *CallConvention) AddRegisterSource(
+	clobbered bool,
+	registers ...*Register,
+) {
+	callSrc := []*RegisterCandidate{}
+	for _, reg := range registers {
+		callSrc = append(callSrc, con.CallConstraints.Require(clobbered, reg))
+	}
+	con.CallConstraints.AddRegisterSource(callSrc...)
+
+	if !clobbered {
+		pseudoSrc := []*RegisterCandidate{}
+		for _, reg := range registers {
+			pseudoSrc = append(pseudoSrc, con.RetConstraints.Require(false, reg))
+		}
+		con.RetConstraints.AddPseudoSource(pseudoSrc...)
+
+		con.CalleeSavedSourceIndices = append(
+			con.CalleeSavedSourceIndices,
+			len(con.CallConstraints.Sources)-1)
+	}
+}
+
+func (con *CallConvention) AddStackSource(
+	size int,
+) {
+	con.CallConstraints.AddStackSource(size)
+}
+
+func (con *CallConvention) SetRegisterDestination(
+	registers ...*Register,
+) {
+	callDest := []*RegisterCandidate{}
+	retSrc := []*RegisterCandidate{}
+	for _, reg := range registers {
+		callDest = append(callDest, con.CallConstraints.Require(true, reg))
+		retSrc = append(retSrc, con.RetConstraints.Require(true, reg))
+	}
+	con.CallConstraints.SetRegisterDestination(callDest...)
+	con.RetConstraints.AddRegisterSource(retSrc...)
+}
+
+func (con *CallConvention) SetStackDestination(
+	size int,
+) {
+	con.CallConstraints.SetStackDestination(size)
+	con.RetConstraints.AddStackSource(size)
+}
+
+// All caller-saved registers that are clobbered by the call.
+func (con *CallConvention) CallerSaved(registers ...*Register) {
+	for _, reg := range registers {
+		con.CallConstraints.Require(true, reg)
+	}
+}
+
+// All callee-saved registers that are not clobbered by the call.
+func (con *CallConvention) CalleeSaved(registers ...*Register) {
+	for _, reg := range registers {
+		con.CallConstraints.Require(false, reg)
+	}
 }

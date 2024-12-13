@@ -28,21 +28,6 @@ func (initializer *controlFlowGraphInitializer) Process(
 		return
 	}
 
-	firstBlock := def.Blocks[0]
-
-	// Always insert a pseudo entry block to copy callee-saved argument variables
-	// and ensures the first block is not a loop header.
-	entryBlock := &ast.Block{
-		StartEndPos: parseutil.NewStartEndPos(firstBlock.Loc(), firstBlock.Loc()),
-		Children:    []*ast.Block{firstBlock},
-	}
-
-	// TODO: copy rename callee-saved func def argument, and copy argument into
-	// entry block
-
-	firstBlock.Parents = []*ast.Block{entryBlock}
-	def.Blocks = append([]*ast.Block{entryBlock}, def.Blocks...)
-
 	labelled := map[string]*ast.Block{}
 	names := map[string]struct{}{}
 	for _, block := range def.Blocks {
@@ -53,7 +38,12 @@ func (initializer *controlFlowGraphInitializer) Process(
 	}
 
 	for idx, block := range def.Blocks {
-		if idx == 0 { // entry block is already initialized
+		if idx == 0 {
+			// The entry block was inserted during call convention generation and
+			// may be empty if there are no callee-saved registers.
+			firstRealBlock := def.Blocks[1]
+			block.Children = []*ast.Block{firstRealBlock}
+			firstRealBlock.Parents = []*ast.Block{block}
 			continue
 		}
 

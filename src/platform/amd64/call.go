@@ -15,7 +15,26 @@ const (
 func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 	switch convention {
 	case ast.InternalCallConvention:
-		return internalCallSpec{}
+		return internalCallSpec{
+			NumGeneral:            9,
+			NumFloat:              8,
+			NumCallerSavedGeneral: 9,
+			NumCallerSavedFloat:   8,
+		}
+	case ast.InternalCalleeSavedCallConvention:
+		return internalCallSpec{
+			NumGeneral:            15,
+			NumFloat:              16,
+			NumCallerSavedGeneral: 15,
+			NumCallerSavedFloat:   16,
+		}
+	case ast.InternalCallerSavedCallConvention:
+		return internalCallSpec{
+			NumGeneral:            15,
+			NumFloat:              16,
+			NumCallerSavedGeneral: 1,
+			NumCallerSavedFloat:   0,
+		}
 	case ast.SystemVLiteCallConvention:
 		return systemVLiteCallSpec{}
 	default: // Error emitted by ast syntax validator
@@ -25,15 +44,35 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 
 type internalCallSpec struct {
 	platform.InternalCallTypeSpec
+
+	// Number of general registers used (must be one or larger).
+	//
+	// The first general register is always used for function location value,
+	// the next (NumGeneral - 1) general registers are usable for int/data
+	// arguments.
+	//
+	// The return value will use the same set of registers in the same
+	// assignment order, except the first general register is also usable for
+	// the return value.
+	NumGeneral int
+
+	// Number of float registers used (can be zero).
+	//
+	// The first NumFloat float registers are usable for float/data arguments and
+	// return value.
+	NumFloat int
+
+	// 1 <= NumCallerSavedGeneral <= NumGeneral
+	NumCallerSavedGeneral int
+
+	// 0 <= NumCallerSavedFloat <= NumFloat
+	NumCallerSavedFloat int
 }
 
-func (internalCallSpec) CallRetConstraints(
+func (spec internalCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) (
-	*architecture.InstructionConstraints,
-	[]*ast.VariableDefinition,
-) {
-	constraints := architecture.NewInstructionConstraints()
+) *architecture.CallConvention {
+	convention := architecture.NewCallConvention(true, RegisterSet.General[0])
 
 	// The first general register is always used for function location value,
 	// the next 8 general registers are usable for int/data arguments.  The first
@@ -44,17 +83,13 @@ func (internalCallSpec) CallRetConstraints(
 	// assignment algorithm, except the first general register is also usable for
 	// the return value.
 
-	general := []*architecture.RegisterCandidate{}
-	for _, reg := range RegisterSet.General[:9] {
-		general = append(general, constraints.Require(true, reg))
-	}
+	general := RegisterSet.General[:spec.NumGeneral]
+	convention.CallerSaved(general[:spec.NumCallerSavedGeneral]...)
+	convention.CalleeSaved(RegisterSet.General[spec.NumCallerSavedGeneral:]...)
 
-	float := []*architecture.RegisterCandidate{}
-	for _, reg := range RegisterSet.Float[:8] {
-		float = append(float, constraints.Require(true, reg))
-	}
-
-	constraints.SetFuncValue(general[0])
+	float := RegisterSet.Float[:spec.NumFloat]
+	convention.CallerSaved(float[:spec.NumCallerSavedFloat]...)
+	convention.CalleeSaved(RegisterSet.Float[spec.NumCallerSavedFloat:]...)
 
 	// Arguments are grouped by number of registers needed, and iterated from
 	// smallest group to largest group.  For each argument, the registers are
@@ -76,7 +111,7 @@ func (internalCallSpec) CallRetConstraints(
 		availableFloat:   float,
 	}
 
-	paramLocations := map[ast.Type][]*architecture.RegisterCandidate{}
+	paramLocations := map[ast.Type][]*architecture.Register{}
 	for _, numNeeded := range sortedNumNeeded {
 		for _, paramType := range paramSizeGroups[numNeeded] {
 			registers := argumentRegisterPicker.Pick(paramType, numNeeded)
@@ -96,9 +131,13 @@ func (internalCallSpec) CallRetConstraints(
 		}
 
 		if registers == nil { // need to be on memory
-			constraints.AddStackSource(paramType.ByteSize())
+			convention.AddStackSource(paramType.ByteSize())
 		} else {
-			constraints.AddRegisterSource(registers...)
+			clobbered := true
+			if len(registers) > 0 {
+				clobbered = convention.CallConstraints.RequiredRegisters[registers[0]]
+			}
+			convention.AddRegisterSource(clobbered, registers...)
 		}
 	}
 
@@ -112,45 +151,17 @@ func (internalCallSpec) CallRetConstraints(
 		funcType.ReturnType.RegisterSize())
 
 	if registers == nil { // need to be on memory
-		constraints.SetStackDestination(funcType.ReturnType.ByteSize())
+		convention.SetStackDestination(funcType.ReturnType.ByteSize())
 	} else {
-		constraints.SetRegisterDestination(registers...)
+		convention.SetRegisterDestination(registers...)
 	}
 
-	// Create pseudo parameter entries for callee-saved registers
-
-	calleeSaved := []*ast.VariableDefinition{}
-
-	for _, reg := range RegisterSet.General[9:] {
-		constraints.AddPseudoSource(reg)
-		calleeSaved = append(
-			calleeSaved,
-			&ast.VariableDefinition{
-				StartEndPos: funcType.StartEnd(),
-				Name:        "%" + reg.Name,
-				Type:        ast.NewU64(funcType.StartEnd()),
-				DefUses:     map[*ast.VariableReference]struct{}{},
-			})
-	}
-
-	for _, reg := range RegisterSet.Float[8:] {
-		constraints.AddPseudoSource(reg)
-		calleeSaved = append(
-			calleeSaved,
-			&ast.VariableDefinition{
-				StartEndPos: funcType.StartEnd(),
-				Name:        "%" + reg.Name,
-				Type:        ast.NewF64(funcType.StartEnd()),
-				DefUses:     map[*ast.VariableReference]struct{}{},
-			})
-	}
-
-	return constraints, calleeSaved
+	return convention
 }
 
 type internalCallRegisterPicker struct {
-	availableGeneral []*architecture.RegisterCandidate
-	availableFloat   []*architecture.RegisterCandidate
+	availableGeneral []*architecture.Register
+	availableFloat   []*architecture.Register
 }
 
 // This return nil if the value should be on memory, empty list if the value
@@ -158,33 +169,33 @@ type internalCallRegisterPicker struct {
 func (picker *internalCallRegisterPicker) Pick(
 	valueType ast.Type,
 	numNeeded int,
-) []*architecture.RegisterCandidate {
+) []*architecture.Register {
 	if len(picker.availableGeneral)+len(picker.availableFloat) < numNeeded {
 		return nil
 	}
 
 	if numNeeded == 0 {
-		return []*architecture.RegisterCandidate{}
+		return []*architecture.Register{}
 	}
 
 	if ast.IsIntSubType(valueType) || ast.IsFunctionType(valueType) {
 		if len(picker.availableGeneral) > 0 {
-			result := []*architecture.RegisterCandidate{picker.availableGeneral[0]}
+			result := []*architecture.Register{picker.availableGeneral[0]}
 			picker.availableGeneral = picker.availableGeneral[1:]
 			return result
 		}
 
-		result := []*architecture.RegisterCandidate{picker.availableFloat[0]}
+		result := []*architecture.Register{picker.availableFloat[0]}
 		picker.availableFloat = picker.availableFloat[1:]
 		return result
 	} else if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) > 0 {
-			result := []*architecture.RegisterCandidate{picker.availableFloat[0]}
+			result := []*architecture.Register{picker.availableFloat[0]}
 			picker.availableFloat = picker.availableFloat[1:]
 			return result
 		}
 
-		result := []*architecture.RegisterCandidate{picker.availableGeneral[0]}
+		result := []*architecture.Register{picker.availableGeneral[0]}
 		picker.availableGeneral = picker.availableGeneral[1:]
 		return result
 	} else {
@@ -198,86 +209,68 @@ type systemVLiteCallSpec struct {
 
 func (systemVLiteCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
-) (
-	*architecture.InstructionConstraints,
-	[]*ast.VariableDefinition,
-) {
-	constraints := architecture.NewInstructionConstraints()
+) *architecture.CallConvention {
+	convention := architecture.NewCallConvention(true, r11)
 
 	// See Figure 3.4 Register Usage in
 	// https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
 
 	// General argument registers are caller-saved.
-	general := []*architecture.RegisterCandidate{}
-	for _, reg := range []*architecture.Register{rdi, rsi, rdx, rcx, r8, r9} {
-		general = append(general, constraints.Require(true, reg))
-	}
+	generalArgs := []*architecture.Register{rdi, rsi, rdx, rcx, r8, r9}
+	convention.CallerSaved(generalArgs...)
+
+	// r10 and r11 are caller-saved temporary registers.  r10 is sometimes a
+	// hidden argument for passing static chain pointer.
+	//
+	// Chickadee uses r11 for func location value since it has no hidden meaning.
+	convention.CallerSaved(r10, r11)
+
+	// rax is the caller-saved int return value register.  It's also a hidden
+	// argument register for vararg.
+	generalRet := rax
+	convention.CallerSaved(rax)
+
+	convention.CalleeSaved(rbx, rbp, r12, r13, r14, r15)
 
 	// All xmm registers are caller-saved.
-	float := []*architecture.RegisterCandidate{}
-	for _, reg := range RegisterSet.Float {
-		float = append(float, constraints.Require(true, reg))
-	}
+	// Only xmm0-xmm7 are usable for argument
+	// xmm0 is also the float return register
+	convention.CallerSaved(RegisterSet.Float...)
+	floatArgs := RegisterSet.Float[:8]
+	floatRet := floatArgs[0]
 
 	picker := &systemVLiteCallRegisterPicker{
-		availableGeneral: general,
-		availableFloat:   float[:8], // Only xmm0-xmm7 are usable for argument
+		availableGeneral: generalArgs,
+		availableFloat:   floatArgs,
 	}
 
 	for _, paramType := range funcType.ParameterTypes {
 		register := picker.Pick(paramType)
 		if register == nil { // need to be on memory
-			constraints.AddStackSource(paramType.ByteSize())
+			convention.AddStackSource(paramType.ByteSize())
 		} else {
-			constraints.AddRegisterSource(register)
+			convention.AddRegisterSource(true, register)
 		}
 	}
 
-	// r10 and r11 are caller-saved temporary registers.  r10 is sometimes a
-	// hidden argument for passing static chain pointer.
-	//
-	// We'll use r11 for func location value since it has no hidden meaning.
-	constraints.Require(true, r10)
-	constraints.SetFuncValue(constraints.Require(true, r11))
-
-	// rax is the caller-saved int return value register.  It's also a hidden
-	// argument register for vararg.
-	generalRet := constraints.Require(true, rax)
-
 	if ast.IsFloatSubType(funcType.ReturnType) {
 		// xmm0 is also the float return register
-		constraints.SetRegisterDestination(float[0])
+		convention.SetRegisterDestination(floatRet)
 	} else {
-		constraints.SetRegisterDestination(generalRet)
+		convention.SetRegisterDestination(generalRet)
 	}
 
-	// Create pseudo parameter entries for callee-saved registers
-
-	calleeSaved := []*ast.VariableDefinition{}
-
-	for _, reg := range []*architecture.Register{rbx, rbp, r12, r13, r14, r15} {
-		constraints.AddPseudoSource(reg)
-		calleeSaved = append(
-			calleeSaved,
-			&ast.VariableDefinition{
-				StartEndPos: funcType.StartEnd(),
-				Name:        "%" + reg.Name,
-				Type:        ast.NewU64(funcType.StartEnd()),
-				DefUses:     map[*ast.VariableReference]struct{}{},
-			})
-	}
-
-	return constraints, calleeSaved
+	return convention
 }
 
 type systemVLiteCallRegisterPicker struct {
-	availableGeneral []*architecture.RegisterCandidate
-	availableFloat   []*architecture.RegisterCandidate
+	availableGeneral []*architecture.Register
+	availableFloat   []*architecture.Register
 }
 
 func (picker *systemVLiteCallRegisterPicker) Pick(
 	valueType ast.Type,
-) *architecture.RegisterCandidate {
+) *architecture.Register {
 	if ast.IsFloatSubType(valueType) {
 		if len(picker.availableFloat) == 0 {
 			return nil
