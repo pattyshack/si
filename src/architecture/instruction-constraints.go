@@ -62,9 +62,8 @@ type InstructionConstraints struct {
 	// nil if the destination is on registers
 	DestStackLocation *LocationConstraint
 
-	// Only set by FuncCall (must be a register)
-	FuncValue *LocationConstraint
-	// Source data locations are in the same order as the instruction's sources.
+	// Source data locations are in the same order as the instruction's Sources().
+	// For call, the first entry is func value.
 	Sources []*LocationConstraint
 	// Pseudo sources are used to track callee-saved registers in call
 	// conventions.
@@ -144,16 +143,6 @@ func (constraints *InstructionConstraints) registerLocation(
 	return &LocationConstraint{
 		Registers: list,
 	}
-}
-
-func (constraints *InstructionConstraints) SetFuncValue(
-	register *RegisterCandidate,
-) {
-	if constraints.FuncValue != nil {
-		panic("func value already set")
-	}
-	loc := constraints.registerLocation(false, register)
-	constraints.FuncValue = loc
 }
 
 func (constraints *InstructionConstraints) AddAnySource(
@@ -239,9 +228,8 @@ func NewCallConvention(
 		RetConstraints:  NewInstructionConstraints(),
 	}
 
-	con.CallConstraints.SetFuncValue(
+	con.CallConstraints.AddRegisterSource(
 		con.CallConstraints.Require(funcValueClobbered, funcValueRegister))
-
 	return con
 }
 

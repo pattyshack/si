@@ -112,6 +112,8 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 
 	pseudoParameters := []*ast.VariableDefinition{}
 	for _, reg := range sorted {
+		convention.CallConstraints.AddPseudoSource(
+			convention.CallConstraints.Require(false, reg))
 		convention.RetConstraints.AddPseudoSource(
 			convention.RetConstraints.Require(false, reg))
 

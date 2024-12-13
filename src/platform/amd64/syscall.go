@@ -33,7 +33,7 @@ func newSysCallConstraints(
 ) *architecture.InstructionConstraints {
 	switch os {
 	case platform.Linux:
-		return newLinuxSysCallConstraints(len(call.Args))
+		return newLinuxSysCallConstraints(len(call.Args)).CallConstraints
 	default:
 		panic("unsupported os: " + os)
 	}
@@ -41,23 +41,21 @@ func newSysCallConstraints(
 
 func newLinuxSysCallConstraints(
 	numArgs int,
-) *architecture.InstructionConstraints {
-	constraints := architecture.NewInstructionConstraints()
+) *architecture.CallConvention {
+	// Syscall number and return value
+	convention := architecture.NewCallConvention(true, rax)
+	convention.SetRegisterDestination(rax)
 
 	// Clobbered by syscall
-	constraints.Require(true, rcx)
-	constraints.Require(true, r11)
-
-	// Syscall number and return value
-	ret := constraints.Require(true, rax)
-	constraints.SetFuncValue(ret)
-	constraints.SetRegisterDestination(ret)
+	convention.CallerSaved(rcx, r11)
 
 	// Syscall arguments
 	calleeSavedArguments := []*architecture.Register{rdi, rsi, rdx, r10, r8, r9}
+	convention.CalleeSaved(calleeSavedArguments...)
+
 	for _, register := range calleeSavedArguments[:numArgs] {
-		constraints.AddRegisterSource(constraints.Require(false, register))
+		convention.AddRegisterSource(false, register)
 	}
 
-	return constraints
+	return convention
 }
