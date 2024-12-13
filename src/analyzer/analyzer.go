@@ -82,7 +82,6 @@ func Analyze(
 					// implementation and should be removed or flag guarded once the
 					// compiler works.
 					PrintLiveness(),
-					//ValidateInstructionConstraints(targetPlatform),
 				},
 			}
 
