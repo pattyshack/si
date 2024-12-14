@@ -65,8 +65,11 @@ type InstructionConstraints struct {
 	// Source data locations are in the same order as the instruction's Sources().
 	// For call, the first entry is func value.
 	Sources []*LocationConstraint
-	// Pseudo sources are used to track callee-saved registers in call
-	// conventions.
+	// Pseudo sources are used to track callee-saved pseudo source registers in
+	// function definition (populated by funcDefConstraintsGenerator).  It's also
+	// used as temporary storage to keep track of callee-saved parameters in ret
+	// instruction (funcDefConstraintsGenerator move these to Sources after the
+	// destination is set)
 	PseudoSources []*LocationConstraint
 	Destination   *LocationConstraint // not set by control flow instructions
 
