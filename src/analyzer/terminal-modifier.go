@@ -3,6 +3,7 @@ package analyzer
 import (
 	"fmt"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -11,7 +12,9 @@ type terminalModifier struct {
 	platform platform.Platform
 }
 
-func ModifyTerminals(targetPlatform platform.Platform) Pass[ast.SourceEntry] {
+func ModifyTerminals(
+	targetPlatform platform.Platform,
+) util.Pass[ast.SourceEntry] {
 	return &terminalModifier{
 		platform: targetPlatform,
 	}

@@ -1,4 +1,4 @@
-package analyzer
+package util
 
 import (
 	"sync"
@@ -48,22 +48,22 @@ func ParallelProcess[Node ast.Node](
 	wg.Wait()
 }
 
-type dataflowWorkSet struct {
+type DataFlowWorkSet struct {
 	queue []*ast.Block
 	set   map[*ast.Block]struct{}
 }
 
-func newDataflowWorkSet() *dataflowWorkSet {
-	return &dataflowWorkSet{
+func NewDataflowWorkSet() *DataFlowWorkSet {
+	return &DataFlowWorkSet{
 		set: map[*ast.Block]struct{}{},
 	}
 }
 
-func (set *dataflowWorkSet) isEmpty() bool {
+func (set *DataFlowWorkSet) IsEmpty() bool {
 	return len(set.queue) == 0
 }
 
-func (set *dataflowWorkSet) push(block *ast.Block) {
+func (set *DataFlowWorkSet) Push(block *ast.Block) {
 	_, ok := set.set[block]
 	if ok {
 		return
@@ -72,7 +72,7 @@ func (set *dataflowWorkSet) push(block *ast.Block) {
 	set.queue = append(set.queue, block)
 }
 
-func (set *dataflowWorkSet) pop() *ast.Block {
+func (set *DataFlowWorkSet) Pop() *ast.Block {
 	head := set.queue[0]
 	set.queue = set.queue[1:]
 	delete(set.set, head)

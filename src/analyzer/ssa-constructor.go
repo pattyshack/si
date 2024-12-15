@@ -3,6 +3,7 @@ package analyzer
 import (
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -13,7 +14,7 @@ type ssaConstructor struct {
 	defOuts map[*ast.Block]map[string]*ast.VariableDefinition
 }
 
-func ConstructSSA(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
+func ConstructSSA(emitter *parseutil.Emitter) util.Pass[ast.SourceEntry] {
 	return &ssaConstructor{
 		Emitter: emitter,
 		defOuts: map[*ast.Block]map[string]*ast.VariableDefinition{},

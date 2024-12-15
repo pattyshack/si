@@ -5,6 +5,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
@@ -19,7 +20,7 @@ type funcDefConstraintsGenerator struct {
 func GenerateFuncDefConstraints(
 	emitter *parseutil.Emitter,
 	platform platform.Platform,
-) Pass[ast.SourceEntry] {
+) util.Pass[ast.SourceEntry] {
 	return &funcDefConstraintsGenerator{
 		Emitter:  emitter,
 		platform: platform,

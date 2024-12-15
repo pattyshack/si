@@ -3,6 +3,7 @@ package analyzer
 import (
 	"reflect"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -129,7 +130,7 @@ type livenessAnalyzer struct {
 	funcParams map[*ast.VariableDefinition]struct{}
 }
 
-var _ Pass[ast.SourceEntry] = &livenessAnalyzer{}
+var _ util.Pass[ast.SourceEntry] = &livenessAnalyzer{}
 
 func NewLivenessAnalyzer() *livenessAnalyzer {
 	return &livenessAnalyzer{
@@ -152,20 +153,20 @@ func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
 		analyzer.funcParams[param] = struct{}{}
 	}
 
-	workSet := newDataflowWorkSet()
+	workSet := util.NewDataflowWorkSet()
 	for _, block := range funcDef.Blocks {
 		analyzer.liveOut[block] = liveSet{}
 		if len(block.Children) == 0 { // Terminal block
-			workSet.push(block)
+			workSet.Push(block)
 		}
 	}
 
-	for !workSet.isEmpty() {
-		block := workSet.pop()
+	for !workSet.IsEmpty() {
+		block := workSet.Pop()
 		if analyzer.updateLiveIn(block) {
 			for _, parent := range block.Parents {
 				if analyzer.updateParentLiveOut(parent, block) {
-					workSet.push(parent)
+					workSet.Push(parent)
 				}
 			}
 		}

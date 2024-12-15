@@ -5,6 +5,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -23,7 +24,7 @@ type typeChecker struct {
 func CheckTypes(
 	emitter *parseutil.Emitter,
 	targetPlatform platform.Platform,
-) Pass[ast.SourceEntry] {
+) util.Pass[ast.SourceEntry] {
 	return &typeChecker{
 		Emitter:  emitter,
 		platform: targetPlatform,

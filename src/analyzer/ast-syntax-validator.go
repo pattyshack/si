@@ -3,6 +3,7 @@ package analyzer
 import (
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -10,7 +11,9 @@ type astSyntaxValidator struct {
 	*parseutil.Emitter
 }
 
-func ValidateAstSyntax(emitter *parseutil.Emitter) Pass[ast.SourceEntry] {
+func ValidateAstSyntax(
+	emitter *parseutil.Emitter,
+) util.Pass[ast.SourceEntry] {
 	return &astSyntaxValidator{
 		Emitter: emitter,
 	}

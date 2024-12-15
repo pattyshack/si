@@ -5,6 +5,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
 )
@@ -29,17 +30,17 @@ func Analyze(
 		entryEmitters[entry] = &parseutil.Emitter{}
 	}
 
-	ParallelProcess(
+	util.ParallelProcess(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
 
-			passes := [][]Pass[ast.SourceEntry]{
+			passes := [][]util.Pass[ast.SourceEntry]{
 				{ValidateAstSyntax(entryEmitter)},
 				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
 			}
 
-			Process(entry, passes, nil)
+			util.Process(entry, passes, nil)
 			if entryEmitter.HasErrors() {
 				abortBuild()
 			}
@@ -50,7 +51,7 @@ func Analyze(
 		abortBuild()
 	}
 
-	ParallelProcess(
+	util.ParallelProcess(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
@@ -58,7 +59,7 @@ func Analyze(
 				return
 			}
 
-			passes := [][]Pass[ast.SourceEntry]{
+			passes := [][]util.Pass[ast.SourceEntry]{
 				{InitializeControlFlowGraph(entryEmitter)},
 				{ModifyTerminals(targetPlatform)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
@@ -66,7 +67,7 @@ func Analyze(
 				{CheckTypes(entryEmitter, targetPlatform)},
 			}
 
-			Process(entry, passes, nil)
+			util.Process(entry, passes, nil)
 			if entryEmitter.HasErrors() {
 				abortBuild()
 			}
@@ -76,7 +77,7 @@ func Analyze(
 				return
 			}
 
-			passes = [][]Pass[ast.SourceEntry]{
+			passes = [][]util.Pass[ast.SourceEntry]{
 				{
 					// these passes are only used for debugging the compiler
 					// implementation and should be removed or flag guarded once the
@@ -85,7 +86,7 @@ func Analyze(
 				},
 			}
 
-			Process(entry, passes, shouldAbortBuild)
+			util.Process(entry, passes, shouldAbortBuild)
 		})
 
 	for _, entryEmitter := range entryEmitters {

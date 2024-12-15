@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -12,7 +13,7 @@ type livenessPrinter struct {
 }
 
 // This is only for debugging purpose.
-func PrintLiveness() Pass[ast.SourceEntry] {
+func PrintLiveness() util.Pass[ast.SourceEntry] {
 	return &livenessPrinter{
 		livenessAnalyzer: NewLivenessAnalyzer(),
 	}

@@ -3,6 +3,7 @@ package analyzer
 import (
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -15,7 +16,7 @@ type globalLabelReferenceBinder struct {
 func BindGlobalLabelReferences(
 	emitter *parseutil.Emitter,
 	signatures map[string]ast.SourceEntry,
-) Pass[ast.SourceEntry] {
+) util.Pass[ast.SourceEntry] {
 	return &globalLabelReferenceBinder{
 		Emitter:    emitter,
 		signatures: signatures,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 )
 
@@ -14,7 +15,7 @@ type controlFlowGraphInitializer struct {
 
 func InitializeControlFlowGraph(
 	emitter *parseutil.Emitter,
-) Pass[ast.SourceEntry] {
+) util.Pass[ast.SourceEntry] {
 	return &controlFlowGraphInitializer{
 		Emitter: emitter,
 	}
