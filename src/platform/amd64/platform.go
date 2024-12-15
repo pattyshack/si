@@ -116,3 +116,8 @@ func (p Platform) InstructionConstraints(
 
 	panic(fmt.Sprintf("should never reach here: %s", in.Loc()))
 }
+
+func (Platform) StackFrameAlignment() int {
+	// This equals 16 bytes we don't support 128/256 bit registers
+	return 2 * architecture.RegisterByteSize
+}
