@@ -45,6 +45,11 @@ type InstructionConstraints struct {
 	// Register -> clobbered.  This is mainly used by call convention.
 	RequiredRegisters map[*Register]bool
 
+	// FramePointerRegister is a special pseudo callee-saved register reserved
+	// for the frame pointer hidden parameter.  A corresponding location
+	// constraint entry is in the pseudo sources list.
+	FramePointerRegister *Register
+
 	// Which sources/destination values should be on stack.  The layout is
 	// specified from top to bottom (stack destination is always at the bottom).
 	// Note: The stack layout depends on AddStackSource calls order.
@@ -180,6 +185,17 @@ func (constraints *InstructionConstraints) AddStackSource(
 	constraints.Sources = append(constraints.Sources, loc)
 }
 
+func (constraints *InstructionConstraints) SetFramePointerRegister(
+	register *Register,
+) {
+	if constraints.FramePointerRegister != nil {
+		panic("frame pointer register already set")
+	}
+
+	constraints.FramePointerRegister = register
+	constraints.AddPseudoSource(constraints.Require(false, register))
+}
+
 func (constraints *InstructionConstraints) AddPseudoSource(
 	registers ...*RegisterCandidate,
 ) {
@@ -263,6 +279,12 @@ func (con *CallConvention) AddStackSource(
 	size int,
 ) {
 	con.CallConstraints.AddStackSource(size)
+}
+
+func (con *CallConvention) SetFramePointerRegister(
+	register *Register,
+) {
+	con.CallConstraints.SetFramePointerRegister(register)
 }
 
 func (con *CallConvention) SetRegisterDestination(

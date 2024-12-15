@@ -132,9 +132,15 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 		} else {
 			regType = ast.NewF64(pos)
 		}
+
+		regName := "%" + reg.Name
+		if reg == convention.CallConstraints.FramePointerRegister {
+			regName = architecture.PreviousFramePointerName
+		}
+
 		pseudoParam := &ast.VariableDefinition{
 			StartEndPos: pos,
-			Name:        "%" + reg.Name,
+			Name:        regName,
 			Type:        regType,
 			DefUses:     map[*ast.VariableReference]struct{}{},
 		}

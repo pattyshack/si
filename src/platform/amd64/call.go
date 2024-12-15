@@ -23,14 +23,14 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 		}
 	case ast.InternalCalleeSavedCallConvention:
 		return internalCallSpec{
-			NumGeneral:            15,
+			NumGeneral:            14,
 			NumFloat:              16,
-			NumCallerSavedGeneral: 15,
+			NumCallerSavedGeneral: 14,
 			NumCallerSavedFloat:   16,
 		}
 	case ast.InternalCallerSavedCallConvention:
 		return internalCallSpec{
-			NumGeneral:            15,
+			NumGeneral:            14,
 			NumFloat:              16,
 			NumCallerSavedGeneral: 1,
 			NumCallerSavedFloat:   0,
@@ -45,15 +45,15 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 type internalCallSpec struct {
 	platform.InternalCallTypeSpec
 
-	// Number of general registers used (must be one or larger).
+	// The number of general registers used for sources and destination, not
+	// counting frame pointer. (Must be one or larger)
 	//
-	// The first general register is always used for function location value,
-	// the next (NumGeneral - 1) general registers are usable for int/data
-	// arguments.
+	// Not counting the frame pointer register, the first general register is
+	// always used for function location value, the next (NumGeneral - 1) general
+	// registers are usable for int/data arguments.
 	//
-	// The return value will use the same set of registers in the same
-	// assignment order, except the first general register is also usable for
-	// the return value.
+	// Not counting the frame pointer register, the first NumGeneral general
+	// registers are usable for int/data return value.
 	NumGeneral int
 
 	// Number of float registers used (can be zero).
@@ -62,30 +62,32 @@ type internalCallSpec struct {
 	// return value.
 	NumFloat int
 
-	// 1 <= NumCallerSavedGeneral <= NumGeneral
+	// 1 <= NumCallerSavedGeneral <= NumGeneral <= len(RegisterSet.General)-2
 	NumCallerSavedGeneral int
 
-	// 0 <= NumCallerSavedFloat <= NumFloat
+	// 0 <= NumCallerSavedFloat <= NumFloat <= len(RegisterSet.Float)
 	NumCallerSavedFloat int
 }
 
+// The first general register is always used for frame pointer (callee-saved).
+//
+// The second general register is always used for function location value.
+// The next (NumGeneral - 1) general registers are usable for int/data
+// arguments.
+//
+// The first NumFloat float registers are usable for float/data arguments.
+//
+// The same set of NumGeneral general registers and NumFloat float registers
+// are usable for the return value.
 func (spec internalCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
 ) *architecture.CallConvention {
-	convention := architecture.NewCallConvention(true, RegisterSet.General[0])
+	convention := architecture.NewCallConvention(true, RegisterSet.General[1])
+	convention.SetFramePointerRegister(RegisterSet.General[0])
 
-	// The first general register is always used for function location value,
-	// the next 8 general registers are usable for int/data arguments.  The first
-	// 8 float registers are usable for float/data arguments.  All these registers
-	// clobbered.  XXX: maybe make the number of registers dynamic?
-	//
-	// The return value will uses the same set of registers using the same
-	// assignment algorithm, except the first general register is also usable for
-	// the return value.
-
-	general := RegisterSet.General[:spec.NumGeneral]
+	general := RegisterSet.General[1 : spec.NumGeneral+1]
 	convention.CallerSaved(general[:spec.NumCallerSavedGeneral]...)
-	convention.CalleeSaved(RegisterSet.General[spec.NumCallerSavedGeneral:]...)
+	convention.CalleeSaved(RegisterSet.General[spec.NumCallerSavedGeneral+1:]...)
 
 	float := RegisterSet.Float[:spec.NumFloat]
 	convention.CallerSaved(float[:spec.NumCallerSavedFloat]...)
@@ -211,6 +213,7 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	funcType ast.FunctionType,
 ) *architecture.CallConvention {
 	convention := architecture.NewCallConvention(true, r11)
+	convention.SetFramePointerRegister(rbp) // callee-saved
 
 	// See Figure 3.4 Register Usage in
 	// https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
@@ -230,7 +233,7 @@ func (systemVLiteCallSpec) CallRetConstraints(
 	generalRet := rax
 	convention.CallerSaved(rax)
 
-	convention.CalleeSaved(rbx, rbp, r12, r13, r14, r15)
+	convention.CalleeSaved(rbx, r12, r13, r14, r15)
 
 	// All xmm registers are caller-saved.
 	// Only xmm0-xmm7 are usable for argument

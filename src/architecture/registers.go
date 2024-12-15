@@ -3,6 +3,8 @@ package architecture
 const (
 	// Assumption: we only support 64 bit architecture.
 	RegisterByteSize = 8
+
+	PreviousFramePointerName = "%previous-frame-pointer"
 )
 
 func NumRegisters(byteSize int) int {
