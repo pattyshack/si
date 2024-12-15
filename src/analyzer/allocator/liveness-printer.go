@@ -1,4 +1,4 @@
-package analyzer
+package allocator
 
 import (
 	"fmt"
@@ -8,24 +8,24 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-type livenessPrinter struct {
-	*livenessAnalyzer
+type LivenessPrinter struct {
+	*LivenessAnalyzer
 }
 
 // This is only for debugging purpose.
 func PrintLiveness() util.Pass[ast.SourceEntry] {
-	return &livenessPrinter{
-		livenessAnalyzer: NewLivenessAnalyzer(),
+	return &LivenessPrinter{
+		LivenessAnalyzer: NewLivenessAnalyzer(),
 	}
 }
 
-func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
+func (printer *LivenessPrinter) Process(entry ast.SourceEntry) {
 	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
 	}
 
-	printer.livenessAnalyzer.Process(funcDef)
+	printer.LivenessAnalyzer.Process(funcDef)
 
 	result := fmt.Sprintf("Definition: %s\n", funcDef.Label)
 	result += fmt.Sprintf(
@@ -36,7 +36,7 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 
 		result += fmt.Sprintf("    LiveIn:\n")
 		calleeSavedCount := 0
-		for def, dist := range printer.liveIn[block] {
+		for def, dist := range printer.LiveIn[block] {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
@@ -46,7 +46,7 @@ func (printer *livenessPrinter) Process(entry ast.SourceEntry) {
 
 		result += fmt.Sprintf("    LiveOut:\n")
 		calleeSavedCount = 0
-		for def, dist := range printer.liveOut[block] {
+		for def, dist := range printer.LiveOut[block] {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue

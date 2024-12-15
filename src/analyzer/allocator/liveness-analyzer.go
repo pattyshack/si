@@ -1,4 +1,4 @@
-package analyzer
+package allocator
 
 import (
 	"reflect"
@@ -22,7 +22,7 @@ import (
 //    block between block i and block j, and handling data transfer in the
 //    inserted block).
 
-type liveInfo struct {
+type LiveInfo struct {
 	// Distance to next use in number of instructions relative to current
 	// location. Current block's phi instructions counts as zero; the first real
 	// instruction counts as one.
@@ -30,117 +30,117 @@ type liveInfo struct {
 	// TODO: The distance heuristic does not take into account of loops /
 	// branch probability. Improve after we have a working compiler.
 	// If pgo statistics is available, maybe use markov chain weighted distance.
-	distance int
+	Distance int
 
 	// There could be multiple next use instructions if they are all in children
 	// branches.
-	nextUse map[ast.Instruction]struct{}
+	NextUse map[ast.Instruction]struct{}
 }
 
-func newLiveInfo(dist int, inst ast.Instruction) *liveInfo {
-	return &liveInfo{
-		distance: dist,
-		nextUse: map[ast.Instruction]struct{}{
+func NewLiveInfo(dist int, inst ast.Instruction) *LiveInfo {
+	return &LiveInfo{
+		Distance: dist,
+		NextUse: map[ast.Instruction]struct{}{
 			inst: struct{}{},
 		},
 	}
 }
 
-func (info *liveInfo) Copy() *liveInfo {
+func (info *LiveInfo) Copy() *LiveInfo {
 	nextUse := map[ast.Instruction]struct{}{}
-	for inst, _ := range info.nextUse {
+	for inst, _ := range info.NextUse {
 		nextUse[inst] = struct{}{}
 	}
-	return &liveInfo{
-		distance: info.distance,
-		nextUse:  nextUse,
+	return &LiveInfo{
+		Distance: info.Distance,
+		NextUse:  nextUse,
 	}
 }
 
-func (info *liveInfo) MergeFromChild(defDist int, childInfo *liveInfo) bool {
-	totalDist := defDist + childInfo.distance
+func (info *LiveInfo) MergeFromChild(defDist int, childInfo *LiveInfo) bool {
+	totalDist := defDist + childInfo.Distance
 
 	modified := false
-	if info.distance > totalDist {
+	if info.Distance > totalDist {
 		modified = true
-		info.distance = totalDist
+		info.Distance = totalDist
 	}
 
-	for inst, _ := range childInfo.nextUse {
-		_, ok := info.nextUse[inst]
+	for inst, _ := range childInfo.NextUse {
+		_, ok := info.NextUse[inst]
 		if ok {
 			continue
 		}
 		modified = true
-		info.nextUse[inst] = struct{}{}
+		info.NextUse[inst] = struct{}{}
 	}
 
 	return modified
 }
 
-type liveSet map[*ast.VariableDefinition]*liveInfo
+type LiveSet map[*ast.VariableDefinition]*LiveInfo
 
-func (liveIn liveSet) MaybeAdd(
+func (liveIn LiveSet) MaybeAdd(
 	def *ast.VariableDefinition,
 	dist int,
 	inst ast.Instruction,
 ) {
 	info, ok := liveIn[def]
 	if !ok {
-		liveIn[def] = newLiveInfo(dist, inst)
-	} else if info.distance > dist {
+		liveIn[def] = NewLiveInfo(dist, inst)
+	} else if info.Distance > dist {
 		panic("should never happen")
 	}
 }
 
-func (liveIn liveSet) MaybeAddInfo(
+func (liveIn LiveSet) MaybeAddInfo(
 	def *ast.VariableDefinition,
-	other *liveInfo,
+	other *LiveInfo,
 ) {
 	info, ok := liveIn[def]
 	if !ok {
 		liveIn[def] = other.Copy()
-	} else if info.distance > other.distance {
+	} else if info.Distance > other.Distance {
 		panic("should never happen")
 	}
 }
 
-func (liveOut liveSet) MergeFromChild(
+func (liveOut LiveSet) MergeFromChild(
 	def *ast.VariableDefinition,
 	defDist int,
-	childInfo *liveInfo,
+	childInfo *LiveInfo,
 ) bool {
 	info, ok := liveOut[def]
 	if !ok {
 		info = childInfo.Copy()
-		info.distance += defDist
+		info.Distance += defDist
 		liveOut[def] = info
 		return true
 	}
 	return info.MergeFromChild(defDist, childInfo)
 }
 
-type livenessAnalyzer struct {
+type LivenessAnalyzer struct {
 	// updated by children block
-	liveOut map[*ast.Block]liveSet
+	LiveOut map[*ast.Block]LiveSet
 
 	// updated by current block
-	liveIn map[*ast.Block]liveSet
+	LiveIn map[*ast.Block]LiveSet
 
 	funcParams map[*ast.VariableDefinition]struct{}
 }
 
-var _ util.Pass[ast.SourceEntry] = &livenessAnalyzer{}
+var _ util.Pass[ast.SourceEntry] = &LivenessAnalyzer{}
 
-func NewLivenessAnalyzer() *livenessAnalyzer {
-	return &livenessAnalyzer{
-		liveOut:    map[*ast.Block]liveSet{},
-		liveIn:     map[*ast.Block]liveSet{},
+func NewLivenessAnalyzer() *LivenessAnalyzer {
+	return &LivenessAnalyzer{
+		LiveOut:    map[*ast.Block]LiveSet{},
+		LiveIn:     map[*ast.Block]LiveSet{},
 		funcParams: map[*ast.VariableDefinition]struct{}{},
 	}
 }
 
-func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
+func (analyzer *LivenessAnalyzer) Process(entry ast.SourceEntry) {
 	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
@@ -155,7 +155,7 @@ func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
 
 	workSet := util.NewDataflowWorkSet()
 	for _, block := range funcDef.Blocks {
-		analyzer.liveOut[block] = liveSet{}
+		analyzer.LiveOut[block] = LiveSet{}
 		if len(block.Children) == 0 { // Terminal block
 			workSet.Push(block)
 		}
@@ -173,7 +173,7 @@ func (analyzer *livenessAnalyzer) Process(entry ast.SourceEntry) {
 	}
 }
 
-func (analyzer *livenessAnalyzer) isDefinedIn(
+func (analyzer *LivenessAnalyzer) isDefinedIn(
 	def *ast.VariableDefinition,
 	block *ast.Block,
 ) bool {
@@ -187,8 +187,8 @@ func (analyzer *livenessAnalyzer) isDefinedIn(
 
 // Note: no need to perform per instruction back propagation since we have
 // ssa use/def and parent block information.
-func (analyzer *livenessAnalyzer) updateLiveIn(block *ast.Block) bool {
-	liveIn := liveSet{}
+func (analyzer *LivenessAnalyzer) updateLiveIn(block *ast.Block) bool {
+	liveIn := LiveSet{}
 
 	for _, phi := range block.Phis {
 		liveIn.MaybeAdd(phi.Dest, 0, phi) // See note 2a.
@@ -210,33 +210,33 @@ func (analyzer *livenessAnalyzer) updateLiveIn(block *ast.Block) bool {
 		}
 	}
 
-	for def, info := range analyzer.liveOut[block] {
+	for def, info := range analyzer.LiveOut[block] {
 		if analyzer.isDefinedIn(def, block) {
 			continue
 		}
 		liveIn.MaybeAddInfo(def, info)
 	}
 
-	if !reflect.DeepEqual(liveIn, analyzer.liveIn[block]) {
-		analyzer.liveIn[block] = liveIn
+	if !reflect.DeepEqual(liveIn, analyzer.LiveIn[block]) {
+		analyzer.LiveIn[block] = liveIn
 		return true
 	}
 	return false
 }
 
-func (analyzer *livenessAnalyzer) updateParentLiveOut(
+func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 	parent *ast.Block,
 	child *ast.Block,
 ) bool {
-	childLiveIn := analyzer.liveIn[child]
-	parentLiveOut := analyzer.liveOut[parent]
+	childLiveIn := analyzer.LiveIn[child]
+	parentLiveOut := analyzer.LiveOut[parent]
 
 	modified := false
 	parentBlockLength := len(parent.Instructions)
-	localDefs := map[ast.Instruction]*liveInfo{}
+	localDefs := map[ast.Instruction]*LiveInfo{}
 	for def, childInfo := range childLiveIn {
 		if analyzer.isDefinedIn(def, child) { // i.e., a phi, See note 2a
-			if childInfo.distance != 0 {
+			if childInfo.Distance != 0 {
 				panic("should never happen")
 			}
 

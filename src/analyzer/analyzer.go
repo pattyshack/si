@@ -5,6 +5,7 @@ import (
 
 	"github.com/pattyshack/gt/parseutil"
 
+	"github.com/pattyshack/chickadee/analyzer/allocator"
 	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
@@ -82,7 +83,7 @@ func Analyze(
 					// these passes are only used for debugging the compiler
 					// implementation and should be removed or flag guarded once the
 					// compiler works.
-					PrintLiveness(),
+					allocator.PrintLiveness(),
 				},
 			}
 
