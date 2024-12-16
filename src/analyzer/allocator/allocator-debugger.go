@@ -36,11 +36,13 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 	printf("  # of callee saved registers: %d\n", len(funcDef.PseudoParameters))
 
 	for idx, block := range funcDef.Blocks {
+		blockState := debugger.BlockStates[block]
+
 		printf("  Block %d (%s):\n", idx, block.Label)
 
 		printf("    LiveIn:\n")
 		calleeSavedCount := 0
-		for def, info := range debugger.LiveIn[block] {
+		for def, info := range blockState.LiveIn {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
@@ -50,7 +52,7 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 
 		printf("    LiveOut:\n")
 		calleeSavedCount = 0
-		for def, info := range debugger.LiveOut[block] {
+		for def, info := range blockState.LiveOut {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
@@ -62,14 +64,16 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 	printf("------------------------------------------\n")
 	printf("Data Locations:\n")
 	for idx, block := range funcDef.Blocks {
+		blockState := debugger.BlockStates[block]
+
 		printf("  Block %d (%s):\n", idx, block.Label)
 		printf("    LocationIn:\n")
-		for _, loc := range debugger.LocationIn[block] {
+		for _, loc := range blockState.LocationIn {
 			printf("      %s\n", loc)
 		}
 
 		printf("    LocationOut:\n")
-		for _, loc := range debugger.LocationOut[block] {
+		for _, loc := range blockState.LocationOut {
 			printf("      %s\n", loc)
 		}
 	}

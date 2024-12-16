@@ -14,16 +14,7 @@ import (
 type Allocator struct {
 	platform.Platform
 
-	LiveIn  map[*ast.Block]LiveSet
-	LiveOut map[*ast.Block]LiveSet
-
-	// Where data are located immediately prior to executing the block
-	// Every entry maps one-to-one to the corresponding live in set.
-	LocationIn map[*ast.Block]LocationSet
-
-	// Where data are located immediately after the block executed
-	// Every entry maps one-to-one to the corresponding live out set.
-	LocationOut map[*ast.Block]LocationSet
+	BlockStates map[*ast.Block]*BlockState
 
 	*StackFrame
 }
@@ -31,8 +22,7 @@ type Allocator struct {
 func NewAllocator(targetPlatform platform.Platform) *Allocator {
 	return &Allocator{
 		Platform:    targetPlatform,
-		LocationIn:  map[*ast.Block]LocationSet{},
-		LocationOut: map[*ast.Block]LocationSet{},
+		BlockStates: map[*ast.Block]*BlockState{},
 		StackFrame:  NewStackFrame(),
 	}
 }
@@ -73,8 +63,13 @@ func (allocator *Allocator) analyzeLiveness(
 ) {
 	analyzer := NewLivenessAnalyzer()
 	analyzer.Process(funcDef)
-	allocator.LiveIn = analyzer.LiveIn
-	allocator.LiveOut = analyzer.LiveOut
+
+	for _, block := range funcDef.Blocks {
+		allocator.BlockStates[block] = &BlockState{
+			LiveIn:  analyzer.LiveIn[block],
+			LiveOut: analyzer.LiveOut[block],
+		}
+	}
 }
 
 func (allocator *Allocator) initializeFuncDefDataLocations(
@@ -110,5 +105,5 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 		}
 	}
 
-	allocator.LocationIn[funcDef.Blocks[0]] = locations
+	allocator.BlockStates[funcDef.Blocks[0]].LocationIn = locations
 }
