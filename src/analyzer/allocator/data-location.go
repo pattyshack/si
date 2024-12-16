@@ -1,6 +1,7 @@
 package allocator
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -32,6 +33,33 @@ type DataLocation struct {
 	//
 	// entry address = stack pointer address + variabled portion size + offset
 	Offset int
+}
+
+func NewRegistersDataLocation(
+	name string,
+	valueType ast.Type,
+	registers []*architecture.Register,
+) *DataLocation {
+	return &DataLocation{
+		Name:      name,
+		Type:      valueType,
+		Registers: registers,
+	}
+}
+
+func (loc *DataLocation) String() string {
+	registers := []string{}
+	for _, reg := range loc.Registers {
+		registers = append(registers, reg.Name)
+	}
+	return fmt.Sprintf(
+		"Name: %s Registers: %v OnStack: %v AlignedSize: %d Offset: %d Type: %s",
+		loc.Name,
+		registers,
+		loc.OnStack,
+		loc.AlignedSize,
+		loc.Offset,
+		loc.Type)
 }
 
 // Where definition's data is located at block boundaries.
@@ -102,10 +130,12 @@ type StackFrame struct {
 
 	ReturnAddress *DataLocation
 
-	// Non-argument local variable (including previous frame pointer) -> location
+	// Local variables includes all non-stack-passed parameters.  i.e.,
+	// register passed parameters, callee-saved registers including previous
+	// frame pointer, and locally defined variable)
 	LocalVariables map[string]*DataLocation
 
-	// Computed by Finalized()
+	// Computed by FinalizeFrame()
 	FrameSize int             // This respects stack frame alignment
 	Layout    []*DataLocation // from bottom to top
 }
@@ -169,10 +199,13 @@ func (frame *StackFrame) MaybeAddLocalVariable(
 	name string,
 	valueType ast.Type,
 ) *DataLocation {
+	if frame.ReturnAddress == nil {
+		panic("StartCurrentFrame not called")
+	}
 	if frame.Layout != nil {
 		panic("cannot add local variable after finalize")
 	}
-	loc, ok := frame.LocalVariables[name]
+	loc, ok := frame.Locations[name]
 	if ok {
 		return loc
 	}
@@ -181,7 +214,7 @@ func (frame *StackFrame) MaybeAddLocalVariable(
 	return loc
 }
 
-func (frame *StackFrame) Finalize(
+func (frame *StackFrame) FinalizeFrame(
 	targetPlatform platform.Platform,
 ) {
 	unalignedFrameSize := 0
@@ -225,7 +258,8 @@ func (frame *StackFrame) Finalize(
 		})
 
 	frameAlignment := targetPlatform.StackFrameAlignment()
-	frame.FrameSize = (unalignedFrameSize + frameAlignment - 1) / frameAlignment
+	roundUp := (unalignedFrameSize + frameAlignment - 1) / frameAlignment
+	frame.FrameSize = roundUp * frameAlignment
 
 	layout := make(
 		[]*DataLocation,
@@ -235,7 +269,10 @@ func (frame *StackFrame) Finalize(
 	if frame.Destination != nil {
 		layout = append(layout, frame.Destination)
 	}
-	layout = append(layout, frame.Parameters...)
+	// stack arguments are push in reverse order
+	for idx := len(frame.Parameters) - 1; idx >= 0; idx-- {
+		layout = append(layout, frame.Parameters[idx])
+	}
 	layout = append(layout, frame.ReturnAddress)
 	layout = append(layout, frameEntries...)
 

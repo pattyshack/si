@@ -1,0 +1,27 @@
+define func @lotsOfArguments(
+  // the frist 8 args are assigned to general registers
+  %regArg1 I32,
+  %regArg2 I32,
+  %regArg3 I32,
+  %regArg4 I32,
+  %regArg5 I32,
+  %regArg6 I32,
+  %regArg7 I32,
+  %regArg8 I32,
+  // the next 8 args are assigned to float registers
+  %regArg9 I32,
+  %regArg10 I32,
+  %regArg11 I32,
+  %regArg12 I32,
+  %regArg13 I32,
+  %regArg14 I32,
+  %regArg15 I32,
+  %regArg16 I32,
+  // the next 3 args are assigned to stack
+  %stackArg1 I32,
+  %stackArg2 I32,
+  %stackArg3 I32,
+) I32 {
+  exit 1
+}
+
