@@ -47,7 +47,8 @@ type InstructionConstraints struct {
 
 	// FramePointerRegister is a special pseudo callee-saved register reserved
 	// for the frame pointer hidden parameter.  A corresponding location
-	// constraint entry is in the pseudo sources list.
+	// constraint entry is in the pseudo sources list (added by
+	// funcDefConstraintsGenerator).
 	FramePointerRegister *Register
 
 	// Which sources/destination values should be on stack.  The layout is
@@ -95,6 +96,16 @@ func NewInstructionConstraints() *InstructionConstraints {
 	return &InstructionConstraints{
 		RequiredRegisters: map[*Register]bool{},
 	}
+}
+
+func (constraints *InstructionConstraints) AllSources() []*LocationConstraint {
+	result := make(
+		[]*LocationConstraint,
+		0,
+		len(constraints.Sources)+len(constraints.PseudoSources))
+	result = append(result, constraints.Sources...)
+	result = append(result, constraints.PseudoSources...)
+	return result
 }
 
 func (constraints *InstructionConstraints) SelectAnyGeneral(
@@ -193,7 +204,7 @@ func (constraints *InstructionConstraints) SetFramePointerRegister(
 	}
 
 	constraints.FramePointerRegister = register
-	constraints.AddPseudoSource(constraints.Require(false, register))
+	constraints.Require(false, register)
 }
 
 func (constraints *InstructionConstraints) AddPseudoSource(

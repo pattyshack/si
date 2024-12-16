@@ -28,10 +28,7 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 	}
 
 	initDefIn := map[string]*ast.VariableDefinition{}
-	for _, param := range funcDef.Parameters {
-		initDefIn[param.Name] = param
-	}
-	for _, param := range funcDef.PseudoParameters {
+	for _, param := range funcDef.AllParameters() {
 		initDefIn[param.Name] = param
 	}
 	constructor.defOuts[funcDef.Blocks[0]] = initDefIn

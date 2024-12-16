@@ -38,13 +38,7 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	for _, def := range funcDef.Parameters {
-		if def.Type == nil {
-			panic("should never happen") // error previously emitted.
-		}
-		checker.nameType[def.Name] = def.Type
-	}
-	for _, def := range funcDef.PseudoParameters {
+	for _, def := range funcDef.AllParameters() {
 		if def.Type == nil {
 			panic("should never happen") // error previously emitted.
 		}

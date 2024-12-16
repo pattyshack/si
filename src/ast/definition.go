@@ -79,6 +79,16 @@ type FunctionDefinition struct {
 var _ SourceEntry = &FunctionDefinition{}
 var _ Validator = &FunctionDefinition{}
 
+func (def *FunctionDefinition) AllParameters() []*VariableDefinition {
+	result := make(
+		[]*VariableDefinition,
+		0,
+		len(def.Parameters)+len(def.PseudoParameters))
+	result = append(result, def.Parameters...)
+	result = append(result, def.PseudoParameters...)
+	return result
+}
+
 func (def *FunctionDefinition) Walk(visitor Visitor) {
 	visitor.Enter(def)
 	for _, param := range def.Parameters {

@@ -135,7 +135,7 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 
 		regName := "%" + reg.Name
 		if reg == convention.CallConstraints.FramePointerRegister {
-			regName = architecture.PreviousFramePointerName
+			regName = architecture.PreviousFramePointer
 		}
 
 		pseudoParam := &ast.VariableDefinition{
