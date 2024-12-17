@@ -1,7 +1,9 @@
 package allocator
 
 import (
+	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
+	"github.com/pattyshack/chickadee/platform"
 )
 
 // All distances are in terms of instruction distance relative to the beginning
@@ -22,6 +24,8 @@ type BlockState struct {
 
 	// Note: unused definitions are not included in LiveRanges
 	LiveRanges map[*ast.VariableDefinition]LiveRange
+
+	Constraints map[ast.Instruction]*architecture.InstructionConstraints
 
 	// Where data are located immediately prior to executing the block.
 	// Every entry maps one-to-one to the corresponding live in set.
@@ -68,4 +72,13 @@ func (state *BlockState) ComputeLiveRanges() {
 	}
 
 	state.LiveRanges = liveRanges
+}
+
+func (state *BlockState) GenerateConstraints(targetPlatform platform.Platform) {
+	constraints := map[ast.Instruction]*architecture.InstructionConstraints{}
+	for _, inst := range state.Instructions {
+		constraints[inst] = targetPlatform.InstructionConstraints(inst)
+	}
+
+	state.Constraints = constraints
 }

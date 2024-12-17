@@ -14,6 +14,7 @@ import (
 type Allocator struct {
 	platform.Platform
 
+	FuncDef     *ast.FunctionDefinition
 	BlockStates map[*ast.Block]*BlockState
 
 	*StackFrame
@@ -33,6 +34,7 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 		return
 	}
 
+	allocator.FuncDef = funcDef
 	for _, block := range funcDef.Blocks {
 		allocator.BlockStates[block] = &BlockState{
 			Block: block,
@@ -120,5 +122,6 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 func (allocator *Allocator) initializeBlockStates() {
 	for _, state := range allocator.BlockStates {
 		state.ComputeLiveRanges()
+		state.GenerateConstraints(allocator.Platform)
 	}
 }
