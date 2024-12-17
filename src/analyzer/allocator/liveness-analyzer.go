@@ -232,7 +232,7 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 	parentLiveOut := analyzer.LiveOut[parent]
 
 	modified := false
-	parentBlockLength := len(parent.Instructions)
+	parentBlockLength := len(parent.Instructions) + 1 // +1 for parent's phis
 	localDefs := map[ast.Instruction]*LiveInfo{}
 	for def, childInfo := range childLiveIn {
 		if analyzer.isDefinedIn(def, child) { // i.e., a phi, See note 2a
@@ -273,7 +273,8 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 			panic("should never happen")
 		}
 
-		if parentLiveOut.MergeFromChild(dest, parentBlockLength-idx, childInfo) {
+		dist := idx + 1 // +1 for phi
+		if parentLiveOut.MergeFromChild(dest, parentBlockLength-dist, childInfo) {
 			modified = true
 		}
 	}
