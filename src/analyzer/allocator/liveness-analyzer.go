@@ -23,9 +23,9 @@ import (
 //    inserted block).
 
 type LiveInfo struct {
-	// Distance to next use in number of instructions relative to current
-	// location. Current block's phi instructions counts as zero; the first real
-	// instruction counts as one.
+	// Distance to next use in number of instructions relative to the beginning
+	// of the current block. Current block's phi instructions counts as zero;
+	// the first real instruction counts as one.
 	//
 	// TODO: The distance heuristic does not take into account of loops /
 	// branch probability. Improve after we have a working compiler.
@@ -262,7 +262,7 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 		}
 	}
 
-	for idx, inst := range parent.Instructions {
+	for _, inst := range parent.Instructions {
 		childInfo, ok := localDefs[inst]
 		if !ok {
 			continue
@@ -273,8 +273,7 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 			panic("should never happen")
 		}
 
-		dist := idx + 1 // +1 for phi
-		if parentLiveOut.MergeFromChild(dest, parentBlockLength-dist, childInfo) {
+		if parentLiveOut.MergeFromChild(dest, parentBlockLength, childInfo) {
 			modified = true
 		}
 	}

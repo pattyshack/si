@@ -62,6 +62,22 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 	}
 
 	printf("------------------------------------------\n")
+	printf("Live Ranges:\n")
+	for idx, block := range funcDef.Blocks {
+		blockState := debugger.BlockStates[block]
+
+		printf("  Block %d (%s):\n", idx, block.Label)
+		for def, liveRange := range blockState.LiveRanges {
+			printf(
+				"    %s: [%d %d] (%s)\n",
+				def.Name,
+				liveRange.Start,
+				liveRange.End,
+				def.Loc())
+		}
+	}
+
+	printf("------------------------------------------\n")
 	printf("Data Locations:\n")
 	for idx, block := range funcDef.Blocks {
 		blockState := debugger.BlockStates[block]

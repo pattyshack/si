@@ -33,9 +33,17 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	allocator.analyzeLiveness(funcDef)
+	for _, block := range funcDef.Blocks {
+		allocator.BlockStates[block] = &BlockState{
+			Block: block,
+		}
+	}
+
 	allocator.initializeFuncDefDataLocations(funcDef)
 	allocator.StartCurrentFrame()
+
+	allocator.analyzeLiveness(funcDef)
+	allocator.initializeBlockStates()
 
 	// TODO actual allocator implementation.
 	// XXX: The following is only used for debugging stack frame's implementation
@@ -66,6 +74,7 @@ func (allocator *Allocator) analyzeLiveness(
 
 	for _, block := range funcDef.Blocks {
 		allocator.BlockStates[block] = &BlockState{
+			Block:   block,
 			LiveIn:  analyzer.LiveIn[block],
 			LiveOut: analyzer.LiveOut[block],
 		}
@@ -106,4 +115,10 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 	}
 
 	allocator.BlockStates[funcDef.Blocks[0]].LocationIn = locations
+}
+
+func (allocator *Allocator) initializeBlockStates() {
+	for _, state := range allocator.BlockStates {
+		state.ComputeLiveRanges()
+	}
 }
