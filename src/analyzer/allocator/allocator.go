@@ -44,11 +44,18 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	allocator.initializeFuncDefDataLocations(funcDef)
 	allocator.StartCurrentFrame()
 
-	allocator.analyzeLiveness(funcDef)
 	allocator.initializeBlockStates()
 
 	// TODO actual allocator implementation.
 	// XXX: The following is only used for debugging stack frame's implementation
+
+	// XXX: preferences must be computed during block allocation, since the
+	// block's preferences changes based on children's locationIn (fixed by
+	// different parent).  This information is not available ahead of time.
+	for _, state := range allocator.BlockStates {
+		state.computeLiveRangesAndPreferences(allocator.BlockStates)
+	}
+
 	for _, param := range funcDef.AllParameters() {
 		allocator.StackFrame.MaybeAddLocalVariable(param.Name, param.Type)
 	}
@@ -66,21 +73,6 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	}
 
 	allocator.FinalizeFrame(allocator.Platform)
-}
-
-func (allocator *Allocator) analyzeLiveness(
-	funcDef *ast.FunctionDefinition,
-) {
-	analyzer := NewLivenessAnalyzer()
-	analyzer.Process(funcDef)
-
-	for _, block := range funcDef.Blocks {
-		allocator.BlockStates[block] = &BlockState{
-			Block:   block,
-			LiveIn:  analyzer.LiveIn[block],
-			LiveOut: analyzer.LiveOut[block],
-		}
-	}
 }
 
 func (allocator *Allocator) initializeFuncDefDataLocations(
@@ -120,8 +112,17 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 }
 
 func (allocator *Allocator) initializeBlockStates() {
-	for _, state := range allocator.BlockStates {
-		state.ComputeLiveRanges()
+	analyzer := NewLivenessAnalyzer()
+	analyzer.Process(allocator.FuncDef)
+
+	for _, block := range allocator.FuncDef.Blocks {
+		state := &BlockState{
+			Block:   block,
+			LiveIn:  analyzer.LiveIn[block],
+			LiveOut: analyzer.LiveOut[block],
+		}
 		state.GenerateConstraints(allocator.Platform)
+
+		allocator.BlockStates[block] = state
 	}
 }

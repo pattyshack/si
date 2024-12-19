@@ -1,0 +1,16 @@
+define func @helper(%i I32, %j I32) I32 {
+  ret %i
+}
+
+define func @function(%i I32, %j I32) I32 {
+  %k = call @helper(%i, %j)
+  %i = call @helper(%j, %k)
+  %j = call @helper(%k, %i)
+  %k = call @helper(%i, %j)
+:block2
+  %i = call @helper(%i, %i)
+  %j = call @helper(%j, %j)
+  %k = call @helper(%k, %k)
+  %j = call @helper(1, 2)
+  ret %k
+}
