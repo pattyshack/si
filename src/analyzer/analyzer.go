@@ -39,6 +39,7 @@ func Analyze(
 			passes := [][]util.Pass[ast.SourceEntry]{
 				{ValidateAstSyntax(entryEmitter)},
 				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
+				{InitializeControlFlowGraph(entryEmitter)},
 			}
 
 			util.Process(entry, passes, nil)
@@ -61,7 +62,6 @@ func Analyze(
 			}
 
 			passes := [][]util.Pass[ast.SourceEntry]{
-				{InitializeControlFlowGraph(entryEmitter)},
 				{ModifyTerminals(targetPlatform)},
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},

@@ -45,18 +45,8 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 		checker.nameType[def.Name] = def.Type
 	}
 
-	processed := map[*ast.Block]struct{}{}
-	queue := []*ast.Block{funcDef.Blocks[0]}
-	for len(queue) > 0 {
-		block := queue[0]
-		queue = queue[1:]
-
-		_, ok := processed[block]
-		if ok {
-			continue
-		}
-		processed[block] = struct{}{}
-
+	dfsOrder, _ := util.DFS(funcDef)
+	for _, block := range dfsOrder {
 		// Note: we don't need to check phi's source references since all
 		// instruction destination definitions are eventually checked against
 		// checker.nameType
@@ -78,8 +68,6 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 				checker.checkRedefinition(dest)
 			}
 		}
-
-		queue = append(queue, block.Children...)
 	}
 }
 

@@ -78,3 +78,35 @@ func (set *DataFlowWorkSet) Pop() *ast.Block {
 	delete(set.set, head)
 	return head
 }
+
+func DFS(
+	funcDef *ast.FunctionDefinition,
+) (
+	[]*ast.Block,
+	map[*ast.Block]struct{},
+) {
+	stack := make([]*ast.Block, 0, len(funcDef.Blocks))
+	stack = append(stack, funcDef.Blocks[0])
+
+	visited := make(map[*ast.Block]struct{}, len(funcDef.Blocks))
+	order := make([]*ast.Block, 0, len(funcDef.Blocks))
+	for len(stack) > 0 {
+		idx := len(stack) - 1
+		top := stack[idx]
+		stack = stack[:idx]
+
+		_, ok := visited[top]
+		if ok {
+			continue
+		}
+
+		visited[top] = struct{}{}
+		order = append(order, top)
+
+		// NOTE: This visits the fallthrough child before the branch child due to
+		// the way control flow graph is initialized.
+		stack = append(stack, top.Children...)
+	}
+
+	return order, visited
+}

@@ -33,22 +33,10 @@ func (constructor *ssaConstructor) Process(entry ast.SourceEntry) {
 	}
 	constructor.defOuts[funcDef.Blocks[0]] = initDefIn
 
-	processed := map[*ast.Block]struct{}{}
-	queue := []*ast.Block{funcDef.Blocks[0]}
-	for len(queue) > 0 {
-		block := queue[0]
-		queue = queue[1:]
-
-		_, ok := processed[block]
-		if ok {
-			continue
-		}
-		processed[block] = struct{}{}
-
+	dfsOrder, _ := util.DFS(funcDef)
+	for _, block := range dfsOrder {
 		defOut := constructor.processBlock(block)
 		constructor.populateChildrenPhis(block, defOut)
-
-		queue = append(queue, block.Children...)
 	}
 
 	// In theory, this should never happen since the graph is reducible, but

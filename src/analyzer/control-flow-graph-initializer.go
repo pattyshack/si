@@ -118,24 +118,7 @@ func (initializer *controlFlowGraphInitializer) Process(
 func (initializer *controlFlowGraphInitializer) checkForUnreachableBlocks(
 	def *ast.FunctionDefinition,
 ) {
-	reachable := map[*ast.Block]struct{}{
-		def.Blocks[0]: struct{}{},
-	}
-
-	queue := []*ast.Block{def.Blocks[0]}
-	for len(queue) > 0 {
-		node := queue[0]
-		queue = queue[1:]
-
-		for _, child := range node.Children {
-			_, ok := reachable[child]
-			if !ok {
-				reachable[child] = struct{}{}
-				queue = append(queue, child)
-			}
-		}
-	}
-
+	_, reachable := util.DFS(def)
 	for _, block := range def.Blocks {
 		_, ok := reachable[block]
 		if !ok {
