@@ -22,57 +22,42 @@ import (
 //    block between block i and block j, and handling data transfer in the
 //    inserted block).
 
+// All distances are in number of instructions relative to the beginning of
+// the current block. Current block's phi instructions counts as zero; the
+// first real instruction counts as one.
+//
+// TODO: The distance heuristic does not take into account of loops /
+// branch probability. Improve after we have a working compiler.
+// If pgo statistics is available, maybe use markov chain weighted distance.
 type LiveInfo struct {
-	// Distance to next use in number of instructions relative to the beginning
-	// of the current block. Current block's phi instructions counts as zero;
-	// the first real instruction counts as one.
-	//
-	// TODO: The distance heuristic does not take into account of loops /
-	// branch probability. Improve after we have a working compiler.
-	// If pgo statistics is available, maybe use markov chain weighted distance.
-	Distance int
-
 	// There could be multiple next use instructions if they are all in children
 	// branches.
-	NextUse map[ast.Instruction]struct{}
-}
-
-func NewLiveInfo(dist int, inst ast.Instruction) *LiveInfo {
-	return &LiveInfo{
-		Distance: dist,
-		NextUse: map[ast.Instruction]struct{}{
-			inst: struct{}{},
-		},
-	}
+	NextUse map[ast.Instruction]int
 }
 
 func (info *LiveInfo) Copy() *LiveInfo {
-	nextUse := map[ast.Instruction]struct{}{}
-	for inst, _ := range info.NextUse {
-		nextUse[inst] = struct{}{}
+	nextUse := map[ast.Instruction]int{}
+	for inst, dist := range info.NextUse {
+		nextUse[inst] = dist
 	}
 	return &LiveInfo{
-		Distance: info.Distance,
-		NextUse:  nextUse,
+		NextUse: nextUse,
 	}
 }
 
-func (info *LiveInfo) MergeFromChild(defDist int, childInfo *LiveInfo) bool {
-	totalDist := defDist + childInfo.Distance
-
+func (liveOutInfo *LiveInfo) MergeFromChildLiveInInfo(
+	parentBlockLength int,
+	childLiveInInfo *LiveInfo,
+) bool {
 	modified := false
-	if info.Distance > totalDist {
-		modified = true
-		info.Distance = totalDist
-	}
-
-	for inst, _ := range childInfo.NextUse {
-		_, ok := info.NextUse[inst]
-		if ok {
+	for inst, childNextUseDist := range childLiveInInfo.NextUse {
+		dist := parentBlockLength + childNextUseDist
+		origDist, ok := liveOutInfo.NextUse[inst]
+		if ok && origDist < dist {
 			continue
 		}
 		modified = true
-		info.NextUse[inst] = struct{}{}
+		liveOutInfo.NextUse[inst] = dist
 	}
 
 	return modified
@@ -80,44 +65,45 @@ func (info *LiveInfo) MergeFromChild(defDist int, childInfo *LiveInfo) bool {
 
 type LiveSet map[*ast.VariableDefinition]*LiveInfo
 
-func (liveIn LiveSet) MaybeAdd(
-	def *ast.VariableDefinition,
-	dist int,
+func (liveIn LiveSet) InstructionUses(
 	inst ast.Instruction,
+	useDist int,
+	def *ast.VariableDefinition,
 ) {
-	info, ok := liveIn[def]
+	_, ok := liveIn[def]
 	if !ok {
-		liveIn[def] = NewLiveInfo(dist, inst)
-	} else if info.Distance > dist {
-		panic("should never happen")
+		liveIn[def] = &LiveInfo{
+			NextUse: map[ast.Instruction]int{
+				inst: useDist,
+			},
+		}
 	}
 }
 
-func (liveIn LiveSet) MaybeAddInfo(
+func (liveIn LiveSet) MergeFromLiveOut(
 	def *ast.VariableDefinition,
-	other *LiveInfo,
+	liveOutInfo *LiveInfo,
 ) {
-	info, ok := liveIn[def]
+	_, ok := liveIn[def]
 	if !ok {
-		liveIn[def] = other.Copy()
-	} else if info.Distance > other.Distance {
-		panic("should never happen")
+		liveIn[def] = liveOutInfo.Copy()
 	}
 }
 
-func (liveOut LiveSet) MergeFromChild(
+func (liveOut LiveSet) MergeFromChildLiveIn(
 	def *ast.VariableDefinition,
-	defDist int,
-	childInfo *LiveInfo,
+	parentBlockLength int,
+	childLiveInInfo *LiveInfo,
 ) bool {
 	info, ok := liveOut[def]
 	if !ok {
-		info = childInfo.Copy()
-		info.Distance += defDist
+		info = &LiveInfo{
+			NextUse: map[ast.Instruction]int{},
+		}
 		liveOut[def] = info
-		return true
 	}
-	return info.MergeFromChild(defDist, childInfo)
+	modified := info.MergeFromChildLiveInInfo(parentBlockLength, childLiveInInfo)
+	return !ok || modified
 }
 
 type LivenessAnalyzer struct {
@@ -191,10 +177,11 @@ func (analyzer *LivenessAnalyzer) updateLiveIn(block *ast.Block) bool {
 	liveIn := LiveSet{}
 
 	for _, phi := range block.Phis {
-		liveIn.MaybeAdd(phi.Dest, 0, phi) // See note 2a.
+		liveIn.InstructionUses(phi, 0, phi.Dest) // See note 2a.
 	}
 
 	for idx, inst := range block.Instructions {
+		dist := idx + 1
 		for _, src := range inst.Sources() {
 			ref, ok := src.(*ast.VariableReference)
 			if !ok { // immediate or global label reference
@@ -206,7 +193,7 @@ func (analyzer *LivenessAnalyzer) updateLiveIn(block *ast.Block) bool {
 				continue
 			}
 
-			liveIn.MaybeAdd(def, idx+1, inst)
+			liveIn.InstructionUses(inst, dist, def)
 		}
 	}
 
@@ -214,7 +201,7 @@ func (analyzer *LivenessAnalyzer) updateLiveIn(block *ast.Block) bool {
 		if analyzer.isDefinedIn(def, block) {
 			continue
 		}
-		liveIn.MaybeAddInfo(def, info)
+		liveIn.MergeFromLiveOut(def, info)
 	}
 
 	if !reflect.DeepEqual(liveIn, analyzer.LiveIn[block]) {
@@ -236,10 +223,6 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 	localDefs := map[ast.Instruction]*LiveInfo{}
 	for def, childInfo := range childLiveIn {
 		if analyzer.isDefinedIn(def, child) { // i.e., a phi, See note 2a
-			if childInfo.Distance != 0 {
-				panic("should never happen")
-			}
-
 			phi := def.ParentInstruction.(*ast.Phi)
 			ref, ok := phi.Srcs[parent].(*ast.VariableReference)
 			if !ok { // immediate or global label reference
@@ -257,7 +240,7 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 			}
 		}
 
-		if parentLiveOut.MergeFromChild(def, parentBlockLength, childInfo) {
+		if parentLiveOut.MergeFromChildLiveIn(def, parentBlockLength, childInfo) {
 			modified = true
 		}
 	}
@@ -273,7 +256,7 @@ func (analyzer *LivenessAnalyzer) updateParentLiveOut(
 			panic("should never happen")
 		}
 
-		if parentLiveOut.MergeFromChild(dest, parentBlockLength, childInfo) {
+		if parentLiveOut.MergeFromChildLiveIn(dest, parentBlockLength, childInfo) {
 			modified = true
 		}
 	}

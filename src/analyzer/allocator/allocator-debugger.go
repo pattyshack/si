@@ -42,22 +42,22 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 
 		printf("    LiveIn:\n")
 		calleeSavedCount := 0
-		for def, info := range blockState.LiveIn {
+		for def, _ := range blockState.LiveIn {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
 			}
-			printf("      %s : %d (%s)\n", def.Name, info.Distance, def.Loc())
+			printf("      %s (%s)\n", def.Name, def.Loc())
 		}
 
 		printf("    LiveOut:\n")
 		calleeSavedCount = 0
-		for def, info := range blockState.LiveOut {
+		for def, _ := range blockState.LiveOut {
 			if strings.HasPrefix(def.Name, "%") {
 				calleeSavedCount++
 				continue
 			}
-			printf("      %s : %d (%s)\n", def.Name, info.Distance, def.Loc())
+			printf("      %s (%s)\n", def.Name, def.Loc())
 		}
 	}
 

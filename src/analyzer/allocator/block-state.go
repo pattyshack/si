@@ -158,48 +158,69 @@ func (state *BlockState) computeLiveRangesAndPreferencesFromLiveOut(
 	blockStates map[*ast.Block]*BlockState,
 	defStarts map[*ast.VariableDefinition]int,
 ) {
-	sortedDefs := []*ast.VariableDefinition{}
-	for def, _ := range state.LiveOut {
-		sortedDefs = append(sortedDefs, def)
+	type usage struct {
+		inst ast.Instruction
+		dist int
 	}
 
-	// sort by distance, tie break by name
-	sort.Slice(
-		sortedDefs,
-		func(i int, j int) bool {
-			iDist := state.LiveOut[sortedDefs[i]].Distance
-			jDist := state.LiveOut[sortedDefs[j]].Distance
-			if iDist == jDist {
-				return sortedDefs[i].Name < sortedDefs[j].Name
+	sortedUsages := []*usage{}
+	usages := map[ast.Instruction]*usage{}
+	for def, info := range state.LiveOut {
+		maxDist := 0
+		for inst, dist := range info.NextUse {
+			if dist > maxDist {
+				maxDist = dist
 			}
 
-			return iDist < jDist
-		})
-
-	for _, def := range sortedDefs {
-		info := state.LiveOut[def]
+			_, ok := usages[inst]
+			if !ok {
+				use := &usage{
+					inst: inst,
+					dist: dist,
+				}
+				usages[inst] = use
+				sortedUsages = append(sortedUsages, use)
+			}
+		}
 
 		state.LiveRanges[def] = LiveRange{
 			Start: defStarts[def],
-			End:   info.Distance,
+			// Note: global live range could be longer, but this is a good enough
+			// estimate for this block.
+			End: maxDist,
+		}
+	}
+
+	sort.Slice(
+		sortedUsages,
+		func(i int, j int) bool {
+			return sortedUsages[i].dist < sortedUsages[j].dist
+		})
+
+	for _, use := range sortedUsages {
+		inst := use.inst
+		_, ok := inst.(*ast.Phi)
+		if ok { // phi copy has no preferences
+			continue
 		}
 
-		for inst, _ := range info.NextUse {
-			_, ok := inst.(*ast.Phi)
-			if ok { // phi copy has no preferences
+		constraints := blockStates[inst.ParentBlock()].Constraints[inst]
+		for srcIdx, src := range inst.Sources() {
+			ref, ok := src.(*ast.VariableReference)
+			if !ok {
 				continue
 			}
-			constraints := blockStates[inst.ParentBlock()].Constraints[inst]
-			for srcIdx, src := range inst.Sources() {
-				ref, ok := src.(*ast.VariableReference)
-				if !ok || ref.UseDef != def {
-					continue
-				}
-				state.collectConstraintPreferences(
-					info.Distance,
-					def,
-					constraints.Sources[srcIdx])
+
+			def := ref.UseDef
+			_, ok = state.LiveOut[def]
+			if !ok {
+				continue
 			}
+
+			state.collectConstraintPreferences(
+				use.dist,
+				def,
+				constraints.Sources[srcIdx])
 		}
 	}
 }
