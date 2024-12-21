@@ -47,6 +47,23 @@ func NewRegistersDataLocation(
 	}
 }
 
+func (loc *DataLocation) Copy() *DataLocation {
+	var registers []*architecture.Register
+	if loc.Registers != nil {
+		registers = make([]*architecture.Register, 0, len(loc.Registers))
+		registers = append(registers, loc.Registers...)
+	}
+
+	return &DataLocation{
+		Name:        loc.Name,
+		Type:        loc.Type,
+		Registers:   registers,
+		OnStack:     loc.OnStack,
+		AlignedSize: loc.AlignedSize,
+		Offset:      loc.Offset,
+	}
+}
+
 func (loc *DataLocation) String() string {
 	registers := []string{}
 	for _, reg := range loc.Registers {

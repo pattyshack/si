@@ -1,6 +1,7 @@
 package allocator
 
 import (
+	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/platform"
@@ -35,53 +36,40 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	}
 
 	allocator.FuncDef = funcDef
-	for _, block := range funcDef.Blocks {
-		allocator.BlockStates[block] = &BlockState{
-			Block: block,
-		}
-	}
-
-	allocator.initializeFuncDefDataLocations(funcDef)
+	allocator.initializeBlockStates()
+	allocator.initializeFuncDefDataLocations()
 	allocator.StartCurrentFrame()
 
-	allocator.initializeBlockStates()
-
-	// TODO actual allocator implementation.
-	// XXX: The following is only used for debugging stack frame's implementation
-
-	// XXX: preferences must be computed during block allocation, since the
-	// block's preferences changes based on children's locationIn (fixed by
-	// different parent).  This information is not available ahead of time.
-	for _, state := range allocator.BlockStates {
-		state.computeLiveRangesAndPreferences(allocator.BlockStates)
-	}
-
-	for _, param := range funcDef.AllParameters() {
-		allocator.StackFrame.MaybeAddLocalVariable(param.Name, param.Type)
-	}
-
-	for _, block := range funcDef.Blocks {
-		for _, inst := range block.Instructions {
-			for _, src := range inst.Sources() {
-				ref, ok := src.(*ast.VariableReference)
-				if !ok {
-					continue
-				}
-				allocator.StackFrame.MaybeAddLocalVariable(ref.Name, ref.Type())
-			}
-		}
+	dfsOrder, _ := util.DFS(funcDef)
+	for _, block := range dfsOrder {
+		allocator.processBlock(allocator.BlockStates[block])
 	}
 
 	allocator.FinalizeFrame(allocator.Platform)
 }
 
-func (allocator *Allocator) initializeFuncDefDataLocations(
-	funcDef *ast.FunctionDefinition,
-) {
-	convention := funcDef.CallConventionSpec.CallConstraints
+func (allocator *Allocator) initializeBlockStates() {
+	analyzer := NewLivenessAnalyzer()
+	analyzer.Process(allocator.FuncDef)
+
+	for _, block := range allocator.FuncDef.Blocks {
+		state := &BlockState{
+			Platform: allocator.Platform,
+			Block:    block,
+			LiveIn:   analyzer.LiveIn[block],
+			LiveOut:  analyzer.LiveOut[block],
+		}
+		state.GenerateConstraints(allocator.Platform)
+
+		allocator.BlockStates[block] = state
+	}
+}
+
+func (allocator *Allocator) initializeFuncDefDataLocations() {
+	convention := allocator.FuncDef.CallConventionSpec.CallConstraints
 
 	if convention.Destination.RequireOnStack {
-		allocator.StackFrame.SetDestination(funcDef.ReturnType)
+		allocator.StackFrame.SetDestination(allocator.FuncDef.ReturnType)
 	}
 
 	// The first constraint is call's function location, which is not applicable
@@ -89,7 +77,7 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 	constraints := convention.AllSources()[1:]
 
 	locations := LocationSet{}
-	for idx, param := range funcDef.AllParameters() {
+	for idx, param := range allocator.FuncDef.AllParameters() {
 		constraint := constraints[idx]
 		if constraint.RequireOnStack {
 			locations[param] = allocator.StackFrame.AddParameter(
@@ -108,21 +96,22 @@ func (allocator *Allocator) initializeFuncDefDataLocations(
 		}
 	}
 
-	allocator.BlockStates[funcDef.Blocks[0]].LocationIn = locations
+	allocator.BlockStates[allocator.FuncDef.Blocks[0]].LocationIn = locations
 }
 
-func (allocator *Allocator) initializeBlockStates() {
-	analyzer := NewLivenessAnalyzer()
-	analyzer.Process(allocator.FuncDef)
+func (allocator *Allocator) processBlock(block *BlockState) {
+	block.ComputeLiveRangesAndPreferences(allocator.BlockStates)
 
-	for _, block := range allocator.FuncDef.Blocks {
-		state := &BlockState{
-			Block:   block,
-			LiveIn:  analyzer.LiveIn[block],
-			LiveOut: analyzer.LiveOut[block],
+	// TODO actual allocator implementation.
+	// XXX: The following is only used for debugging stack frame's implementation
+
+	for _, inst := range block.Instructions {
+		for _, src := range inst.Sources() {
+			ref, ok := src.(*ast.VariableReference)
+			if !ok {
+				continue
+			}
+			allocator.StackFrame.MaybeAddLocalVariable(ref.Name, ref.Type())
 		}
-		state.GenerateConstraints(allocator.Platform)
-
-		allocator.BlockStates[block] = state
 	}
 }

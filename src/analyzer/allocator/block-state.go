@@ -42,6 +42,7 @@ func (pref PreferredAllocation) String() string {
 
 // The block's execution state at a particular point in time.
 type BlockState struct {
+	platform.Platform
 	*ast.Block
 
 	LiveIn  LiveSet
@@ -75,7 +76,10 @@ func (state *BlockState) GenerateConstraints(targetPlatform platform.Platform) {
 	state.Constraints = constraints
 }
 
-func (state *BlockState) computeLiveRangesAndPreferences(
+// Note: A block's preferences cannot be precomputed since the block's
+// preferences could changes due to its children's LocationIn (set by a
+// different parent).
+func (state *BlockState) ComputeLiveRangesAndPreferences(
 	blockStates map[*ast.Block]*BlockState,
 ) {
 	liveRanges := map[*ast.VariableDefinition]LiveRange{}
