@@ -109,7 +109,7 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 	}
 
 	printf("------------------------------------------\n")
-	printf("Stack Frame (Size = %d):\n", debugger.StackFrame.FrameSize)
+	printf("Stack Frame (Size = %d):\n", debugger.StackFrame.FixedSize)
 	printf("  Layout (bottom to top):\n")
 	for _, entry := range debugger.StackFrame.Layout {
 		printf("    %s\n", entry)

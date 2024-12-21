@@ -21,17 +21,22 @@ type DataLocation struct {
 	//
 	// For now, data location is either completely on stack or completely in
 	// registers.
-	Registers []*architecture.Register
-	OnStack   bool
+	Registers    []*architecture.Register
+	OnFixedStack bool // available throughout the function's lifetime
+	OnTempStack  bool // temporarily allocated for a call instruction
 
 	AlignedSize int // register aligned size
 
-	// The offset is relative to the end of the fixed portion of the stack frame.
+	// For fixed stack locations, the offset is relative to the end of the fixed
+	// portion of the stack frame.
+	//
+	// For temp stack locations, the offset is relative to the top of the stack.
 	//
 	// NOTE: We'll determine the stack entry address based on stack pointer rather
-	// than base pointer.
+	// than base pointer:
 	//
-	// entry address = stack pointer address + variabled portion size + offset
+	// fixed entry address = stack pointer address + temp stack size + offset
+	// temp entry address = stack pointer address + offset
 	Offset int
 }
 
@@ -40,6 +45,10 @@ func NewRegistersDataLocation(
 	valueType ast.Type,
 	registers []*architecture.Register,
 ) *DataLocation {
+	if len(registers) != valueType.RegisterSize() {
+		panic("should never happen")
+	}
+
 	return &DataLocation{
 		Name:      name,
 		Type:      valueType,
@@ -55,12 +64,13 @@ func (loc *DataLocation) Copy() *DataLocation {
 	}
 
 	return &DataLocation{
-		Name:        loc.Name,
-		Type:        loc.Type,
-		Registers:   registers,
-		OnStack:     loc.OnStack,
-		AlignedSize: loc.AlignedSize,
-		Offset:      loc.Offset,
+		Name:         loc.Name,
+		Type:         loc.Type,
+		Registers:    registers,
+		OnFixedStack: loc.OnFixedStack,
+		OnTempStack:  loc.OnTempStack,
+		AlignedSize:  loc.AlignedSize,
+		Offset:       loc.Offset,
 	}
 }
 
@@ -70,10 +80,10 @@ func (loc *DataLocation) String() string {
 		registers = append(registers, reg.Name)
 	}
 	return fmt.Sprintf(
-		"Name: %s Registers: %v OnStack: %v AlignedSize: %d Offset: %d Type: %s",
+		"Name: %s Registers: %v OnFixedStack: %v AlignedSize: %d Offset: %d Type: %s",
 		loc.Name,
 		registers,
-		loc.OnStack,
+		loc.OnFixedStack,
 		loc.AlignedSize,
 		loc.Offset,
 		loc.Type)
@@ -86,7 +96,7 @@ type LocationSet map[*ast.VariableDefinition]*DataLocation
 //
 // |              | (low address)
 // |...           |
-// |              |  / start of current stack frame's variable sized portion
+// |              |  / start of current stack frame's temp portion
 // |--------------| <
 // |local var m   |  \ end of current stack frame's fixed portion
 // |--------------|
@@ -97,7 +107,7 @@ type LocationSet map[*ast.VariableDefinition]*DataLocation
 // |local var 1   | non-argument local variables that are spills to stack
 // |--------------|
 // |prev frame ptr| Optional, depending on call convention
-// |--------------| <- start of current stack frame's fixed size portion
+// |--------------| <- start of current stack frame's fixed portion
 // |ret address   |
 // |--------------| <- this is stack frame size aligned (see padding below)
 // |argument 1    | first argument that goes on the stack
@@ -110,9 +120,10 @@ type LocationSet map[*ast.VariableDefinition]*DataLocation
 // |--------------|
 // |destination   |
 // |--------------|
-// |padding       | padding to ensure argument 1 is stack frame size aligned
-// |--------------| <- start of previous stack frame's variable sized portion
-// |              |  \ end of previous stack frame's fixed portion
+// |temp padding  | padding to ensure argument 1 is stack frame size aligned
+// |--------------| <- start of previous stack frame's temp portion
+// |fixed padding |  \ end of previous stack frame's fixed portion
+// |--------------|
 // |              |
 // |...           |
 // |              | (high address)
@@ -152,8 +163,11 @@ type StackFrame struct {
 	// frame pointer, and locally defined variable)
 	LocalVariables map[string]*DataLocation
 
+	// Note: Total frame size = temp frame size + fixed frame size
+	MaxTempSize int
+
 	// Computed by FinalizeFrame()
-	FrameSize int             // This respects stack frame alignment
+	FixedSize int             // This respects stack frame alignment
 	Layout    []*DataLocation // from bottom to top
 }
 
@@ -161,6 +175,12 @@ func NewStackFrame() *StackFrame {
 	return &StackFrame{
 		Locations:      map[string]*DataLocation{},
 		LocalVariables: map[string]*DataLocation{},
+	}
+}
+
+func (frame *StackFrame) UpdateMaxTempFrameSize(size int) {
+	if size > frame.MaxTempSize {
+		frame.MaxTempSize = size
 	}
 }
 
@@ -174,10 +194,10 @@ func (frame *StackFrame) add(name string, valueType ast.Type) *DataLocation {
 		alignedSize = architecture.AlignedSize(valueType.ByteSize())
 	}
 	loc := &DataLocation{
-		Name:        name,
-		Type:        valueType,
-		OnStack:     true,
-		AlignedSize: alignedSize,
+		Name:         name,
+		Type:         valueType,
+		OnFixedStack: true,
+		AlignedSize:  alignedSize,
 	}
 	frame.Locations[name] = loc
 	return loc
@@ -276,7 +296,7 @@ func (frame *StackFrame) FinalizeFrame(
 
 	frameAlignment := targetPlatform.StackFrameAlignment()
 	roundUp := (unalignedFrameSize + frameAlignment - 1) / frameAlignment
-	frame.FrameSize = roundUp * frameAlignment
+	frame.FixedSize = roundUp * frameAlignment
 
 	layout := make(
 		[]*DataLocation,
@@ -294,10 +314,237 @@ func (frame *StackFrame) FinalizeFrame(
 	layout = append(layout, frameEntries...)
 
 	frame.Layout = layout
-	currentOffset := frame.FrameSize - unalignedFrameSize
+	currentOffset := frame.FixedSize - unalignedFrameSize
 	for idx := len(layout) - 1; idx >= 0; idx-- {
 		entry := layout[idx]
 		entry.Offset = currentOffset
 		currentOffset += entry.AlignedSize
+	}
+}
+
+// A register is free if it is not reserved, and is not used by a variable
+// definition.
+type RegisterInfo struct {
+	// This indicates the register is temporary not selectable/free.
+	//
+	// This flag is reset after each instruction.
+	Reserved bool
+
+	// Which variable definition is currently using this register.
+	UsedBy *DataLocation
+}
+
+func (info *RegisterInfo) SetUsedBy(loc *DataLocation) {
+	if info.UsedBy != nil {
+		panic("should never happen")
+	}
+	info.UsedBy = loc
+}
+
+// Where values are located at a particular point in execution within a block.
+// Note that copies of a value may temporarily reside in multiple locations.
+type ValueLocations struct {
+	FixedStack *StackFrame
+
+	// TODO temporary portion of the stack frame (call's arguments and
+	// return value)
+
+	Registers map[*architecture.Register]*RegisterInfo
+
+	Values     map[*ast.VariableDefinition]map[*DataLocation]struct{}
+	valueNames map[string]*ast.VariableDefinition
+}
+
+func NewValueLocations(
+	targetPlatform platform.Platform,
+	frame *StackFrame,
+	locationIn LocationSet,
+) *ValueLocations {
+	locations := &ValueLocations{
+		FixedStack: frame,
+		Registers:  map[*architecture.Register]*RegisterInfo{},
+		Values:     map[*ast.VariableDefinition]map[*DataLocation]struct{}{},
+		valueNames: map[string]*ast.VariableDefinition{},
+	}
+
+	for _, reg := range targetPlatform.ArchitectureRegisters().Data {
+		locations.Registers[reg] = &RegisterInfo{}
+	}
+
+	for def, loc := range locationIn {
+		if loc.OnFixedStack {
+			locations.NewDefinition(def, locations.FixedStackLocation(def))
+		} else if loc.OnTempStack {
+			panic("should never happen")
+		} else {
+			registers := make([]*architecture.Register, 0, len(loc.Registers))
+			registers = append(registers, loc.Registers...)
+
+			locations.NewDefinition(
+				def,
+				locations.RegistersLocation(def.Name, def.Type, registers))
+		}
+	}
+
+	return locations
+}
+
+func (locations *ValueLocations) getRegInfo(
+	reg *architecture.Register,
+) *RegisterInfo {
+	info, ok := locations.Registers[reg]
+	if !ok {
+		panic("invalid register: " + reg.Name)
+	}
+	return info
+}
+
+func (locations *ValueLocations) getLocations(
+	def *ast.VariableDefinition,
+) map[*DataLocation]struct{} {
+	set, ok := locations.Values[def]
+	if !ok {
+		panic("should never happen")
+	}
+	return set
+}
+
+func (locations *ValueLocations) ResetForNextInstruction() {
+	for _, info := range locations.Registers {
+		info.Reserved = false
+	}
+
+	// TODO should ensure temp stack is copied/freed/popped
+}
+
+// Note: srcRegister's Reserved state is not modified.  destRegister must be
+// unoccupied.
+func (locations *ValueLocations) MoveData(
+	srcRegister *architecture.Register,
+	destRegister *architecture.Register,
+) {
+	srcInfo := locations.getRegInfo(srcRegister)
+	if srcInfo.UsedBy == nil {
+		panic("should never happen")
+	}
+
+	modified := false
+	loc := srcInfo.UsedBy
+	for idx, reg := range loc.Registers {
+		if reg == srcRegister {
+			loc.Registers[idx] = destRegister
+			modified = true
+			break
+		}
+	}
+
+	if !modified {
+		panic("should never happen")
+	}
+
+	// TODO record move operation from srcRegister to destRegister
+
+	srcInfo.UsedBy = nil
+	locations.getRegInfo(destRegister).SetUsedBy(loc)
+}
+
+func (locations *ValueLocations) RegistersLocation(
+	name string, // use "" for immediate / global label value
+	valueType ast.Type,
+	registers []*architecture.Register,
+) *DataLocation {
+	dest := NewRegistersDataLocation(name, valueType, registers)
+	for _, reg := range registers {
+		locations.getRegInfo(reg).SetUsedBy(dest)
+	}
+	return dest
+}
+
+func (locations *ValueLocations) FixedStackLocation(
+	def *ast.VariableDefinition,
+) *DataLocation {
+	return locations.FixedStack.MaybeAddLocalVariable(def.Name, def.Type)
+}
+
+func (locations *ValueLocations) AssignConstantTo(
+	constant ast.Value, // immediate or global label
+	dest *DataLocation,
+) {
+	// TODO record assign constant operation
+}
+
+// Note: this assumes that the location already hold the correct data.
+func (locations *ValueLocations) NewDefinition(
+	def *ast.VariableDefinition,
+	loc *DataLocation,
+) {
+	_, ok := locations.valueNames[def.Name]
+	if ok {
+		panic("should never happen")
+	}
+	locations.valueNames[def.Name] = def
+
+	locations.Values[def] = map[*DataLocation]struct{}{
+		loc: struct{}{},
+	}
+}
+
+// Note: registers' Reserved states are not modified.
+func (locations *ValueLocations) CopyDefinition(
+	def *ast.VariableDefinition,
+	dest *DataLocation,
+) {
+	if !dest.Type.Equals(def.Type) {
+		panic("should never happen")
+	}
+
+	set := locations.getLocations(def)
+	_, ok := set[dest]
+	if ok {
+		return // A copy of the value is already in dest.  Do nothing
+	}
+
+	var src *DataLocation
+	for loc, _ := range set {
+		src = loc
+		if len(src.Registers) > 0 {
+			break // prefer copying from registers source
+		}
+	}
+
+	// TODO record operation copy from src to dest
+
+	set[dest] = struct{}{}
+}
+
+// Note: freed registers' Reserved states are reset to false.
+func (locations *ValueLocations) FreeLocation(
+	toFree *DataLocation,
+) {
+	for _, reg := range toFree.Registers {
+		info := locations.getRegInfo(reg)
+		if info.UsedBy != toFree {
+			panic("should never happen")
+		}
+		info.Reserved = false
+		info.UsedBy = nil
+	}
+
+	def, ok := locations.valueNames[toFree.Name]
+	if !ok {
+		return // location held immediate or global label value
+	}
+
+	set := locations.getLocations(def)
+	_, ok = set[toFree]
+	if !ok {
+		panic("should never happen")
+	}
+
+	if len(set) > 1 {
+		delete(set, toFree)
+	} else {
+		delete(locations.Values, def)
+		delete(locations.valueNames, def.Name)
 	}
 }
