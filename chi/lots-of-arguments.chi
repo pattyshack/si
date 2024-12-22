@@ -22,6 +22,9 @@ define func @lotsOfArguments(
   %stackArg2 I32,
   %stackArg3 I32,
 ) I32 {
+  %i = %regArg1
+  %j = %regArg2
+  %k = %regArg3
   exit 1
 }
 

@@ -27,16 +27,12 @@ type DataLocation struct {
 
 	AlignedSize int // register aligned size
 
-	// For fixed stack locations, the offset is relative to the end of the fixed
-	// portion of the stack frame.
+	// All offsets are relative to the top of the (preallocated) stack.
 	//
-	// For temp stack locations, the offset is relative to the top of the stack.
+	// NOTE: We'll determine the stack entry address based on stack pointer
+	// rather than base pointer:
 	//
-	// NOTE: We'll determine the stack entry address based on stack pointer rather
-	// than base pointer:
-	//
-	// fixed entry address = stack pointer address + temp stack size + offset
-	// temp entry address = stack pointer address + offset
+	// entry address = stack pointer address + offset
 	Offset int
 }
 
@@ -53,6 +49,24 @@ func NewRegistersDataLocation(
 		Name:      name,
 		Type:      valueType,
 		Registers: registers,
+	}
+}
+
+func NewStackDataLocation(
+	name string,
+	valueType ast.Type, // can be nil only for return address pointer
+	onFixedStack bool, // false means on temp stack
+) *DataLocation {
+	alignedSize := architecture.AddressByteSize
+	if valueType != nil {
+		alignedSize = architecture.AlignedSize(valueType.ByteSize())
+	}
+	return &DataLocation{
+		Name:         name,
+		Type:         valueType,
+		OnFixedStack: onFixedStack,
+		OnTempStack:  !onFixedStack,
+		AlignedSize:  alignedSize,
 	}
 }
 
@@ -120,11 +134,9 @@ type LocationSet map[*ast.VariableDefinition]*DataLocation
 // |--------------|
 // |destination   |
 // |--------------|
-// |temp padding  | padding to ensure argument 1 is stack frame size aligned
+// |padding       | extra space allocated that is not used by this call
 // |--------------| <- start of previous stack frame's temp portion
-// |fixed padding |  \ end of previous stack frame's fixed portion
-// |--------------|
-// |              |
+// |              |  \ end of previous stack frame's fixed portion
 // |...           |
 // |              | (high address)
 //
@@ -133,14 +145,16 @@ type LocationSet map[*ast.VariableDefinition]*DataLocation
 //
 // For simplicity, each unique variable name (could map to multiple definitions)
 // that gets spill onto stack will occupy a unique/predetermined location in
-// the fixed portion of the stack frame.  Calls may temporarily increase the
-// stack frame's size, but the stack frame will immediately shrink back to the
-// original size after the call (the call's stack arguments are discarded, and
-// its stack destination value is copied).
+// the fixed portion of the stack frame.  Calls may increase the temp portion
+// of the stack frame, and thus the total stack frame size.  We'll simply
+// preallocate the maximum amount of space needed for any call.  The fixed
+// portion is aligned to the bottom of the stack frame and the temp portion
+// is aligned to the top of the stack frame.
 //
 // For now, we assume all stack arguments pass to the function are
-// caller-saved to a different location.  The function definition won't
-// allocate additional memory for spilling those variable.
+// caller-saved to a different location.  The function will reuse the caller
+// allocated space for re-splilling those variables.  The stack return value
+// should be copied out of the temp portion of the stack asap.
 //
 // The exact layout of the stack frame is finalized at the end of the
 // allocation process. The layout from bottom to top is:
@@ -163,12 +177,12 @@ type StackFrame struct {
 	// frame pointer, and locally defined variable)
 	LocalVariables map[string]*DataLocation
 
-	// Note: Total frame size = temp frame size + fixed frame size
-	MaxTempSize int
+	// Note: Total frame size = max temp frame size + fixed frame size
+	MaxTempSize int // This respects register alignment (but not frame alignment)
 
 	// Computed by FinalizeFrame()
-	FixedSize int             // This respects stack frame alignment
-	Layout    []*DataLocation // from bottom to top
+	TotalFrameSize int             // This respects stack frame alignment
+	Layout         []*DataLocation // from bottom to top
 }
 
 func NewStackFrame() *StackFrame {
@@ -178,7 +192,7 @@ func NewStackFrame() *StackFrame {
 	}
 }
 
-func (frame *StackFrame) UpdateMaxTempFrameSize(size int) {
+func (frame *StackFrame) UpdateMaxTempSize(size int) {
 	if size > frame.MaxTempSize {
 		frame.MaxTempSize = size
 	}
@@ -189,16 +203,8 @@ func (frame *StackFrame) add(name string, valueType ast.Type) *DataLocation {
 	if ok {
 		panic("duplicate data location: " + name)
 	}
-	alignedSize := architecture.AddressByteSize
-	if valueType != nil {
-		alignedSize = architecture.AlignedSize(valueType.ByteSize())
-	}
-	loc := &DataLocation{
-		Name:         name,
-		Type:         valueType,
-		OnFixedStack: true,
-		AlignedSize:  alignedSize,
-	}
+
+	loc := NewStackDataLocation(name, valueType, true)
 	frame.Locations[name] = loc
 	return loc
 }
@@ -254,10 +260,10 @@ func (frame *StackFrame) MaybeAddLocalVariable(
 func (frame *StackFrame) FinalizeFrame(
 	targetPlatform platform.Platform,
 ) {
-	unalignedFrameSize := 0
+	fixedSize := 0
 	frameEntries := make([]*DataLocation, 0, len(frame.LocalVariables))
 	for _, loc := range frame.LocalVariables {
-		unalignedFrameSize += loc.AlignedSize
+		fixedSize += loc.AlignedSize
 		frameEntries = append(frameEntries, loc)
 	}
 
@@ -294,9 +300,10 @@ func (frame *StackFrame) FinalizeFrame(
 			return first < second
 		})
 
+	totalFrameSize := fixedSize + frame.MaxTempSize
 	frameAlignment := targetPlatform.StackFrameAlignment()
-	roundUp := (unalignedFrameSize + frameAlignment - 1) / frameAlignment
-	frame.FixedSize = roundUp * frameAlignment
+	roundUp := (totalFrameSize + frameAlignment - 1) / frameAlignment
+	frame.TotalFrameSize = roundUp * frameAlignment
 
 	layout := make(
 		[]*DataLocation,
@@ -314,7 +321,7 @@ func (frame *StackFrame) FinalizeFrame(
 	layout = append(layout, frameEntries...)
 
 	frame.Layout = layout
-	currentOffset := frame.FixedSize - unalignedFrameSize
+	currentOffset := frame.TotalFrameSize - fixedSize
 	for idx := len(layout) - 1; idx >= 0; idx-- {
 		entry := layout[idx]
 		entry.Offset = currentOffset
@@ -344,10 +351,10 @@ func (info *RegisterInfo) SetUsedBy(loc *DataLocation) {
 // Where values are located at a particular point in execution within a block.
 // Note that copies of a value may temporarily reside in multiple locations.
 type ValueLocations struct {
-	FixedStack *StackFrame
+	*StackFrame
 
-	// TODO temporary portion of the stack frame (call's arguments and
-	// return value)
+	// NOTE: TempStack is ordered from top to bottom
+	TempStack []*DataLocation
 
 	Registers map[*architecture.Register]*RegisterInfo
 
@@ -361,7 +368,7 @@ func NewValueLocations(
 	locationIn LocationSet,
 ) *ValueLocations {
 	locations := &ValueLocations{
-		FixedStack: frame,
+		StackFrame: frame,
 		Registers:  map[*architecture.Register]*RegisterInfo{},
 		Values:     map[*ast.VariableDefinition]map[*DataLocation]struct{}{},
 		valueNames: map[string]*ast.VariableDefinition{},
@@ -414,7 +421,9 @@ func (locations *ValueLocations) ResetForNextInstruction() {
 		info.Reserved = false
 	}
 
-	// TODO should ensure temp stack is copied/freed/popped
+	if locations.TempStack != nil {
+		locations.TempStack = nil
+	}
 }
 
 // Note: srcRegister's Reserved state is not modified.  destRegister must be
@@ -463,7 +472,47 @@ func (locations *ValueLocations) RegistersLocation(
 func (locations *ValueLocations) FixedStackLocation(
 	def *ast.VariableDefinition,
 ) *DataLocation {
-	return locations.FixedStack.MaybeAddLocalVariable(def.Name, def.Type)
+	return locations.StackFrame.MaybeAddLocalVariable(def.Name, def.Type)
+}
+
+func (locations *ValueLocations) AllocateTempStackLocations(
+	targetPlatform platform.Platform,
+	stackArgumentTypes []ast.Type, // top to bottom order
+	stackReturnType ast.Type, // always at the bottom
+) (
+	[]*DataLocation, // argument locations, same order as argument types
+	*DataLocation, // return value location
+) {
+	if locations.TempStack != nil {
+		panic("should never happen")
+	}
+
+	callTempSize := 0
+	argLocs := []*DataLocation{}
+	tempStack := []*DataLocation{}
+	for _, argType := range stackArgumentTypes {
+		loc := NewStackDataLocation("", argType, false)
+		loc.Offset = callTempSize
+
+		callTempSize += loc.AlignedSize
+		argLocs = append(argLocs, loc)
+		tempStack = append(tempStack, loc)
+	}
+
+	var returnLoc *DataLocation
+	if stackReturnType != nil {
+		loc := NewStackDataLocation("", stackReturnType, false)
+		loc.Offset = callTempSize
+
+		callTempSize += loc.AlignedSize
+		tempStack = append(tempStack, loc)
+
+		// TODO record memset operation to zero stack return value slot
+	}
+
+	locations.StackFrame.UpdateMaxTempSize(callTempSize)
+	locations.TempStack = tempStack
+	return argLocs, returnLoc
 }
 
 func (locations *ValueLocations) AssignConstantTo(
@@ -532,7 +581,7 @@ func (locations *ValueLocations) FreeLocation(
 
 	def, ok := locations.valueNames[toFree.Name]
 	if !ok {
-		return // location held immediate or global label value
+		return
 	}
 
 	set := locations.getLocations(def)
