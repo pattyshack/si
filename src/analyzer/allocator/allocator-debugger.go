@@ -69,10 +69,11 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 		printf("  Block %d (%s):\n", idx, block.Label)
 		for def, liveRange := range blockState.LiveRanges {
 			printf(
-				"    %s: [%d %d] (%s)\n",
+				"    %s: [%d %d] NextUses: %v (%s)\n",
 				def.Name,
 				liveRange.Start,
 				liveRange.End,
+				liveRange.NextUses,
 				def.Loc())
 		}
 	}

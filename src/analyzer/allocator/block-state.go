@@ -2,6 +2,7 @@ package allocator
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/pattyshack/chickadee/architecture"
@@ -14,6 +15,9 @@ import (
 type LiveRange struct {
 	Start int // first live distance (relative to beginning of current block)
 	End   int // last use distance, inclusive.
+
+	// NextUses are always at least one instruction ahead of NextInstIdx.
+	NextUses []int
 }
 
 type PreferredAllocation struct {
@@ -51,7 +55,7 @@ type BlockState struct {
 	NextInstIdx int
 
 	// Note: unused definitions are not included in LiveRanges
-	LiveRanges map[*ast.VariableDefinition]LiveRange
+	LiveRanges map[*ast.VariableDefinition]*LiveRange
 
 	Constraints map[ast.Instruction]*architecture.InstructionConstraints
 
@@ -82,8 +86,7 @@ func (state *BlockState) GenerateConstraints(targetPlatform platform.Platform) {
 func (state *BlockState) ComputeLiveRangesAndPreferences(
 	blockStates map[*ast.Block]*BlockState,
 ) {
-	liveRanges := map[*ast.VariableDefinition]LiveRange{}
-	state.LiveRanges = liveRanges
+	state.LiveRanges = map[*ast.VariableDefinition]*LiveRange{}
 	state.Preferences = map[*architecture.Register][]PreferredAllocation{}
 
 	defStarts := map[*ast.VariableDefinition]int{}
@@ -104,11 +107,7 @@ func (state *BlockState) ComputeLiveRangesAndPreferences(
 			var def *ast.VariableDefinition
 			ref, ok := src.(*ast.VariableReference)
 			if ok {
-				def = ref.UseDef
-				liveRanges[ref.UseDef] = LiveRange{
-					Start: defStarts[def],
-					End:   dist,
-				}
+				state.updateLiveRange(ref.UseDef, defStarts[def], dist)
 			}
 
 			// Don't collect preferences from the first instruction since we only
@@ -134,6 +133,25 @@ func (state *BlockState) ComputeLiveRangesAndPreferences(
 	}
 
 	state.computeLiveRangesAndPreferencesFromLiveOut(blockStates, defStarts)
+}
+
+func (state *BlockState) updateLiveRange(
+	def *ast.VariableDefinition,
+	startDist int,
+	useDist int,
+) {
+	live, ok := state.LiveRanges[def]
+	if !ok {
+		live = &LiveRange{
+			Start: startDist,
+		}
+		state.LiveRanges[def] = live
+	}
+
+	live.End = useDist
+	if useDist > 1 {
+		live.NextUses = append(live.NextUses, useDist)
+	}
 }
 
 func (state *BlockState) computePreferencesFromChildLocationIn(
@@ -170,10 +188,15 @@ func (state *BlockState) computeLiveRangesAndPreferencesFromLiveOut(
 	sortedUsages := []*usage{}
 	usages := map[ast.Instruction]*usage{}
 	for def, info := range state.LiveOut {
+		minDist := math.MaxInt32
 		maxDist := 0
 		for inst, dist := range info.NextUse {
 			if dist > maxDist {
 				maxDist = dist
+			}
+
+			if minDist > dist {
+				minDist = dist
 			}
 
 			_, ok := usages[inst]
@@ -187,11 +210,12 @@ func (state *BlockState) computeLiveRangesAndPreferencesFromLiveOut(
 			}
 		}
 
-		state.LiveRanges[def] = LiveRange{
-			Start: defStarts[def],
-			// Note: global live range could be longer, but this is a good enough
-			// estimate for this block.
-			End: maxDist,
+		// Note: global live range could be longer, but this is a good enough
+		// estimate for this block.
+		start := defStarts[def]
+		state.updateLiveRange(def, start, minDist)
+		if minDist < maxDist {
+			state.updateLiveRange(def, start, maxDist)
 		}
 	}
 
