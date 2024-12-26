@@ -96,9 +96,9 @@ func (allocator *Allocator) initializeFuncDefDataLocations() {
 				registers = append(registers, reg.Require)
 			}
 
-			locations[param] = NewRegistersDataLocation(
+			locations[param] = architecture.NewRegistersDataLocation(
 				param.Name,
-				param.Type,
+				param.Type.ByteSize(),
 				registers)
 		}
 	}
