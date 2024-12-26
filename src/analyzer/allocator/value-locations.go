@@ -110,14 +110,7 @@ func (frame *StackFrame) add(name string, valueType ast.Type) *architecture.Data
 		panic("duplicate data location: " + name)
 	}
 
-	// TODO: for now, we'll allow return address to have unspecified type.  Deal
-	// with variable pointer types.
-	byteSize := architecture.AddressByteSize
-	if name != architecture.ReturnAddress {
-		byteSize = valueType.ByteSize()
-	}
-
-	loc := architecture.NewFixedStackDataLocation(name, byteSize)
+	loc := architecture.NewFixedStackDataLocation(name, valueType)
 	frame.Locations[name] = loc
 	return loc
 }
@@ -340,7 +333,7 @@ func (locations *ValueLocations) AllocateRegistersLocation(
 ) *architecture.DataLocation {
 	dest := architecture.NewRegistersDataLocation(
 		name,
-		valueType.ByteSize(),
+		valueType,
 		registers)
 	locations.allocateRegistersLocation(dest)
 	return dest
@@ -386,7 +379,7 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 	argLocs := []*architecture.DataLocation{}
 	tempStack := []*architecture.DataLocation{}
 	for _, argType := range stackArgumentTypes {
-		loc := architecture.NewTempStackDataLocation(argType.ByteSize())
+		loc := architecture.NewTempStackDataLocation(argType)
 		loc.Offset = callTempSize
 
 		locations.allocated[loc] = nil
@@ -398,8 +391,7 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 
 	var returnLoc *architecture.DataLocation
 	if stackReturnType != nil {
-		returnLoc = architecture.NewTempStackDataLocation(
-			stackReturnType.ByteSize())
+		returnLoc = architecture.NewTempStackDataLocation(stackReturnType)
 		returnLoc.Offset = callTempSize
 
 		locations.allocated[returnLoc] = nil

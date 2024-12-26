@@ -2,10 +2,14 @@ package architecture
 
 import (
 	"fmt"
+
+	"github.com/pattyshack/chickadee/ast"
 )
 
 type DataLocation struct {
 	Name string
+
+	ast.Type
 
 	// XXX: Support register / stack overlay?
 	//
@@ -28,40 +32,43 @@ type DataLocation struct {
 
 func NewRegistersDataLocation(
 	name string,
-	byteSize int,
+	valType ast.Type,
 	registers []*Register,
 ) *DataLocation {
-	if len(registers) != NumRegisters(byteSize) {
+	if len(registers) != NumRegisters(valType) {
 		panic("should never happen")
 	}
 
 	return &DataLocation{
 		Name:        name,
+		Type:        valType,
 		Registers:   registers,
-		AlignedSize: AlignedSize(byteSize),
+		AlignedSize: AlignedSize(valType),
 	}
 }
 
 func NewFixedStackDataLocation(
 	name string,
-	byteSize int,
+	valType ast.Type,
 ) *DataLocation {
 	return &DataLocation{
 		Name:         name,
+		Type:         valType,
 		OnFixedStack: true,
 		OnTempStack:  false,
-		AlignedSize:  AlignedSize(byteSize),
+		AlignedSize:  AlignedSize(valType),
 	}
 }
 
 func NewTempStackDataLocation(
-	byteSize int,
+	valType ast.Type,
 ) *DataLocation {
 	return &DataLocation{
 		Name:         "",
+		Type:         valType,
 		OnFixedStack: false,
 		OnTempStack:  true,
-		AlignedSize:  AlignedSize(byteSize),
+		AlignedSize:  AlignedSize(valType),
 	}
 }
 
@@ -74,6 +81,7 @@ func (loc *DataLocation) Copy() *DataLocation {
 
 	return &DataLocation{
 		Name:         loc.Name,
+		Type:         loc.Type,
 		Registers:    registers,
 		OnFixedStack: loc.OnFixedStack,
 		OnTempStack:  loc.OnTempStack,
@@ -89,11 +97,12 @@ func (loc *DataLocation) String() string {
 	}
 	return fmt.Sprintf(
 		"Name: %s Registers: %v OnFixedStack: %v OnFixedStack: %v "+
-			"AlignedSize: %d Offset: %d",
+			"AlignedSize: %d Offset: %d Type: %s",
 		loc.Name,
 		registers,
 		loc.OnFixedStack,
 		loc.OnTempStack,
 		loc.AlignedSize,
-		loc.Offset)
+		loc.Offset,
+		loc.Type)
 }

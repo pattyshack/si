@@ -2,8 +2,6 @@ package ast
 
 import (
 	"github.com/pattyshack/gt/parseutil"
-
-	"github.com/pattyshack/chickadee/architecture"
 )
 
 type CallConvention string
@@ -65,7 +63,7 @@ type FunctionDefinition struct {
 
 	// Internal
 
-	CallConventionSpec *architecture.CallConvention
+	CallConventionSpec interface{} //*architecture.CallConvention
 
 	// Non-argument callee-saved registers are treated as pseudo/hidden
 	// parameters that are alive for the entire function execution, and are

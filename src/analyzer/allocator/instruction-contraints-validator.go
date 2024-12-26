@@ -129,7 +129,8 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 func (validator *InstructionConstraintsValidator) ValidateFunctionDefinition(
 	funcDef *ast.FunctionDefinition,
 ) {
-	constraints := funcDef.CallConventionSpec.CallConstraints
+	// TODO fix this
+	constraints := funcDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
 
 	// The fist constraint is call's function location, which is not applicable
 	// to the function definition.

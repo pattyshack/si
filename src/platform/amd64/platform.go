@@ -93,7 +93,8 @@ func (p Platform) InstructionConstraints(
 				return convention.CallConstraints
 			case *ast.GlobalLabelReference:
 				funcDef := value.Signature.(*ast.FunctionDefinition)
-				return funcDef.CallConventionSpec.CallConstraints
+				// TODO fix this
+				return funcDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
 			default: // immediate can't have func type
 				panic("This should never happen")
 			}
@@ -105,7 +106,8 @@ func (p Platform) InstructionConstraints(
 	case *ast.Terminal:
 		switch inst.Kind {
 		case ast.Ret:
-			return inst.ParentBlock().ParentFuncDef.CallConventionSpec.RetConstraints
+			// TODO: fix this
+			return inst.ParentBlock().ParentFuncDef.CallConventionSpec.(*architecture.CallConvention).RetConstraints
 		case ast.Exit:
 			// exit is replaced by syscall immediately after cfg initialization
 			panic("should never happen")

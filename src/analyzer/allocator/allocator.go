@@ -73,7 +73,8 @@ func (allocator *Allocator) initializeBlockStates() {
 }
 
 func (allocator *Allocator) initializeFuncDefDataLocations() {
-	convention := allocator.FuncDef.CallConventionSpec.CallConstraints
+	// TODO fix this
+	convention := allocator.FuncDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
 
 	if convention.Destination.RequireOnStack {
 		allocator.StackFrame.SetDestination(allocator.FuncDef.ReturnType)
@@ -98,7 +99,7 @@ func (allocator *Allocator) initializeFuncDefDataLocations() {
 
 			locations[param] = architecture.NewRegistersDataLocation(
 				param.Name,
-				param.Type.ByteSize(),
+				param.Type,
 				registers)
 		}
 	}

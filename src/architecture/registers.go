@@ -1,23 +1,11 @@
 package architecture
 
 const (
-	// Assumption: we only support 64 bit architecture.
-	RegisterByteSize = 8
-	AddressByteSize  = RegisterByteSize
-
 	// Internal labels for various stack/register data locations
 	PreviousFramePointer = "%previous-frame-pointer"
 	ReturnAddress        = "%return-address"
 	StackDestination     = "%stack-destination"
 )
-
-func NumRegisters(byteSize int) int {
-	return (byteSize + RegisterByteSize - 1) / RegisterByteSize
-}
-
-func AlignedSize(byteSize int) int {
-	return NumRegisters(byteSize) * RegisterByteSize
-}
 
 type Register struct {
 	Name string

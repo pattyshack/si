@@ -45,10 +45,10 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 	// NOTE: convention temporarily stores callee-saved parameters to pseudo
 	// sources in order to ensure the return value is always the first sources
 	// entry.  We now need to move these to their rightful places.
-	funcDef.CallConventionSpec.RetConstraints.Sources = append(
-		funcDef.CallConventionSpec.RetConstraints.Sources,
-		funcDef.CallConventionSpec.RetConstraints.PseudoSources...)
-	funcDef.CallConventionSpec.RetConstraints.PseudoSources = nil
+	convention.RetConstraints.Sources = append(
+		convention.RetConstraints.Sources,
+		convention.RetConstraints.PseudoSources...)
+	convention.RetConstraints.PseudoSources = nil
 
 	funcDef.PseudoParameters = generator.generatePseudoParameters(
 		convention,
