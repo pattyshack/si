@@ -49,6 +49,8 @@ type BlockState struct {
 	platform.Platform
 	*ast.Block
 
+	DebugMode bool
+
 	LiveIn  LiveSet
 	LiveOut LiveSet
 

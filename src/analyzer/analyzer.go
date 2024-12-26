@@ -78,18 +78,23 @@ func Analyze(
 				return
 			}
 
-			registerStackAllocator := allocator.NewAllocator(targetPlatform)
+			debugMode := true
+			registerStackAllocator := allocator.NewAllocator(
+				targetPlatform,
+				debugMode)
 			passes = [][]util.Pass[ast.SourceEntry]{
-				{
-					registerStackAllocator,
-				},
-				{
-					// these passes are only used for debugging the compiler
-					// implementation and should be removed or flag guarded once the
-					// compiler works.
-					allocator.Debug(registerStackAllocator),
-					allocator.ValidateInstructionConstraints(registerStackAllocator),
-				},
+				{registerStackAllocator},
+			}
+			if debugMode {
+				passes = append(
+					passes,
+					[]util.Pass[ast.SourceEntry]{
+						// these passes are only used for debugging the compiler
+						// implementation and should be removed or flag guarded once the
+						// compiler works.
+						allocator.Debug(registerStackAllocator),
+						allocator.ValidateInstructionConstraints(registerStackAllocator),
+					})
 			}
 
 			util.Process(entry, passes, shouldAbortBuild)

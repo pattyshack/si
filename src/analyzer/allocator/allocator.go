@@ -15,15 +15,21 @@ import (
 type Allocator struct {
 	platform.Platform
 
+	DebugMode bool
+
 	FuncDef     *ast.FunctionDefinition
 	BlockStates map[*ast.Block]*BlockState
 
 	*StackFrame
 }
 
-func NewAllocator(targetPlatform platform.Platform) *Allocator {
+func NewAllocator(
+	targetPlatform platform.Platform,
+	debugMode bool,
+) *Allocator {
 	return &Allocator{
 		Platform:    targetPlatform,
+		DebugMode:   debugMode,
 		BlockStates: map[*ast.Block]*BlockState{},
 		StackFrame:  NewStackFrame(),
 	}
@@ -54,10 +60,11 @@ func (allocator *Allocator) initializeBlockStates() {
 
 	for _, block := range allocator.FuncDef.Blocks {
 		state := &BlockState{
-			Platform: allocator.Platform,
-			Block:    block,
-			LiveIn:   analyzer.LiveIn[block],
-			LiveOut:  analyzer.LiveOut[block],
+			Platform:  allocator.Platform,
+			Block:     block,
+			DebugMode: allocator.DebugMode,
+			LiveIn:    analyzer.LiveIn[block],
+			LiveOut:   analyzer.LiveOut[block],
 		}
 		state.GenerateConstraints(allocator.Platform)
 
