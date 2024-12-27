@@ -16,7 +16,7 @@ type LiveRange struct {
 	Start int // first live distance (relative to beginning of current block)
 	End   int // last use distance, inclusive.
 
-	// NextUses are always at least one instruction ahead of NextInstIdx.
+	// NextUses are always at least one instruction ahead of CurrentInstIdx.
 	NextUses []int
 }
 
@@ -49,19 +49,21 @@ type BlockState struct {
 	platform.Platform
 	*ast.Block
 
+	*architecture.StackFrame
+
 	DebugMode bool
 
 	LiveIn  LiveSet
 	LiveOut LiveSet
 
-	NextInstIdx int
+	CurrentInstIdx int
 
 	// Note: unused definitions are not included in LiveRanges
 	LiveRanges map[*ast.VariableDefinition]*LiveRange
 
 	Constraints map[ast.Instruction]*architecture.InstructionConstraints
 
-	// Preferences are always at least one instruction ahead of NextInstIdx.
+	// Preferences are always at least one instruction ahead of CurrentInstIdx.
 	Preferences map[*architecture.Register][]PreferredAllocation
 
 	// Where data are located immediately prior to executing the block.
@@ -71,6 +73,10 @@ type BlockState struct {
 	// Where data are located immediately after the block executed.
 	// Every entry maps one-to-one to the corresponding live in set.
 	LocationOut LocationSet
+
+	*ValueLocations
+
+	Operations []architecture.Operation
 }
 
 func (state *BlockState) GenerateConstraints(targetPlatform platform.Platform) {
@@ -288,4 +294,100 @@ func (state *BlockState) maybeAddPreference(
 			Def:      def,
 			ChunkIdx: chunkIdx,
 		})
+}
+
+func (state *BlockState) InitializeValueLocations() {
+	state.ValueLocations = NewValueLocations(
+		state.Platform,
+		state.StackFrame,
+		state.LocationIn)
+}
+
+// Log instruction execution without advancing CurrentInstIdx since the
+// instruction may have other tear down operations.
+func (state *BlockState) ExecuteInstruction(
+	srcs []*architecture.DataLocation,
+	dest *architecture.DataLocation,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewExecuteInstructionOp(
+			state.Instructions[state.CurrentInstIdx],
+			srcs,
+			dest))
+}
+
+func (state *BlockState) PushStackFrame() {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewPushStackFrameOp(state.StackFrame))
+}
+
+func (state *BlockState) PopStackFrame() {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewPopStackFrameOp(state.StackFrame))
+}
+
+func (state *BlockState) MoveRegister(
+	src *architecture.Register,
+	dest *architecture.Register,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewMoveRegisterOp(src, dest))
+}
+
+func (state *BlockState) CopyLocation(
+	src *architecture.DataLocation,
+	dest *architecture.DataLocation,
+	temp *architecture.Register,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewCopyLocationOp(src, dest, temp))
+}
+
+func (state *BlockState) SetConstantValue(
+	value ast.Value,
+	dest *architecture.DataLocation,
+	temp *architecture.Register,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewSetConstantValueOp(value, dest, temp))
+}
+
+func (state *BlockState) InitializeZeros(
+	dest *architecture.DataLocation,
+	temp *architecture.Register,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewInitializeZerosOp(dest, temp))
+}
+
+func (state *BlockState) AllocateLocation(
+	loc *architecture.DataLocation,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewAllocateLocationOp(loc))
+}
+
+func (state *BlockState) FreeLocation(
+	loc *architecture.DataLocation,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewFreeLocationOp(loc))
+}
+
+func (state *BlockState) AssignLocationToDefinition(
+	loc *architecture.DataLocation,
+	def *ast.VariableDefinition,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewAssignLocationToDefinitionOp(loc, def))
 }

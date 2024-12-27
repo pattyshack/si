@@ -60,11 +60,12 @@ func (allocator *Allocator) initializeBlockStates() {
 
 	for _, block := range allocator.FuncDef.Blocks {
 		state := &BlockState{
-			Platform:  allocator.Platform,
-			Block:     block,
-			DebugMode: allocator.DebugMode,
-			LiveIn:    analyzer.LiveIn[block],
-			LiveOut:   analyzer.LiveOut[block],
+			Platform:   allocator.Platform,
+			Block:      block,
+			StackFrame: allocator.StackFrame,
+			DebugMode:  allocator.DebugMode,
+			LiveIn:     analyzer.LiveIn[block],
+			LiveOut:    analyzer.LiveOut[block],
 		}
 		state.GenerateConstraints(allocator.Platform)
 
