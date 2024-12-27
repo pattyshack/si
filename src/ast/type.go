@@ -525,7 +525,7 @@ func NewFunctionType(
 	convention CallConventionName,
 	retType Type,
 	paramTypes []Type,
-) Type {
+) *FunctionType {
 	return &FunctionType{
 		StartEndPos:        pos,
 		CallConventionName: convention,

@@ -8,16 +8,20 @@ import (
 	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
+	"github.com/pattyshack/chickadee/platform"
 )
 
 type InstructionConstraintsValidator struct {
+	platform.Platform
 	*Allocator
 }
 
 func ValidateInstructionConstraints(
+	targetPlatform platform.Platform,
 	allocator *Allocator,
 ) util.Pass[ast.SourceEntry] {
 	return &InstructionConstraintsValidator{
+		Platform:  targetPlatform,
 		Allocator: allocator,
 	}
 }
@@ -129,8 +133,7 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 func (validator *InstructionConstraintsValidator) ValidateFunctionDefinition(
 	funcDef *ast.FunctionDefinition,
 ) {
-	// TODO fix this
-	constraints := funcDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
+	constraints := validator.CallConvention(funcDef.FuncType).CallConstraints
 
 	// The fist constraint is call's function location, which is not applicable
 	// to the function definition.

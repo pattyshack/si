@@ -93,7 +93,9 @@ func Analyze(
 						// implementation and should be removed or flag guarded once the
 						// compiler works.
 						allocator.Debug(registerStackAllocator),
-						allocator.ValidateInstructionConstraints(registerStackAllocator),
+						allocator.ValidateInstructionConstraints(
+							targetPlatform,
+							registerStackAllocator),
 					})
 			}
 

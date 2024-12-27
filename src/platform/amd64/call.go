@@ -12,37 +12,30 @@ const (
 	registerSize = 8
 )
 
-func NewCallSpec(convention ast.CallConventionName) platform.CallSpec {
-	switch convention {
-	case ast.InternalCallConvention:
-		return internalCallSpec{
+func newCallSpecs() *platform.CallSpecs {
+	return platform.NewCallSpecs(
+		internalCallSpec{
 			name:                  ast.InternalCallConvention,
 			NumGeneral:            9,
 			NumFloat:              8,
 			NumCallerSavedGeneral: 9,
 			NumCallerSavedFloat:   8,
-		}
-	case ast.InternalCalleeSavedCallConvention:
-		return internalCallSpec{
+		},
+		internalCallSpec{
 			name:                  ast.InternalCalleeSavedCallConvention,
 			NumGeneral:            14,
 			NumFloat:              16,
 			NumCallerSavedGeneral: 14,
 			NumCallerSavedFloat:   16,
-		}
-	case ast.InternalCallerSavedCallConvention:
-		return internalCallSpec{
+		},
+		internalCallSpec{
 			name:                  ast.InternalCallerSavedCallConvention,
 			NumGeneral:            14,
 			NumFloat:              16,
 			NumCallerSavedGeneral: 1,
 			NumCallerSavedFloat:   0,
-		}
-	case ast.SystemVLiteCallConvention:
-		return systemVLiteCallSpec{}
-	default: // Error emitted by ast syntax validator
-		return internalCallSpec{}
-	}
+		},
+		systemVLiteCallSpec{})
 }
 
 type internalCallSpec struct {

@@ -11,12 +11,15 @@ import (
 type Platform struct {
 	os          platform.OperatingSystemName
 	sysCallSpec platform.SysCallSpec
+
+	*platform.CallSpecs
 }
 
 func NewPlatform(os platform.OperatingSystemName) platform.Platform {
 	return Platform{
 		os:          os,
 		sysCallSpec: newSysCallSpec(os),
+		CallSpecs:   newCallSpecs(),
 	}
 }
 
@@ -26,12 +29,6 @@ func (Platform) ArchitectureName() platform.ArchitectureName {
 
 func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 	return p.os
-}
-
-func (Platform) CallSpec(
-	convention ast.CallConventionName,
-) platform.CallSpec {
-	return NewCallSpec(convention)
 }
 
 func (p Platform) SysCallSpec() platform.SysCallSpec {
@@ -85,19 +82,8 @@ func (p Platform) InstructionConstraints(
 	case *ast.FuncCall:
 		switch inst.Kind {
 		case ast.Call:
-			switch value := inst.Func.(type) {
-			case *ast.VariableReference:
-				funcType := value.UseDef.Type.(*ast.FunctionType)
-				callSpec := p.CallSpec(funcType.CallConventionName)
-				convention := callSpec.CallConvention(funcType)
-				return convention.CallConstraints
-			case *ast.GlobalLabelReference:
-				funcDef := value.Signature.(*ast.FunctionDefinition)
-				// TODO fix this
-				return funcDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
-			default: // immediate can't have func type
-				panic("This should never happen")
-			}
+			funcType := inst.Func.Type().(*ast.FunctionType)
+			return p.CallConvention(funcType).CallConstraints
 		case ast.SysCall:
 			return newSysCallConstraints(p.os, inst)
 		default:
@@ -106,8 +92,8 @@ func (p Platform) InstructionConstraints(
 	case *ast.Terminal:
 		switch inst.Kind {
 		case ast.Ret:
-			// TODO: fix this
-			return inst.ParentBlock().ParentFuncDef.CallConventionSpec.(*architecture.CallConvention).RetConstraints
+			funcType := inst.ParentBlock().ParentFuncDef.FuncType
+			return p.CallConvention(funcType).RetConstraints
 		case ast.Exit:
 			// exit is replaced by syscall immediately after cfg initialization
 			panic("should never happen")

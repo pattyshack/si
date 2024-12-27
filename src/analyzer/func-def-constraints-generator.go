@@ -34,12 +34,13 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 	}
 
 	callSpec := generator.platform.CallSpec(funcDef.CallConventionName)
-	if generator.failCallTypeRestriction(funcDef, callSpec) {
+	funcType := generator.validateFunctionType(funcDef, callSpec)
+	if funcType == nil {
 		return
 	}
 
-	convention := callSpec.CallConvention(funcDef.Type().(*ast.FunctionType))
-	funcDef.CallConventionSpec = convention
+	funcDef.FuncType = funcType
+	convention := callSpec.CallConvention(funcType)
 
 	// NOTE: convention temporarily stores callee-saved parameters to pseudo
 	// sources in order to ensure the return value is always the first sources
@@ -150,12 +151,13 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 	return pseudoParameters
 }
 
-func (generator *funcDefConstraintsGenerator) failCallTypeRestriction(
+func (generator *funcDefConstraintsGenerator) validateFunctionType(
 	funcDef *ast.FunctionDefinition,
 	callSpec platform.CallSpec,
-) bool {
+) *ast.FunctionType {
 	hasCallConventionError := false
 
+	paramTypes := []ast.Type{}
 	for _, def := range funcDef.Parameters {
 		if def.Type == nil {
 			hasCallConventionError = true
@@ -170,6 +172,8 @@ func (generator *funcDefConstraintsGenerator) failCallTypeRestriction(
 				funcDef.CallConventionName,
 				def.Type)
 		}
+
+		paramTypes = append(paramTypes, def.Type)
 	}
 
 	if !callSpec.IsValidReturnType(funcDef.ReturnType) {
@@ -181,5 +185,13 @@ func (generator *funcDefConstraintsGenerator) failCallTypeRestriction(
 			funcDef.ReturnType)
 	}
 
-	return hasCallConventionError
+	if hasCallConventionError {
+		return nil
+	}
+
+	return ast.NewFunctionType(
+		funcDef.StartEnd(),
+		funcDef.CallConventionName,
+		funcDef.ReturnType,
+		paramTypes)
 }

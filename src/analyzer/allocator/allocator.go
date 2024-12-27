@@ -73,8 +73,8 @@ func (allocator *Allocator) initializeBlockStates() {
 }
 
 func (allocator *Allocator) initializeFuncDefDataLocations() {
-	// TODO fix this
-	convention := allocator.FuncDef.CallConventionSpec.(*architecture.CallConvention).CallConstraints
+	spec := allocator.CallConvention(allocator.FuncDef.FuncType)
+	convention := spec.CallConstraints
 
 	if convention.Destination.RequireOnStack {
 		allocator.StackFrame.SetDestination(allocator.FuncDef.ReturnType)
