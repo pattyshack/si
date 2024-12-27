@@ -38,8 +38,7 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	convention := callSpec.CallRetConstraints(
-		funcDef.Type().(ast.FunctionType))
+	convention := callSpec.CallRetConstraints(funcDef.Type().(*ast.FunctionType))
 	funcDef.CallConventionSpec = convention
 
 	// NOTE: convention temporarily stores callee-saved parameters to pseudo

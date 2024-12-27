@@ -80,7 +80,7 @@ type internalCallSpec struct {
 // The same set of NumGeneral general registers and NumFloat float registers
 // are usable for the return value.
 func (spec internalCallSpec) CallRetConstraints(
-	funcType ast.FunctionType,
+	funcType *ast.FunctionType,
 ) *architecture.CallConvention {
 	convention := architecture.NewCallConvention(true, RegisterSet.General[1])
 	convention.SetFramePointerRegister(RegisterSet.General[0])
@@ -210,7 +210,7 @@ type systemVLiteCallSpec struct {
 }
 
 func (systemVLiteCallSpec) CallRetConstraints(
-	funcType ast.FunctionType,
+	funcType *ast.FunctionType,
 ) *architecture.CallConvention {
 	convention := architecture.NewCallConvention(true, r11)
 	convention.SetFramePointerRegister(rbp) // callee-saved

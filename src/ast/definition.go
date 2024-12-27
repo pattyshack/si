@@ -63,6 +63,8 @@ type FunctionDefinition struct {
 
 	// Internal
 
+	FuncType Type
+
 	CallConventionSpec interface{} //*architecture.CallConvention
 
 	// Non-argument callee-saved registers are treated as pseudo/hidden
@@ -143,17 +145,19 @@ func (def *FunctionDefinition) Validate(emitter *parseutil.Emitter) {
 }
 
 func (def *FunctionDefinition) Type() Type {
-	paramTypes := []Type{}
-	for _, param := range def.Parameters {
-		paramTypes = append(paramTypes, param.Type)
-	}
+	if def.FuncType == nil {
+		paramTypes := []Type{}
+		for _, param := range def.Parameters {
+			paramTypes = append(paramTypes, param.Type)
+		}
 
-	return FunctionType{
-		StartEndPos:    def.StartEndPos,
-		CallConvention: def.CallConvention,
-		ReturnType:     def.ReturnType,
-		ParameterTypes: paramTypes,
+		def.FuncType = NewFunctionType(
+			def.StartEndPos,
+			def.CallConvention,
+			def.ReturnType,
+			paramTypes)
 	}
+	return def.FuncType
 }
 
 // A straight-line / basic block

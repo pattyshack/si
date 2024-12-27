@@ -87,7 +87,7 @@ func (p Platform) InstructionConstraints(
 		case ast.Call:
 			switch value := inst.Func.(type) {
 			case *ast.VariableReference:
-				funcType := value.UseDef.Type.(ast.FunctionType)
+				funcType := value.UseDef.Type.(*ast.FunctionType)
 				callSpec := p.CallSpec(funcType.CallConvention)
 				convention := callSpec.CallRetConstraints(funcType)
 				return convention.CallConstraints

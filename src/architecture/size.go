@@ -18,15 +18,15 @@ func ByteSize(valType ast.Type) int {
 	}
 
 	switch valueType := valType.(type) {
-	case ast.ErrorType:
+	case *ast.ErrorType:
 		panic("error type has no size")
-	case ast.PositiveIntLiteralType:
+	case *ast.PositiveIntLiteralType:
 		panic("positive int literal type has no size")
-	case ast.NegativeIntLiteralType:
+	case *ast.NegativeIntLiteralType:
 		panic("negative int literal type has no size")
-	case ast.FloatLiteralType:
+	case *ast.FloatLiteralType:
 		panic("float literal type has no size")
-	case ast.SignedIntType:
+	case *ast.SignedIntType:
 		switch valueType.Kind {
 		case ast.I8:
 			return 1
@@ -39,7 +39,7 @@ func ByteSize(valType ast.Type) int {
 		default:
 			panic("should never reach here")
 		}
-	case ast.UnsignedIntType:
+	case *ast.UnsignedIntType:
 		switch valueType.Kind {
 		case ast.U8:
 			return 1
@@ -52,7 +52,7 @@ func ByteSize(valType ast.Type) int {
 		default:
 			panic("should never reach here")
 		}
-	case ast.FloatType:
+	case *ast.FloatType:
 		switch valueType.Kind {
 		case ast.F32:
 			return 4
@@ -61,7 +61,7 @@ func ByteSize(valType ast.Type) int {
 		default:
 			panic("should never reach here")
 		}
-	case ast.FunctionType:
+	case *ast.FunctionType:
 		return AddressByteSize
 	default:
 		panic("unhandled type")

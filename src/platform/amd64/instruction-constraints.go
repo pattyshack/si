@@ -29,23 +29,23 @@ func getRegisterClasses(
 	valueType ast.Type,
 ) []bool {
 	switch valueType.(type) {
-	case ast.ErrorType:
+	case *ast.ErrorType:
 		panic("should never happen")
-	case ast.PositiveIntLiteralType:
+	case *ast.PositiveIntLiteralType:
 		panic("should never happen")
-	case ast.NegativeIntLiteralType:
+	case *ast.NegativeIntLiteralType:
 		panic("should never happen")
-	case ast.FloatLiteralType:
+	case *ast.FloatLiteralType:
 		panic("should never happen")
 
-	case ast.SignedIntType:
+	case *ast.SignedIntType:
 		return []bool{false}
-	case ast.UnsignedIntType:
+	case *ast.UnsignedIntType:
 		return []bool{false}
-	case ast.FunctionType:
+	case *ast.FunctionType:
 		return []bool{false}
 
-	case ast.FloatType:
+	case *ast.FloatType:
 		return []bool{true}
 
 	default:

@@ -191,21 +191,21 @@ func (printer *treePrinter) Enter(n Node) {
 			len(node.CalleeSavedSources),
 			"RetVal=")
 
-	case ErrorType:
+	case *ErrorType:
 		printer.write("[ErrorType]")
-	case PositiveIntLiteralType:
+	case *PositiveIntLiteralType:
 		printer.write("[PositiveIntLiteralType]")
-	case NegativeIntLiteralType:
+	case *NegativeIntLiteralType:
 		printer.write("[NegativeIntLiteralType]")
-	case FloatLiteralType:
+	case *FloatLiteralType:
 		printer.write("[FloatLiteralType]")
-	case SignedIntType:
+	case *SignedIntType:
 		printer.write("[SignedIntType: Kind=%s]", node.Kind)
-	case UnsignedIntType:
+	case *UnsignedIntType:
 		printer.write("[UnsignedIntType: Kind=%s]", node.Kind)
-	case FloatType:
+	case *FloatType:
 		printer.write("[FloatType: Kind=%s]", node.Kind)
-	case FunctionType:
+	case *FunctionType:
 		printer.list(
 			fmt.Sprintf("[FunctionType CallConvention=%s", node.CallConvention),
 			"Parameter",

@@ -320,13 +320,9 @@ func (imm *IntImmediate) Walk(visitor Visitor) {
 
 func (imm *IntImmediate) Type() Type {
 	if imm.IsNegative {
-		return NegativeIntLiteralType{
-			StartEndPos: imm.StartEndPos,
-		}
+		return NewNegativeIntLiteralType(imm.StartEndPos)
 	} else {
-		return PositiveIntLiteralType{
-			StartEndPos: imm.StartEndPos,
-		}
+		return NewPositiveIntLiteralType(imm.StartEndPos)
 	}
 }
 
@@ -364,7 +360,5 @@ func (imm *FloatImmediate) Walk(visitor Visitor) {
 }
 
 func (imm *FloatImmediate) Type() Type {
-	return FloatLiteralType{
-		StartEndPos: imm.StartEndPos,
-	}
+	return NewFloatLiteralType(imm.StartEndPos)
 }

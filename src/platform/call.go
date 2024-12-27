@@ -18,7 +18,7 @@ type CallSpec interface {
 
 	// Used by both call and ret instructions.
 	CallRetConstraints(
-		ast.FunctionType,
+		*ast.FunctionType,
 	) *architecture.CallConvention
 }
 

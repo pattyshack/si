@@ -267,7 +267,7 @@ func (checker *typeChecker) evaluateCall(
 		return fType
 	}
 
-	funcType, ok := fType.(ast.FunctionType)
+	funcType, ok := fType.(*ast.FunctionType)
 	if !ok {
 		checker.Emit(
 			fType.Loc(),
@@ -398,21 +398,21 @@ func (checker *typeChecker) processDestination(
 ) {
 	if dest.Type == nil {
 		switch evalType.(type) {
-		case ast.PositiveIntLiteralType:
+		case *ast.PositiveIntLiteralType:
 			checker.Emit(
 				dest.Loc(),
 				"cannot infer register type from int immediate, "+
 					"destination (%s) must be explicitly typed",
 				dest.Name)
 			dest.Type = ast.NewErrorType(evalType.StartEnd())
-		case ast.NegativeIntLiteralType:
+		case *ast.NegativeIntLiteralType:
 			checker.Emit(
 				dest.Loc(),
 				"cannot infer register type from int immediate, "+
 					"destination (%s) must be explicitly typed",
 				dest.Name)
 			dest.Type = ast.NewErrorType(evalType.StartEnd())
-		case ast.FloatLiteralType:
+		case *ast.FloatLiteralType:
 			checker.Emit(
 				dest.Loc(),
 				"cannot infer register type from float immediate, "+
@@ -426,7 +426,7 @@ func (checker *typeChecker) processDestination(
 	}
 
 	switch evalType.(type) {
-	case ast.ErrorType:
+	case *ast.ErrorType:
 	// Do nothing.  Assume definition's type is valid
 	default:
 		if !evalType.IsSubTypeOf(dest.Type) {
@@ -444,13 +444,13 @@ func (checker *typeChecker) checkRedefinition(
 	dest *ast.VariableDefinition,
 ) {
 	switch dest.Type.(type) {
-	case ast.PositiveIntLiteralType:
+	case *ast.PositiveIntLiteralType:
 		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))
-	case ast.NegativeIntLiteralType:
+	case *ast.NegativeIntLiteralType:
 		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))
-	case ast.FloatLiteralType:
+	case *ast.FloatLiteralType:
 		panic(fmt.Sprintf("should never happen (%s)", dest.Loc()))
-	case ast.ErrorType:
+	case *ast.ErrorType:
 		return
 	}
 
