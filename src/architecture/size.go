@@ -8,6 +8,13 @@ const (
 	// Assumption: we only support 64 bit architecture.
 	RegisterByteSize = 8
 	AddressByteSize  = RegisterByteSize
+
+	// XXX: maybe this belongs to call/syscall convention?
+	//
+	// e.g., System V amd64 requires 16 (=2*RegisterByteSize) byte aligned
+	// stack frames (%rsp before calling any funcion must have the form
+	// 0x???????????????0).
+	StackFrameAlignment = 2 * RegisterByteSize
 )
 
 func ByteSize(valType ast.Type) int {

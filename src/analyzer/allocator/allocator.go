@@ -20,7 +20,7 @@ type Allocator struct {
 	FuncDef     *ast.FunctionDefinition
 	BlockStates map[*ast.Block]*BlockState
 
-	*StackFrame
+	*architecture.StackFrame
 }
 
 func NewAllocator(
@@ -31,7 +31,7 @@ func NewAllocator(
 		Platform:    targetPlatform,
 		DebugMode:   debugMode,
 		BlockStates: map[*ast.Block]*BlockState{},
-		StackFrame:  NewStackFrame(),
+		StackFrame:  architecture.NewStackFrame(),
 	}
 }
 
@@ -51,7 +51,7 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 		allocator.processBlock(allocator.BlockStates[block])
 	}
 
-	allocator.FinalizeFrame(allocator.Platform)
+	allocator.FinalizeFrame()
 }
 
 func (allocator *Allocator) initializeBlockStates() {

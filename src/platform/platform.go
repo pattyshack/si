@@ -28,11 +28,4 @@ type Platform interface {
 	InstructionConstraints(
 		ast.Instruction,
 	) *architecture.InstructionConstraints
-
-	// XXX: maybe this belongs to call/syscall convention?
-	//
-	// e.g., System V amd64 requires 16 (=2*RegisterByteSize) byte aligned
-	// stack frames (%rsp before calling any funcion must have the form
-	// 0x???????????????0).
-	StackFrameAlignment() int // in byte
 }
