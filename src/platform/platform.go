@@ -18,7 +18,7 @@ type Platform interface {
 	ArchitectureName() ArchitectureName
 	OperatingSystemName() OperatingSystemName
 
-	CallSpec(ast.CallConvention) CallSpec
+	CallSpec(ast.CallConventionName) CallSpec
 
 	SysCallSpec() SysCallSpec
 

@@ -12,10 +12,11 @@ const (
 	registerSize = 8
 )
 
-func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
+func NewCallSpec(convention ast.CallConventionName) platform.CallSpec {
 	switch convention {
 	case ast.InternalCallConvention:
 		return internalCallSpec{
+			name:                  ast.InternalCallConvention,
 			NumGeneral:            9,
 			NumFloat:              8,
 			NumCallerSavedGeneral: 9,
@@ -23,6 +24,7 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 		}
 	case ast.InternalCalleeSavedCallConvention:
 		return internalCallSpec{
+			name:                  ast.InternalCalleeSavedCallConvention,
 			NumGeneral:            14,
 			NumFloat:              16,
 			NumCallerSavedGeneral: 14,
@@ -30,6 +32,7 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 		}
 	case ast.InternalCallerSavedCallConvention:
 		return internalCallSpec{
+			name:                  ast.InternalCallerSavedCallConvention,
 			NumGeneral:            14,
 			NumFloat:              16,
 			NumCallerSavedGeneral: 1,
@@ -43,6 +46,8 @@ func NewCallSpec(convention ast.CallConvention) platform.CallSpec {
 }
 
 type internalCallSpec struct {
+	name ast.CallConventionName
+
 	platform.InternalCallTypeSpec
 
 	// The number of general registers used for sources and destination, not
@@ -69,6 +74,10 @@ type internalCallSpec struct {
 	NumCallerSavedFloat int
 }
 
+func (spec internalCallSpec) Name() ast.CallConventionName {
+	return spec.name
+}
+
 // The first general register is always used for frame pointer (callee-saved).
 //
 // The second general register is always used for function location value.
@@ -79,7 +88,7 @@ type internalCallSpec struct {
 //
 // The same set of NumGeneral general registers and NumFloat float registers
 // are usable for the return value.
-func (spec internalCallSpec) CallRetConstraints(
+func (spec internalCallSpec) CallConvention(
 	funcType *ast.FunctionType,
 ) *architecture.CallConvention {
 	convention := architecture.NewCallConvention(true, RegisterSet.General[1])
@@ -209,7 +218,11 @@ type systemVLiteCallSpec struct {
 	platform.SystemVLiteCallTypeSpec
 }
 
-func (systemVLiteCallSpec) CallRetConstraints(
+func (spec systemVLiteCallSpec) Name() ast.CallConventionName {
+	return ast.SystemVLiteCallConvention
+}
+
+func (systemVLiteCallSpec) CallConvention(
 	funcType *ast.FunctionType,
 ) *architecture.CallConvention {
 	convention := architecture.NewCallConvention(true, r11)

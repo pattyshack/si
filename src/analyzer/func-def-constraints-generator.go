@@ -33,12 +33,12 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 		return
 	}
 
-	callSpec := generator.platform.CallSpec(funcDef.CallConvention)
+	callSpec := generator.platform.CallSpec(funcDef.CallConventionName)
 	if generator.failCallTypeRestriction(funcDef, callSpec) {
 		return
 	}
 
-	convention := callSpec.CallRetConstraints(funcDef.Type().(*ast.FunctionType))
+	convention := callSpec.CallConvention(funcDef.Type().(*ast.FunctionType))
 	funcDef.CallConventionSpec = convention
 
 	// NOTE: convention temporarily stores callee-saved parameters to pseudo
@@ -167,7 +167,7 @@ func (generator *funcDefConstraintsGenerator) failCallTypeRestriction(
 			generator.Emit(
 				def.Type.Loc(),
 				"%s call convention does not support %s argument type",
-				funcDef.CallConvention,
+				funcDef.CallConventionName,
 				def.Type)
 		}
 	}
@@ -177,7 +177,7 @@ func (generator *funcDefConstraintsGenerator) failCallTypeRestriction(
 		generator.Emit(
 			funcDef.ReturnType.Loc(),
 			"%s call convention does not support %s return type",
-			funcDef.CallConvention,
+			funcDef.CallConventionName,
 			funcDef.ReturnType)
 	}
 

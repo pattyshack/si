@@ -14,10 +14,12 @@ type CallTypeSpec interface {
 }
 
 type CallSpec interface {
+	Name() ast.CallConventionName
+
 	CallTypeSpec
 
 	// Used by both call and ret instructions.
-	CallRetConstraints(
+	CallConvention(
 		*ast.FunctionType,
 	) *architecture.CallConvention
 }

@@ -4,7 +4,7 @@ import (
 	"github.com/pattyshack/gt/parseutil"
 )
 
-type CallConvention string
+type CallConventionName string
 
 const (
 	DefaultCallConvention = InternalCallConvention
@@ -14,14 +14,16 @@ const (
 	// type	classification/splitting, vararg, etc.).  We'll just pick something
 	// simple to implement for now.  Note that the internal/default convention
 	// is unstable.
-	InternalCallConvention = CallConvention("internal")
+	InternalCallConvention = CallConventionName("internal")
 
 	// All except the first register are callee saved.  The return type is
 	// limited to the first register (and stack).  Mainly used for testing.
-	InternalCalleeSavedCallConvention = CallConvention("internal-callee-saved")
+	InternalCalleeSavedCallConvention = CallConventionName(
+		"internal-callee-saved")
 
 	// All registers are caller saved.  Mainly used for testing.
-	InternalCallerSavedCallConvention = CallConvention("internal-caller-saved")
+	InternalCallerSavedCallConvention = CallConventionName(
+		"internal-caller-saved")
 
 	// This call convention implements a subset of the SystemV ABI; specifically,
 	// it only supports primitive argument and return types (ints, floats and
@@ -33,10 +35,10 @@ const (
 	// - aggregate type as argument / return value
 	// - c++ conventions
 	// - vararg
-	SystemVLiteCallConvention = CallConvention("SystemV-lite")
+	SystemVLiteCallConvention = CallConventionName("SystemV-lite")
 )
 
-func (call CallConvention) isValid() bool {
+func (call CallConventionName) isValid() bool {
 	switch call {
 	case InternalCallConvention,
 		InternalCalleeSavedCallConvention,
@@ -54,7 +56,7 @@ type FunctionDefinition struct {
 	parseutil.StartEndPos
 
 	// TODO: add option to specify call convention via lr grammar
-	CallConvention
+	CallConventionName
 
 	Label      string
 	Parameters []*VariableDefinition
@@ -109,11 +111,11 @@ func (def *FunctionDefinition) Validate(emitter *parseutil.Emitter) {
 		emitter.Emit(def.Loc(), "empty function definition label string")
 	}
 
-	if !def.CallConvention.isValid() {
+	if !def.CallConventionName.isValid() {
 		emitter.Emit(
 			def.Loc(),
 			"unsupported call convention (%s)",
-			def.CallConvention)
+			def.CallConventionName)
 	}
 
 	if len(def.Blocks) == 0 {
@@ -153,7 +155,7 @@ func (def *FunctionDefinition) Type() Type {
 
 		def.FuncType = NewFunctionType(
 			def.StartEndPos,
-			def.CallConvention,
+			def.CallConventionName,
 			def.ReturnType,
 			paramTypes)
 	}

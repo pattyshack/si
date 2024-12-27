@@ -29,10 +29,10 @@ func (Reducer) FuncToDefinition(
 	return &ast.FunctionDefinition{
 		StartEndPos: parseutil.NewStartEndPos(define.Loc(), lbrace.End()),
 		// TODO: make call convention configurable
-		CallConvention: ast.DefaultCallConvention,
-		Label:          label.Label,
-		Parameters:     parameters,
-		ReturnType:     retType,
+		CallConventionName: ast.DefaultCallConvention,
+		Label:              label.Label,
+		Parameters:         parameters,
+		ReturnType:         retType,
 	}, nil
 }
 

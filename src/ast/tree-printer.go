@@ -207,16 +207,18 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.write("[FloatType: Kind=%s]", node.Kind)
 	case *FunctionType:
 		printer.list(
-			fmt.Sprintf("[FunctionType CallConvention=%s", node.CallConvention),
+			fmt.Sprintf(
+				"[FunctionType CallConventionName=%s",
+				node.CallConventionName),
 			"Parameter",
 			len(node.ParameterTypes),
 			"ReturnType=")
 
 	case *FunctionDefinition:
 		printer.write(
-			"[FunctionDefinition: Label=%s CallConvention=%s",
+			"[FunctionDefinition: Label=%s CallConventionName=%s",
 			node.Label,
-			node.CallConvention)
+			node.CallConventionName)
 		labels := []string{}
 		for idx, _ := range node.Parameters {
 			labels = append(labels, fmt.Sprintf("Parameter%d=", idx))

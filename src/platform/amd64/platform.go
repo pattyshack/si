@@ -29,7 +29,7 @@ func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 }
 
 func (Platform) CallSpec(
-	convention ast.CallConvention,
+	convention ast.CallConventionName,
 ) platform.CallSpec {
 	return NewCallSpec(convention)
 }
@@ -88,8 +88,8 @@ func (p Platform) InstructionConstraints(
 			switch value := inst.Func.(type) {
 			case *ast.VariableReference:
 				funcType := value.UseDef.Type.(*ast.FunctionType)
-				callSpec := p.CallSpec(funcType.CallConvention)
-				convention := callSpec.CallRetConstraints(funcType)
+				callSpec := p.CallSpec(funcType.CallConventionName)
+				convention := callSpec.CallConvention(funcType)
 				return convention.CallConstraints
 			case *ast.GlobalLabelReference:
 				funcDef := value.Signature.(*ast.FunctionDefinition)
