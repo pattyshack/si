@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"strconv"
+	"fmt"
 
 	"github.com/pattyshack/gt/parseutil"
 
@@ -29,12 +29,17 @@ func (initializer *controlFlowGraphInitializer) Process(
 		return
 	}
 
+	nextId := 0
 	labelled := map[string]*ast.Block{}
 	names := map[string]struct{}{}
 	for _, block := range def.Blocks {
 		if block.Label != "" {
 			labelled[block.Label] = block
 			names[block.Label] = struct{}{}
+		} else {
+			// Add labels for internal debugging purpose
+			block.Label = fmt.Sprintf(":unlabelled-block-%d", nextId)
+			nextId++
 		}
 	}
 
@@ -94,25 +99,6 @@ func (initializer *controlFlowGraphInitializer) Process(
 	}
 
 	initializer.checkForUnreachableBlocks(def)
-
-	// Add labels for internal debugging purpose
-	idx := 0
-	for _, block := range def.Blocks {
-		if block.Label != "" {
-			continue
-		}
-
-		for {
-			label := ":" + strconv.Itoa(idx)
-			idx++
-
-			_, ok := names[label]
-			if !ok {
-				block.Label = label
-				break
-			}
-		}
-	}
 }
 
 func (initializer *controlFlowGraphInitializer) checkForUnreachableBlocks(

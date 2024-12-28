@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/pattyshack/gt/parseutil"
 )
 
@@ -188,6 +190,10 @@ func (block *Block) Walk(visitor Visitor) {
 }
 
 func (block *Block) Validate(emitter *parseutil.Emitter) {
+	if strings.HasPrefix(block.Label, ":") {
+		emitter.Emit(block.Loc(), ":-prefixed label is reserved for internal use")
+	}
+
 	if len(block.Instructions) == 0 {
 		emitter.Emit(block.Loc(), "block must have at least one instruction")
 		return

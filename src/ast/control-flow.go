@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/pattyshack/gt/parseutil"
 )
 
@@ -56,6 +58,10 @@ func (jump *Jump) Walk(visitor Visitor) {
 }
 
 func (jump *Jump) Validate(emitter *parseutil.Emitter) {
+	if strings.HasPrefix(jump.Label, ":") {
+		emitter.Emit(jump.Loc(), ":-prefixed label is reserved for internal use")
+	}
+
 	if jump.Kind != Jmp {
 		emitter.Emit(
 			jump.Loc(),
@@ -121,6 +127,10 @@ func (jump *ConditionalJump) Walk(visitor Visitor) {
 }
 
 func (jump *ConditionalJump) Validate(emitter *parseutil.Emitter) {
+	if strings.HasPrefix(jump.Label, ":") {
+		emitter.Emit(jump.Loc(), ":-prefixed label is reserved for internal use")
+	}
+
 	switch jump.Kind {
 	case Jeq, Jne, Jlt, Jge: // ok
 	default:

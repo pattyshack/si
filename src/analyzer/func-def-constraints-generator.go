@@ -58,6 +58,7 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 	// and ensures the first block is not a loop header.
 	entryBlock := &ast.Block{
 		StartEndPos: parseutil.NewStartEndPos(funcDef.Loc(), funcDef.Loc()),
+		Label:       ":entry-block",
 	}
 	funcDef.Blocks = append([]*ast.Block{entryBlock}, funcDef.Blocks...)
 
