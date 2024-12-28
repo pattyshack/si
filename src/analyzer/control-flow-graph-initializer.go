@@ -53,12 +53,10 @@ func (initializer *controlFlowGraphInitializer) Process(
 			continue
 		}
 
-		canFallthrough := true
+		var prevChild *ast.Block
 		last := block.Instructions[len(block.Instructions)-1]
 		switch jump := last.(type) {
 		case *ast.Jump:
-			canFallthrough = false
-
 			child, ok := labelled[jump.Label]
 			if !ok {
 				initializer.Emit(jump.Loc(), "undefined block label (%s)", jump.Label)
@@ -67,6 +65,7 @@ func (initializer *controlFlowGraphInitializer) Process(
 				block.Children = append(block.Children, child)
 				child.Parents = append(child.Parents, block)
 			}
+			continue
 		case *ast.ConditionalJump:
 			child, ok := labelled[jump.Label]
 			if !ok {
@@ -75,12 +74,9 @@ func (initializer *controlFlowGraphInitializer) Process(
 			} else {
 				block.Children = append(block.Children, child)
 				child.Parents = append(child.Parents, block)
+				prevChild = child
 			}
 		case *ast.Terminal:
-			canFallthrough = false
-		}
-
-		if !canFallthrough {
 			continue
 		}
 
@@ -94,8 +90,12 @@ func (initializer *controlFlowGraphInitializer) Process(
 
 		child := def.Blocks[idx+1]
 
-		block.Children = append(block.Children, child)
-		child.Parents = append(child.Parents, block)
+		// Conditional jump branches could both point to the same child.
+		// Only include the child once in this case.
+		if prevChild != child {
+			block.Children = append(block.Children, child)
+			child.Parents = append(child.Parents, block)
+		}
 	}
 
 	initializer.checkForUnreachableBlocks(def)
