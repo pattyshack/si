@@ -35,14 +35,7 @@ func Analyze(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
-
-			passes := [][]util.Pass[ast.SourceEntry]{
-				{ValidateAstSyntax(entryEmitter)},
-				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
-				{InitializeControlFlowGraph(entryEmitter)},
-			}
-
-			util.Process(entry, passes, nil)
+			ValidateAstSyntax(entryEmitter).Process(entry)
 			if entryEmitter.HasErrors() {
 				abortBuild()
 			}
@@ -57,20 +50,35 @@ func Analyze(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
-			if entryEmitter.HasErrors() { // Entry has syntax / func def type error
+			if entryEmitter.HasErrors() { // Entry has syntax error
 				return
 			}
 
-			passes := [][]util.Pass[ast.SourceEntry]{
+			setupPasses := [][]util.Pass[ast.SourceEntry]{
+				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
+				{InitializeControlFlowGraph(entryEmitter)},
 				{ModifyTerminals(targetPlatform)},
+			}
+
+			if !util.Process(
+				entry,
+				setupPasses,
+				func() bool { return entryEmitter.HasErrors() }) {
+
+				abortBuild()
+				return
+			}
+
+			semanticCheckPasses := [][]util.Pass[ast.SourceEntry]{
 				{BindGlobalLabelReferences(entryEmitter, signatures)},
 				{ConstructSSA(entryEmitter)},
 				{CheckTypes(entryEmitter, targetPlatform)},
 			}
 
-			util.Process(entry, passes, nil)
+			util.Process(entry, semanticCheckPasses, nil)
 			if entryEmitter.HasErrors() {
 				abortBuild()
+				return
 			}
 
 			// At this point, the entry is well-form and no more error could occur.
@@ -82,12 +90,12 @@ func Analyze(
 			registerStackAllocator := allocator.NewAllocator(
 				targetPlatform,
 				debugMode)
-			passes = [][]util.Pass[ast.SourceEntry]{
+			backendPasses := [][]util.Pass[ast.SourceEntry]{
 				{registerStackAllocator},
 			}
 			if debugMode {
-				passes = append(
-					passes,
+				backendPasses = append(
+					backendPasses,
 					[]util.Pass[ast.SourceEntry]{
 						// these passes are only used for debugging the compiler
 						// implementation and should be removed or flag guarded once the
@@ -99,7 +107,7 @@ func Analyze(
 					})
 			}
 
-			util.Process(entry, passes, shouldAbortBuild)
+			util.Process(entry, backendPasses, shouldAbortBuild)
 		})
 
 	for _, entryEmitter := range entryEmitters {

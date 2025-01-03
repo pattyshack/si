@@ -14,7 +14,7 @@ func Process[T any](
 	node T,
 	passes [][]Pass[T], // sequence of parallelizable passes
 	shouldEarlyExit func() bool, // optional
-) {
+) bool {
 	for _, parallelPasses := range passes {
 		wg := sync.WaitGroup{}
 		wg.Add(len(parallelPasses))
@@ -28,9 +28,11 @@ func Process[T any](
 		wg.Wait()
 
 		if shouldEarlyExit != nil && shouldEarlyExit() {
-			return
+			return false
 		}
 	}
+
+	return true
 }
 
 func ParallelProcess[Node ast.Node](
