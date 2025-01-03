@@ -43,6 +43,8 @@ func (validator *InstructionConstraintsValidator) Process(
 				validator.ValidateCall(inst, constraints)
 			case *ast.Terminal:
 				validator.ValidateRet(inst, constraints)
+			case *ast.Jump:
+				continue
 			case ast.Instruction:
 				validator.ValidateGenericInstruction(inst, constraints)
 			}

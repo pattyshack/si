@@ -1,6 +1,8 @@
 package allocator
 
 import (
+	"github.com/pattyshack/gt/parseutil"
+
 	"github.com/pattyshack/chickadee/analyzer/util"
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
@@ -40,8 +42,13 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	if !ok {
 		return
 	}
-
 	allocator.FuncDef = funcDef
+
+	// Note: The allocator will insert and reorder blocks, making the original
+	// jump instructions invalid.  We will need to replace all jump instructions
+	// after the allocation process.
+	allocator.stripExplicitUnconditionalJumps()
+
 	allocator.initializeBlockStates()
 	allocator.initializeFuncDefDataLocations()
 	allocator.StartCurrentFrame()
@@ -52,6 +59,98 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	}
 
 	allocator.FinalizeFrame()
+
+	allocator.reorderBlocksAndUpdateJumps()
+}
+
+func (allocator *Allocator) stripExplicitUnconditionalJumps() {
+	for _, block := range allocator.FuncDef.Blocks {
+		if len(block.Instructions) == 0 {
+			continue
+		}
+
+		strip := false
+		last := block.Instructions[len(block.Instructions)-1]
+		switch last.(type) {
+		case *ast.Jump:
+			strip = true
+		case *ast.ConditionalJump:
+			// Both branches ends up at the next block
+			strip = len(block.Children) == 1
+		}
+
+		if strip {
+			block.Instructions = block.Instructions[:len(block.Instructions)-1]
+		}
+	}
+}
+
+func (allocator *Allocator) reorderBlocksAndUpdateJumps() {
+	reorderedBlocks, _ := util.DFS(allocator.FuncDef)
+	allocator.FuncDef.Blocks = reorderedBlocks
+
+	numBlocks := len(allocator.FuncDef.Blocks)
+	for idx, block := range allocator.FuncDef.Blocks {
+		switch len(block.Children) {
+		case 0: // terminal block
+			// sanity check
+			if len(block.Instructions) == 0 {
+				panic("should never happen")
+			}
+
+			last := block.Instructions[len(block.Instructions)-1]
+			_, ok := last.(*ast.Terminal)
+			if !ok {
+				panic("should never happen")
+			}
+		case 1: // unconditional jump
+			if idx+1 < numBlocks &&
+				allocator.FuncDef.Blocks[idx+1] == block.Children[0] {
+
+				continue // implicit jump via fallthrough
+			}
+
+			// sanity check
+			if len(block.Instructions) > 0 {
+				last := block.Instructions[len(block.Instructions)-1]
+				_, ok := last.(ast.ControlFlowInstruction)
+				if ok {
+					panic("should never happen")
+				}
+			}
+
+			// Insert explicit unconditional jump
+			jump := &ast.Jump{
+				StartEndPos: parseutil.NewStartEndPos(block.End(), block.End()),
+				Label:       block.Children[0].Label,
+			}
+			block.Instructions = append(block.Instructions, jump)
+			allocator.BlockStates[block].ExecuteInstruction(nil, nil)
+		case 2: // conditional jump
+			if len(block.Instructions) == 0 {
+				panic("should never happen")
+			}
+
+			last := block.Instructions[len(block.Instructions)-1]
+			jump, ok := last.(*ast.ConditionalJump)
+			if !ok {
+				panic("should never happen")
+			}
+
+			// The first child is always the jump child branch
+			jump.Label = block.Children[0].Label
+
+			// The second child is always the fallthrough child branch
+			if idx+1 < numBlocks &&
+				allocator.FuncDef.Blocks[idx+1] == block.Children[1] {
+				// ok
+			} else {
+				panic("should never happen")
+			}
+		default:
+			panic("should never happen")
+		}
+	}
 }
 
 func (allocator *Allocator) initializeBlockStates() {

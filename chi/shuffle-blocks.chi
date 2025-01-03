@@ -1,0 +1,32 @@
+define func @shuffle_blocks(%code I32) I32 {
+:block1
+  jmp :block2
+
+:block9
+  // explicit jump.
+  // TODO optimize.  If the child block has only the unconditional jump
+  // instruction, and the parent block reached this child block via a jump
+  // branch, then the parent can jump direct to the child's labelled block.
+  jmp :block1
+
+:block6
+  jge :block7, 1, 2  // unconditional jump to next block
+
+:block7
+  jge :block9, 1, 2
+
+:block8
+  ret %code
+
+:block4
+  jmp :block5
+
+:block2
+  jmp :block3
+
+:block5
+  jmp :block6
+
+:block3
+  jmp :block4
+}
