@@ -20,19 +20,11 @@ func (controlFlowInstruction) isControlFlow() {}
 // XXX: Need to support generic jump to some arbitrary offset?  Preferably not
 // since single entry point per block simplifies ssa generation.
 
-type JumpKind string
-
-const (
-	Jmp = JumpKind("jmp")
-)
-
 // Unconditional jump instruction of the form: jmp <label>
 type Jump struct {
 	controlFlowInstruction
 
 	parseutil.StartEndPos
-
-	Kind JumpKind
 
 	Label string
 }
@@ -60,13 +52,6 @@ func (jump *Jump) Walk(visitor Visitor) {
 func (jump *Jump) Validate(emitter *parseutil.Emitter) {
 	if strings.HasPrefix(jump.Label, ":") {
 		emitter.Emit(jump.Loc(), ":-prefixed label is reserved for internal use")
-	}
-
-	if jump.Kind != Jmp {
-		emitter.Emit(
-			jump.Loc(),
-			"unexpected unconditional jump kind (%s)",
-			jump.Kind)
 	}
 }
 

@@ -167,7 +167,9 @@ type Block struct {
 	ParentFuncDef *FunctionDefinition
 
 	// Populated by ControlFlowGraphInitializer.
-	Parents  []*Block
+	Parents []*Block
+	// The jump child branch (if exist) is always before the fallthrough child
+	// branch (if exist).
 	Children []*Block
 
 	Phis map[string]*Phi

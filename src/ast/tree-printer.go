@@ -180,7 +180,7 @@ func (printer *treePrinter) Enter(n Node) {
 			"Func=")
 
 	case *Jump:
-		printer.write("[Jump: Kind=%s Label=%s]", node.Kind, node.Label)
+		printer.write("[Jump: Label=%s]", node.Label)
 	case *ConditionalJump:
 		printer.write("[ConditionalJump: Kind=%s Label=%s", node.Kind, node.Label)
 		printer.push("Src1=", "Src2=")
