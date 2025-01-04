@@ -1,6 +1,8 @@
 package allocator
 
 import (
+	"fmt"
+
 	"github.com/pattyshack/gt/parseutil"
 
 	"github.com/pattyshack/chickadee/analyzer/util"
@@ -23,6 +25,8 @@ type Allocator struct {
 	BlockStates map[*ast.Block]*BlockState
 
 	*architecture.StackFrame
+
+	nextTransferBlockId int
 }
 
 func NewAllocator(
@@ -30,10 +34,11 @@ func NewAllocator(
 	debugMode bool,
 ) *Allocator {
 	return &Allocator{
-		Platform:    targetPlatform,
-		DebugMode:   debugMode,
-		BlockStates: map[*ast.Block]*BlockState{},
-		StackFrame:  architecture.NewStackFrame(),
+		Platform:            targetPlatform,
+		DebugMode:           debugMode,
+		BlockStates:         map[*ast.Block]*BlockState{},
+		StackFrame:          architecture.NewStackFrame(),
+		nextTransferBlockId: 0,
 	}
 }
 
@@ -57,6 +62,8 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	for _, block := range dfsOrder {
 		allocator.processBlock(allocator.BlockStates[block])
 	}
+
+	allocator.maybeInsertTransferBlocks()
 
 	allocator.FinalizeFrame()
 
@@ -221,5 +228,112 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 			}
 			allocator.StackFrame.MaybeAddLocalVariable(ref.Name, ref.Type())
 		}
+	}
+}
+
+func (allocator *Allocator) maybeInsertTransferBlocks() {
+	for _, child := range allocator.FuncDef.Blocks[:] {
+		if len(child.Parents) <= 1 {
+			// All data must already be at the correct locations.  Note that only
+			// the entry block has no parent; the rest have exactly one parent.
+			continue
+		}
+
+		childState := allocator.BlockStates[child]
+		for _, parent := range child.Parents {
+			allocator.maybeInsertTransferBlock(
+				allocator.BlockStates[parent],
+				childState)
+		}
+	}
+}
+
+// If the parent's LocationOut data locations does not match the child's
+// expected LocationIn data locations, this inserts a transfer block between
+// the parent and child, and the transfer block will move the data to the
+// expected locations.
+//
+// This assumes that both parent are child are already processed.
+func (allocator *Allocator) maybeInsertTransferBlock(
+	parent *BlockState,
+	child *BlockState,
+) {
+	transferBlock := &ast.Block{
+		StartEndPos: parseutil.NewStartEndPos(parent.End(), child.Loc()),
+		Label: fmt.Sprintf(
+			":transfer-block-%d",
+			allocator.nextTransferBlockId),
+		ParentFuncDef: allocator.FuncDef,
+		Parents:       []*ast.Block{parent.Block},
+		Children:      []*ast.Block{child.Block},
+	}
+	allocator.nextTransferBlockId++
+
+	outDefs := map[string]*ast.VariableDefinition{}
+	for def, _ := range child.LocationIn {
+		outDefs[def.Name] = def
+	}
+
+	locationIn := LocationSet{}
+	for def, loc := range parent.LocationOut {
+		outDef, ok := outDefs[def.Name]
+		if !ok { // definition not used by this child
+			continue
+		}
+
+		// This is the SSA deconstruction "copy" step.  Note that the data may
+		// still be in the wrong location.
+		locationIn[outDef] = loc
+	}
+
+	// NOTE: LiveIn, LiveOut, LiveRanges, Constraints, and Preferences are not
+	// populated.
+	transferState := &BlockState{
+		Platform:    allocator.Platform,
+		Block:       transferBlock,
+		StackFrame:  allocator.StackFrame,
+		DebugMode:   allocator.DebugMode,
+		LocationIn:  locationIn,
+		LocationOut: child.LocationIn,
+	}
+	transferState.InitializeValueLocations()
+
+	// TODO move data to the correct locations
+
+	/*
+	  TODO uncomment once data move is implemented
+
+	  if len(transferState.Operations) == 0 {
+	    // All data are already in correct locations.  No need to insert a transfer
+	    // block.
+	    return
+	  }
+	*/
+
+	// Insert the transfer block and update control flow graph edges
+
+	allocator.FuncDef.Blocks = append(allocator.FuncDef.Blocks, transferBlock)
+	allocator.BlockStates[transferBlock] = transferState
+
+	numModified := 0
+	for idx, block := range parent.Children {
+		if child.Block == block {
+			parent.Children[idx] = transferBlock
+			numModified++
+		}
+	}
+	if numModified != 1 {
+		panic("should never happen")
+	}
+
+	numModified = 0
+	for idx, block := range child.Parents {
+		if parent.Block == block {
+			child.Parents[idx] = transferBlock
+			numModified++
+		}
+	}
+	if numModified != 1 {
+		panic("should never happen")
 	}
 }
