@@ -8,7 +8,7 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-func CollectSignaturesAndCallRetConstraints(
+func CollectSignatures(
 	entries []ast.SourceEntry,
 	emitter *parseutil.Emitter,
 ) map[string]ast.SourceEntry {

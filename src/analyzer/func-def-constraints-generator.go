@@ -11,23 +11,25 @@ import (
 	"github.com/pattyshack/chickadee/platform"
 )
 
-type funcDefConstraintsGenerator struct {
+type funcDefTypeAndConstraintsGenerator struct {
 	*parseutil.Emitter
 
 	platform platform.Platform
 }
 
-func GenerateFuncDefConstraints(
+func GenerateFuncDefTypeAndConstraints(
 	emitter *parseutil.Emitter,
 	platform platform.Platform,
 ) util.Pass[ast.SourceEntry] {
-	return &funcDefConstraintsGenerator{
+	return &funcDefTypeAndConstraintsGenerator{
 		Emitter:  emitter,
 		platform: platform,
 	}
 }
 
-func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
+func (generator *funcDefTypeAndConstraintsGenerator) Process(
+	entry ast.SourceEntry,
+) {
 	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
 		return
@@ -94,7 +96,7 @@ func (generator *funcDefConstraintsGenerator) Process(entry ast.SourceEntry) {
 	funcDef.CalleeSavedParameters = calleeSavedParameters
 }
 
-func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
+func (generator *funcDefTypeAndConstraintsGenerator) generatePseudoParameters(
 	convention *architecture.CallConvention,
 	pos parseutil.StartEndPos,
 ) []*ast.VariableDefinition {
@@ -152,7 +154,7 @@ func (generator *funcDefConstraintsGenerator) generatePseudoParameters(
 	return pseudoParameters
 }
 
-func (generator *funcDefConstraintsGenerator) validateFunctionType(
+func (generator *funcDefTypeAndConstraintsGenerator) validateFunctionType(
 	funcDef *ast.FunctionDefinition,
 	callSpec platform.CallSpec,
 ) *ast.FunctionType {

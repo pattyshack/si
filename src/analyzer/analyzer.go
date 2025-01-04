@@ -35,13 +35,24 @@ func Analyze(
 		sources,
 		func(entry ast.SourceEntry) {
 			entryEmitter := entryEmitters[entry]
-			ValidateAstSyntax(entryEmitter).Process(entry)
-			if entryEmitter.HasErrors() {
+
+			syntaxPasses := [][]util.Pass[ast.SourceEntry]{
+				{ValidateAstSyntax(entryEmitter)},
+				// Note: func def type must be generated prior to signature collection
+				// to avoid race races during name binding.
+				{GenerateFuncDefTypeAndConstraints(entryEmitter, targetPlatform)},
+			}
+
+			if !util.Process(
+				entry,
+				syntaxPasses,
+				func() bool { return entryEmitter.HasErrors() }) {
+
 				abortBuild()
 			}
 		})
 
-	signatures := CollectSignaturesAndCallRetConstraints(sources, emitter)
+	signatures := CollectSignatures(sources, emitter)
 	if emitter.HasErrors() {
 		abortBuild()
 	}
@@ -55,7 +66,6 @@ func Analyze(
 			}
 
 			setupPasses := [][]util.Pass[ast.SourceEntry]{
-				{GenerateFuncDefConstraints(entryEmitter, targetPlatform)},
 				{InitializeControlFlowGraph(entryEmitter)},
 				{ModifyTerminals(targetPlatform)},
 			}
