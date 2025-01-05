@@ -144,14 +144,3 @@ func NewFreeLocationOp(loc *DataLocation) Operation {
 		Destination: loc,
 	}
 }
-
-func NewAssignLocationToDefinitionOp(
-	loc *DataLocation,
-	def *ast.VariableDefinition,
-) Operation {
-	return Operation{
-		Kind:               AssignLocationToDefinition,
-		Destination:        loc,
-		VariableDefinition: def,
-	}
-}

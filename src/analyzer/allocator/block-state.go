@@ -74,7 +74,7 @@ type BlockState struct {
 	// Every entry maps one-to-one to the corresponding live in set.
 	LocationOut LocationSet
 
-	*ValueLocations
+	ValueLocations *ValueLocations
 
 	Operations []architecture.Operation
 }
@@ -305,10 +305,28 @@ func (state *BlockState) InitializeValueLocations() {
 
 // Log instruction execution without advancing CurrentInstIdx since the
 // instruction may have other tear down operations.
+//
+// Note: srcs must be allocated/tracked by ValueLocations.  dest's location is
+// allocated/tracked by ValueLocations prior to instruction execution iff the
+// location is on temp stack; register locations must be allocated/tracked by
+// ValueLocations after instruction execution since destination could reuse
+// source registers (dest cannot be on fixed stack).
 func (state *BlockState) ExecuteInstruction(
 	srcs []*architecture.DataLocation,
 	dest *architecture.DataLocation,
 ) {
+	for _, src := range srcs {
+		state.ValueLocations.AssertAllocated(src)
+	}
+
+	if dest.OnFixedStack {
+		panic("should never happen")
+	} else if dest.OnTempStack {
+		state.ValueLocations.AssertAllocated(dest)
+	} else { // register locations
+		state.ValueLocations.AssertNotAllocated(dest)
+	}
+
 	state.Operations = append(
 		state.Operations,
 		architecture.NewExecuteInstructionOp(
@@ -333,61 +351,126 @@ func (state *BlockState) MoveRegister(
 	src *architecture.Register,
 	dest *architecture.Register,
 ) {
+	state.ValueLocations.MoveRegister(src, dest)
 	state.Operations = append(
 		state.Operations,
 		architecture.NewMoveRegisterOp(src, dest))
 }
 
+// Note: both src and dest must be allocated/tracked by ValueLocations. temp
+// register must not be in use.
 func (state *BlockState) CopyLocation(
 	src *architecture.DataLocation,
 	dest *architecture.DataLocation,
 	temp *architecture.Register,
 ) {
+	state.ValueLocations.AssertAllocated(src)
+	state.ValueLocations.AssertAllocated(dest)
+
+	if (src.OnFixedStack || src.OnTempStack) &&
+		(dest.OnFixedStack || dest.OnTempStack) {
+
+		state.ValueLocations.AssertFree(temp)
+	} else if temp != nil {
+		panic("should never happen")
+	}
+
 	state.Operations = append(
 		state.Operations,
 		architecture.NewCopyLocationOp(src, dest, temp))
 }
 
+// Note: dest must be allocated/tracked by ValueLocations. temp register must
+// not be in use.
 func (state *BlockState) SetConstantValue(
 	value ast.Value,
 	dest *architecture.DataLocation,
 	temp *architecture.Register,
 ) {
+	state.ValueLocations.AssertAllocated(dest)
+
+	if dest.OnFixedStack || dest.OnTempStack {
+		state.ValueLocations.AssertFree(temp)
+	} else if temp != nil {
+		panic("should never happen")
+	}
+
 	state.Operations = append(
 		state.Operations,
 		architecture.NewSetConstantValueOp(value, dest, temp))
 }
 
+// Note: dest must be allocated/tracked by ValueLocations. temp register must
+// not be in use.
 func (state *BlockState) InitializeZeros(
 	dest *architecture.DataLocation,
 	temp *architecture.Register,
 ) {
+	state.ValueLocations.AssertAllocated(dest)
+
+	if !dest.OnTempStack {
+		panic("should never happen")
+	}
+	state.ValueLocations.AssertFree(temp)
+
 	state.Operations = append(
 		state.Operations,
 		architecture.NewInitializeZerosOp(dest, temp))
 }
 
-func (state *BlockState) AllocateLocation(
-	loc *architecture.DataLocation,
-) {
+func (state *BlockState) AllocateRegistersLocation(
+	def *ast.VariableDefinition,
+	registers ...*architecture.Register,
+) *architecture.DataLocation {
+	loc := state.ValueLocations.AllocateRegistersLocation(def, registers...)
 	state.Operations = append(
 		state.Operations,
 		architecture.NewAllocateLocationOp(loc))
+	return loc
 }
 
+func (state *BlockState) AllocateFixedStackLocation(
+	def *ast.VariableDefinition,
+) *architecture.DataLocation {
+	loc := state.ValueLocations.AllocateFixedStackLocation(def)
+	state.Operations = append(
+		state.Operations,
+		architecture.NewAllocateLocationOp(loc))
+	return loc
+}
+
+func (state *BlockState) AllocateTempStackLocations(
+	argDefs []*ast.VariableDefinition,
+	returnDef *ast.VariableDefinition,
+) (
+	[]*architecture.DataLocation,
+	*architecture.DataLocation,
+) {
+	argLocs, returnLoc := state.ValueLocations.AllocateTempStackLocations(
+		argDefs,
+		returnDef)
+
+	for _, loc := range argLocs {
+		state.Operations = append(
+			state.Operations,
+			architecture.NewAllocateLocationOp(loc))
+	}
+
+	if returnLoc != nil {
+		state.Operations = append(
+			state.Operations,
+			architecture.NewAllocateLocationOp(returnLoc))
+	}
+
+	return argLocs, returnLoc
+}
+
+// Note: loc must be allocated/tracked by ValueLocations.
 func (state *BlockState) FreeLocation(
 	loc *architecture.DataLocation,
 ) {
+	state.ValueLocations.FreeLocation(loc)
 	state.Operations = append(
 		state.Operations,
 		architecture.NewFreeLocationOp(loc))
-}
-
-func (state *BlockState) AssignLocationToDefinition(
-	loc *architecture.DataLocation,
-	def *ast.VariableDefinition,
-) {
-	state.Operations = append(
-		state.Operations,
-		architecture.NewAssignLocationToDefinitionOp(loc, def))
 }
