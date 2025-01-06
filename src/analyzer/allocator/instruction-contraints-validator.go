@@ -87,37 +87,35 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 		}
 	}
 
-	if constraints.Destination == nil {
-		return
-	}
+	if constraints.Destination != nil {
+		uniqueDestCandidates := map[*architecture.RegisterCandidate]struct{}{}
+		uniqueDestRegisters := map[*architecture.Register]struct{}{}
+		for _, reg := range constraints.Destination.Registers {
+			_, ok := uniqueDestCandidates[reg]
+			if ok {
+				panic(fmt.Sprintf("invalid: %s", pos))
+			}
+			uniqueDestCandidates[reg] = struct{}{}
 
-	uniqueDestCandidates := map[*architecture.RegisterCandidate]struct{}{}
-	uniqueDestRegisters := map[*architecture.Register]struct{}{}
-	for _, reg := range constraints.Destination.Registers {
-		_, ok := uniqueDestCandidates[reg]
-		if ok {
-			panic(fmt.Sprintf("invalid: %s", pos))
-		}
-		uniqueDestCandidates[reg] = struct{}{}
+			if reg.Require == nil {
+				_, ok := uniqueSrcCandidates[reg]
+				if !ok { // a new register not used by any source
+					numRegistersNeeded++
+				}
 
-		if reg.Require == nil {
-			_, ok := uniqueSrcCandidates[reg]
-			if !ok { // a new register not used by any source
-				numRegistersNeeded++
+				continue
 			}
 
-			continue
-		}
+			_, ok = uniqueDestRegisters[reg.Require]
+			if ok {
+				panic(fmt.Sprintf("invalid: %s", pos))
+			}
+			uniqueDestRegisters[reg.Require] = struct{}{}
 
-		_, ok = uniqueDestRegisters[reg.Require]
-		if ok {
-			panic(fmt.Sprintf("invalid: %s", pos))
-		}
-		uniqueDestRegisters[reg.Require] = struct{}{}
-
-		_, ok = uniqueSrcRegisters[reg.Require]
-		if !ok {
-			numRegistersNeeded++
+			_, ok = uniqueSrcRegisters[reg.Require]
+			if !ok {
+				numRegistersNeeded++
+			}
 		}
 	}
 
