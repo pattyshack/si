@@ -52,8 +52,9 @@ func (modifier *terminalModifier) Process(
 					Name: "%%ignore-exit-syscall-return-value%%",
 					Type: sysCallSpec.ReturnType(term.StartEndPos),
 				},
-				Func: sysCallSpec.ExitSysCallFuncValue(term.StartEndPos),
-				Args: []ast.Value{term.RetVal},
+				Func:           sysCallSpec.ExitSysCallFuncValue(term.StartEndPos),
+				Args:           []ast.Value{term.RetVal},
+				IsExitTerminal: true,
 			}
 
 			block.Instructions[len(block.Instructions)-1] = exitSysCall

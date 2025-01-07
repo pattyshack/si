@@ -173,7 +173,10 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.push("Dest=", "Src1=", "Src2=")
 	case *FuncCall:
 		printer.list(
-			fmt.Sprintf("[FuncCall: Kind=%s", node.Kind),
+			fmt.Sprintf(
+				"[FuncCall: Kind=%s IsExitTerminal=%v",
+				node.Kind,
+				node.IsExitTerminal),
 			"Argument",
 			len(node.Args),
 			"Dest=",

@@ -227,6 +227,9 @@ type FuncCall struct {
 	Dest *VariableDefinition
 	Func Value
 	Args []Value
+
+	// Internal
+	IsExitTerminal bool
 }
 
 var _ Instruction = &FuncCall{}
