@@ -37,9 +37,11 @@ func (validator *InstructionConstraintsValidator) Process(
 	validator.ValidateFunctionDefinition(funcDef)
 	for _, block := range validator.BlockStates {
 		for _, in := range block.Instructions {
+			isFuncCall := false
 			constraints := block.Constraints[in]
 			switch inst := in.(type) {
 			case *ast.FuncCall:
+				isFuncCall = true
 				validator.ValidateCall(inst, constraints)
 			case *ast.Terminal:
 				validator.ValidateRet(inst, constraints)
@@ -49,7 +51,7 @@ func (validator *InstructionConstraintsValidator) Process(
 				validator.ValidateGenericInstruction(inst, constraints)
 			}
 
-			validator.ValidateUniqueRegisters(in.Loc(), constraints, false)
+			validator.ValidateUniqueRegisters(in.Loc(), constraints, isFuncCall)
 		}
 	}
 }
@@ -60,12 +62,16 @@ func (validator *InstructionConstraintsValidator) Process(
 func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 	pos parseutil.Location,
 	constraints *architecture.InstructionConstraints,
-	isFuncDef bool,
+	isFuncDefOrCall bool,
 ) {
+	if !isFuncDefOrCall && len(constraints.PseudoSources) > 0 {
+		panic(fmt.Sprintf("invalid: %s", pos))
+	}
+
 	numRegistersNeeded := 0
 	uniqueSrcCandidates := map[*architecture.RegisterCandidate]struct{}{}
 	uniqueSrcRegisters := map[*architecture.Register]struct{}{}
-	for _, loc := range constraints.AllSources() {
+	for _, loc := range constraints.Sources {
 		for _, reg := range loc.Registers {
 			numRegistersNeeded++
 
@@ -119,13 +125,17 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 		}
 	}
 
+	// We'll assume all instructions must leave at least one register unused.
+	// The allocator will make use of the unused register for data shuffling.
+	// This mostly impact call convention since most real architecture
+	// instruction use at most 3 registers.
 	totalRegisters := len(validator.Platform.ArchitectureRegisters().Data)
-	if numRegistersNeeded > totalRegisters {
+	if numRegistersNeeded > totalRegisters-1 {
 		panic(fmt.Sprintf("invalid: %s", pos))
 	}
 
 	// call convention must fully specify all registers' clobber behavior
-	if isFuncDef && len(constraints.RequiredRegisters) != totalRegisters {
+	if isFuncDefOrCall && len(constraints.RequiredRegisters) != totalRegisters {
 		panic(fmt.Sprintf("invalid: %s", pos))
 	}
 }
