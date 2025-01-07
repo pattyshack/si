@@ -132,7 +132,7 @@ func (allocator *Allocator) reorderBlocksAndUpdateJumps() {
 				Label:       block.Children[0].Label,
 			}
 			block.Instructions = append(block.Instructions, jump)
-			allocator.BlockStates[block].ExecuteInstruction(nil, nil)
+			allocator.BlockStates[block].ExecuteInstruction(jump, nil, nil)
 		case 2: // conditional jump
 			if len(block.Instructions) == 0 {
 				panic("should never happen")

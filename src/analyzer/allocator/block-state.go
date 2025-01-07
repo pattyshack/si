@@ -312,6 +312,7 @@ func (state *BlockState) InitializeValueLocations() {
 // ValueLocations after instruction execution since destination could reuse
 // source registers (dest cannot be on fixed stack).
 func (state *BlockState) ExecuteInstruction(
+	inst ast.Instruction,
 	srcs []*architecture.DataLocation,
 	dest *architecture.DataLocation,
 ) {
@@ -319,7 +320,9 @@ func (state *BlockState) ExecuteInstruction(
 		state.ValueLocations.AssertAllocated(src)
 	}
 
-	if dest.OnFixedStack {
+	if dest == nil {
+		// Do nothing. This is a control flow instruction.
+	} else if dest.OnFixedStack {
 		panic("should never happen")
 	} else if dest.OnTempStack {
 		state.ValueLocations.AssertAllocated(dest)
@@ -329,10 +332,7 @@ func (state *BlockState) ExecuteInstruction(
 
 	state.Operations = append(
 		state.Operations,
-		architecture.NewExecuteInstructionOp(
-			state.Instructions[state.CurrentInstIdx],
-			srcs,
-			dest))
+		architecture.NewExecuteInstructionOp(inst, srcs, dest))
 }
 
 func (state *BlockState) PushStackFrame() {
