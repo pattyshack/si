@@ -208,7 +208,7 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 		loc := architecture.NewTempStackDataLocation(argDef.Type)
 		loc.Offset = callTempSize
 
-		locations.allocated[loc] = nil
+		locations.allocate(loc, argDef)
 
 		callTempSize += loc.AlignedSize
 		argLocs = append(argLocs, loc)
@@ -220,7 +220,7 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 		returnLoc = architecture.NewTempStackDataLocation(returnDef.Type)
 		returnLoc.Offset = callTempSize
 
-		locations.allocated[returnLoc] = nil
+		locations.allocate(returnLoc, returnDef)
 
 		callTempSize += returnLoc.AlignedSize
 		tempStack = append(tempStack, returnLoc)
