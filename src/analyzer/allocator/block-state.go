@@ -366,14 +366,7 @@ func (state *BlockState) CopyLocation(
 ) {
 	state.ValueLocations.AssertAllocated(src)
 	state.ValueLocations.AssertAllocated(dest)
-
-	if (src.OnFixedStack || src.OnTempStack) &&
-		(dest.OnFixedStack || dest.OnTempStack) {
-
-		state.ValueLocations.AssertFree(temp)
-	} else if temp != nil {
-		panic("should never happen")
-	}
+	state.ValueLocations.AssertFree(temp)
 
 	state.Operations = append(
 		state.Operations,
@@ -388,12 +381,7 @@ func (state *BlockState) SetConstantValue(
 	temp *architecture.Register,
 ) {
 	state.ValueLocations.AssertAllocated(dest)
-
-	if dest.OnFixedStack || dest.OnTempStack {
-		state.ValueLocations.AssertFree(temp)
-	} else if temp != nil {
-		panic("should never happen")
-	}
+	state.ValueLocations.AssertFree(temp)
 
 	state.Operations = append(
 		state.Operations,

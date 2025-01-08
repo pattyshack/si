@@ -12,6 +12,8 @@ type LocationSet map[*ast.VariableDefinition]*architecture.DataLocation
 // A register is free if it is not reserved, and is not used by a variable
 // definition.
 type RegisterInfo struct {
+	*architecture.Register
+
 	// Which variable definition is currently using this register.
 	UsedBy *architecture.DataLocation
 }
@@ -31,7 +33,7 @@ type ValueLocations struct {
 	// NOTE: TempStack is ordered from top to bottom
 	TempStack []*architecture.DataLocation
 
-	Registers map[*architecture.Register]*RegisterInfo
+	Registers []*RegisterInfo
 
 	// NOTE: Global reference, immediate, and temp stack argument/result values
 	// are tracked via pseudo variable definitions with internally generated
@@ -48,14 +50,18 @@ func NewValueLocations(
 ) *ValueLocations {
 	locations := &ValueLocations{
 		StackFrame: frame,
-		Registers:  map[*architecture.Register]*RegisterInfo{},
+		Registers:  []*RegisterInfo{},
 		Values:     map[*ast.VariableDefinition]map[*architecture.DataLocation]struct{}{},
 		allocated:  map[*architecture.DataLocation]*ast.VariableDefinition{},
 		valueNames: map[string]*ast.VariableDefinition{},
 	}
 
 	for _, reg := range targetPlatform.ArchitectureRegisters().Data {
-		locations.Registers[reg] = &RegisterInfo{}
+		locations.Registers = append(
+			locations.Registers,
+			&RegisterInfo{
+				Register: reg,
+			})
 	}
 
 	for def, loc := range locationIn {
@@ -119,11 +125,7 @@ func (locations *ValueLocations) AssertNoTempLocations() {
 func (locations *ValueLocations) getRegInfo(
 	reg *architecture.Register,
 ) *RegisterInfo {
-	info, ok := locations.Registers[reg]
-	if !ok {
-		panic("invalid register: " + reg.Name)
-	}
-	return info
+	return locations.Registers[reg.Index]
 }
 
 func (locations *ValueLocations) getLocations(

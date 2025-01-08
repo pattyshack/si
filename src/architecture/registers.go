@@ -21,12 +21,17 @@ type Register struct {
 	// When true, the register is usable for float operation, as well as general
 	// data storage.  Note that a float register can also be a general register.
 	AllowFloatOp bool
+
+	// Internally assigned.  Stack pointer register always have index -1.
+	// Data registers' index are in the ordered given by NewRegisterSet
+	Index int
 }
 
 func NewStackPointerRegister(name string) *Register {
 	return &Register{
 		Name:           name,
 		IsStackPointer: true,
+		Index:          -1,
 	}
 }
 
@@ -76,6 +81,7 @@ type RegisterSet struct {
 func NewRegisterSet(registers ...*Register) *RegisterSet {
 	set := &RegisterSet{}
 
+	idx := 0
 	names := map[string]struct{}{}
 	for _, register := range registers {
 		if register.Name == "" {
@@ -87,6 +93,11 @@ func NewRegisterSet(registers ...*Register) *RegisterSet {
 			panic("added duplicate register: " + register.Name)
 		}
 		names[register.Name] = struct{}{}
+
+		if !register.IsStackPointer {
+			register.Index = idx
+			idx++
+		}
 
 		set.add(register)
 	}
