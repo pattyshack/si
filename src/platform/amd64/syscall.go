@@ -47,12 +47,17 @@ func newLinuxSysCallConstraints(
 	convention.SetRegisterDestination(rax)
 
 	// Clobbered by syscall
-	convention.CallerSaved(rcx, r11)
 
 	// Syscall arguments
-	calleeSavedArguments := []*architecture.Register{rdi, rsi, rdx, r10, r8, r9}
-	convention.CalleeSaved(calleeSavedArguments...)
+	for _, reg := range RegisterSet.Data {
+		if reg == rax || reg == rcx || reg == r11 {
+			convention.CallerSaved(reg)
+		} else {
+			convention.CalleeSaved(reg)
+		}
+	}
 
+	calleeSavedArguments := []*architecture.Register{rdi, rsi, rdx, r10, r8, r9}
 	for _, register := range calleeSavedArguments[:numArgs] {
 		convention.AddRegisterSource(false, register)
 	}
