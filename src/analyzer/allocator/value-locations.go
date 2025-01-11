@@ -207,7 +207,7 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 	argLocs := []*architecture.DataLocation{}
 	tempStack := []*architecture.DataLocation{}
 	for _, argDef := range argDefs {
-		loc := architecture.NewTempStackDataLocation(argDef.Type)
+		loc := architecture.NewTempStackDataLocation(argDef.Name, argDef.Type)
 		loc.Offset = callTempSize
 
 		locations.allocate(loc, argDef)
@@ -219,7 +219,9 @@ func (locations *ValueLocations) AllocateTempStackLocations(
 
 	var returnLoc *architecture.DataLocation
 	if returnDef != nil {
-		returnLoc = architecture.NewTempStackDataLocation(returnDef.Type)
+		returnLoc = architecture.NewTempStackDataLocation(
+			returnDef.Name,
+			returnDef.Type)
 		returnLoc.Offset = callTempSize
 
 		locations.allocate(returnLoc, returnDef)

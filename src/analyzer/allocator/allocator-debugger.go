@@ -11,27 +11,31 @@ import (
 
 type AllocatorDebugger struct {
 	*Allocator
+
+	debugLiveness      bool
+	debugLiveRanges    bool
+	debugPreferences   bool
+	debugDataLocations bool
+	debugStackFrame    bool
+	debugOperations    bool
 }
 
 func Debug(allocator *Allocator) util.Pass[ast.SourceEntry] {
 	return &AllocatorDebugger{
 		Allocator: allocator,
+		//debugLiveness: true,
+		//debugLiveRanges: true,
+		//debugPreferences: true,
+		debugDataLocations: true,
+		debugStackFrame:    true,
+		debugOperations:    true,
 	}
 }
 
-func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
-	funcDef, ok := entry.(*ast.FunctionDefinition)
-	if !ok {
-		return
-	}
-
-	buffer := &bytes.Buffer{}
-	printf := func(template string, args ...interface{}) {
-		fmt.Fprintf(buffer, template, args...)
-	}
-
-	printf("Definition: %s\n", funcDef.Label)
-	printf("------------------------------------------\n")
+func (debugger *AllocatorDebugger) printLiveness(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
 	printf("Liveness:\n")
 	printf("  # of callee saved registers: %d\n", len(funcDef.PseudoParameters))
 
@@ -60,8 +64,12 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 			printf("      %s (%s)\n", def.Name, def.Loc())
 		}
 	}
+}
 
-	printf("------------------------------------------\n")
+func (debugger *AllocatorDebugger) printLiveRanges(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
 	printf("Live Ranges:\n")
 	for idx, block := range funcDef.Blocks {
 		blockState := debugger.BlockStates[block]
@@ -77,8 +85,12 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 				def.Loc())
 		}
 	}
+}
 
-	printf("------------------------------------------\n")
+func (debugger *AllocatorDebugger) printPreferences(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
 	printf("Preferences:\n")
 	for idx, block := range funcDef.Blocks {
 		blockState := debugger.BlockStates[block]
@@ -91,8 +103,12 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 			}
 		}
 	}
+}
 
-	printf("------------------------------------------\n")
+func (debugger *AllocatorDebugger) printDataLocations(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
 	printf("Data Locations:\n")
 	for idx, block := range funcDef.Blocks {
 		blockState := debugger.BlockStates[block]
@@ -108,13 +124,100 @@ func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
 			printf("      %s\n", loc)
 		}
 	}
+}
 
-	printf("------------------------------------------\n")
+func (debugger *AllocatorDebugger) printStackFrame(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
 	printf("Stack Frame (Size = %d):\n", debugger.StackFrame.TotalFrameSize)
 	printf("  Layout (bottom to top):\n")
 	for _, entry := range debugger.StackFrame.Layout {
 		printf("    %s\n", entry)
 	}
+}
+
+func (debugger *AllocatorDebugger) printOperations(
+	funcDef *ast.FunctionDefinition,
+	printf func(string, ...interface{}),
+) {
+	for idx, block := range funcDef.Blocks {
+		blockState := debugger.BlockStates[block]
+
+		printf("  Block %d (%s):\n", idx, block.Label)
+		for _, op := range blockState.Operations {
+			printf("    %s\n", op.Kind)
+			if op.Destination != nil {
+				printf("      Destination: %v\n", op.Destination)
+			}
+			if len(op.Sources) > 0 {
+				printf("      Sources:\n")
+				for _, src := range op.Sources {
+					printf("        %v\n", src)
+				}
+			}
+			if op.Instruction != nil {
+				printf("      Instruction: %v\n", op.Instruction)
+			}
+			if op.Value != nil {
+				printf("      Value: %v\n", op.Value)
+			}
+			if op.StackFrame != nil {
+				printf("      StackFrame: %p\n", op.StackFrame)
+			}
+			if op.SrcRegister != nil {
+				printf("      SrcRegister: %p\n", op.SrcRegister)
+			}
+			if op.DestRegister != nil {
+				printf("      DestRegister: %p\n", op.DestRegister)
+			}
+		}
+	}
+}
+
+func (debugger *AllocatorDebugger) Process(entry ast.SourceEntry) {
+	funcDef, ok := entry.(*ast.FunctionDefinition)
+	if !ok {
+		return
+	}
+
+	buffer := &bytes.Buffer{}
+	printf := func(template string, args ...interface{}) {
+		fmt.Fprintf(buffer, template, args...)
+	}
+
+	printf("Definition: %s\n", funcDef.Label)
+
+	if debugger.debugLiveness {
+		printf("------------------------------------------\n")
+		debugger.printLiveness(funcDef, printf)
+	}
+
+	if debugger.debugLiveRanges {
+		printf("------------------------------------------\n")
+		debugger.printLiveRanges(funcDef, printf)
+	}
+
+	if debugger.debugPreferences {
+		printf("------------------------------------------\n")
+		debugger.printPreferences(funcDef, printf)
+	}
+
+	if debugger.debugDataLocations {
+		printf("------------------------------------------\n")
+		debugger.printDataLocations(funcDef, printf)
+	}
+
+	if debugger.debugStackFrame {
+		printf("------------------------------------------\n")
+		debugger.printStackFrame(funcDef, printf)
+	}
+
+	if debugger.debugOperations {
+		printf("------------------------------------------\n")
+		debugger.printOperations(funcDef, printf)
+	}
+
 	printf("==========================================\n")
 
 	fmt.Println(buffer.String())

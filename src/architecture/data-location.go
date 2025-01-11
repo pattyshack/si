@@ -61,10 +61,11 @@ func NewFixedStackDataLocation(
 }
 
 func NewTempStackDataLocation(
+	name string,
 	valType ast.Type,
 ) *DataLocation {
 	return &DataLocation{
-		Name:         "",
+		Name:         name,
 		Type:         valType,
 		OnFixedStack: false,
 		OnTempStack:  true,
@@ -96,7 +97,7 @@ func (loc *DataLocation) String() string {
 		registers = append(registers, reg.Name)
 	}
 	return fmt.Sprintf(
-		"Name: %s Registers: %v OnFixedStack: %v OnFixedStack: %v "+
+		"Name: %s Registers: %v OnFixedStack: %v OnTempStack: %v "+
 			"AlignedSize: %d Offset: %d Type: %s",
 		loc.Name,
 		registers,

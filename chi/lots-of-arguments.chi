@@ -29,6 +29,27 @@ define func @lotsOfArguments(
 }
 
 define func @callLotsOfArguments() I32 {
+  %r1 I32 = 1
+  %r2 I32 = 2
+  %r3 I32 = 3
+  %r4 I32 = 4
+  %r5 I32 = 5
+  %r6 I32 = 6
+  %r7 I32 = 7
+  %r8 I32 = 8
+  %r9 I32 = 9
+  %r10 I32 = 10
+  %r11 I32 = 11
+  %r12 I32 = 12
+  %r13 I32 = 13
+  %r14 I32 = 14
+  %r15 I32 = 15
+  %r16 I32 = 16
+  %s1 I32 = 17
+  %s2 I32 = 18
+  %s3 I32 = 19
   %i = call @lotsOfArguments(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19)
-  ret %i
+  %j = call @lotsOfArguments(%r1,%r2,%r3,%r4,%r5,%r6,%r7,%r8,%r9,%r10,%r11,%r12,%r13,%r14,%r15,%r16,%s1,%s2,%s3)
+  %k = add %i, %j
+  ret %k
 }
