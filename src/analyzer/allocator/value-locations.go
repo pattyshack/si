@@ -40,7 +40,7 @@ type ValueLocations struct {
 	// names.
 	Values     map[*ast.VariableDefinition]map[*architecture.DataLocation]struct{}
 	allocated  map[*architecture.DataLocation]*ast.VariableDefinition
-	valueNames map[string]*ast.VariableDefinition
+	ValueNames map[string]*ast.VariableDefinition
 }
 
 func NewValueLocations(
@@ -53,7 +53,7 @@ func NewValueLocations(
 		Registers:  []*RegisterInfo{},
 		Values:     map[*ast.VariableDefinition]map[*architecture.DataLocation]struct{}{},
 		allocated:  map[*architecture.DataLocation]*ast.VariableDefinition{},
-		valueNames: map[string]*ast.VariableDefinition{},
+		ValueNames: map[string]*ast.VariableDefinition{},
 	}
 
 	for _, reg := range targetPlatform.ArchitectureRegisters().Data {
@@ -128,7 +128,7 @@ func (locations *ValueLocations) getRegInfo(
 	return locations.Registers[reg.Index]
 }
 
-func (locations *ValueLocations) getLocations(
+func (locations *ValueLocations) GetLocations(
 	def *ast.VariableDefinition,
 ) map[*architecture.DataLocation]struct{} {
 	set, ok := locations.Values[def]
@@ -143,9 +143,9 @@ func (locations *ValueLocations) allocate(
 	def *ast.VariableDefinition,
 ) {
 	// Ensure definition name is unique.
-	foundDef, ok := locations.valueNames[def.Name]
+	foundDef, ok := locations.ValueNames[def.Name]
 	if !ok {
-		locations.valueNames[def.Name] = def
+		locations.ValueNames[def.Name] = def
 	} else if foundDef != def {
 		panic("should never happen")
 	}
@@ -250,7 +250,7 @@ func (locations *ValueLocations) FreeLocation(
 	}
 	delete(locations.allocated, toFree)
 
-	set := locations.getLocations(def)
+	set := locations.GetLocations(def)
 	_, ok = set[toFree]
 	if !ok {
 		panic("should never happen")
@@ -260,7 +260,7 @@ func (locations *ValueLocations) FreeLocation(
 		delete(set, toFree)
 	} else {
 		delete(locations.Values, def)
-		delete(locations.valueNames, def.Name)
+		delete(locations.ValueNames, def.Name)
 	}
 }
 
