@@ -21,13 +21,7 @@ func newCallSpecs() *platform.CallSpecs {
 			NumCallerSavedGeneral: 9,
 			NumCallerSavedFloat:   8,
 		},
-		internalCallSpec{
-			name:                  ast.InternalCalleeSavedCallConvention,
-			NumGeneral:            14,
-			NumFloat:              16,
-			NumCallerSavedGeneral: 14,
-			NumCallerSavedFloat:   16,
-		},
+		internalCalleeSavedCallSpec{},
 		internalCallSpec{
 			name:                  ast.InternalCallerSavedCallConvention,
 			NumGeneral:            14,
@@ -36,6 +30,33 @@ func newCallSpecs() *platform.CallSpecs {
 			NumCallerSavedFloat:   0,
 		},
 		systemVLiteCallSpec{})
+}
+
+// All arguments and destination are pass via stack.  All registers are callee
+// saved.
+type internalCalleeSavedCallSpec struct {
+	platform.InternalCallTypeSpec
+}
+
+func (internalCalleeSavedCallSpec) Name() ast.CallConventionName {
+	return ast.InternalCalleeSavedCallConvention
+}
+
+func (internalCalleeSavedCallSpec) CallConvention(
+	funcType *ast.FunctionType,
+) *architecture.CallConvention {
+	convention := architecture.NewCallConvention(false, RegisterSet.General[1])
+	convention.SetFramePointerRegister(RegisterSet.General[0])
+
+	convention.CalleeSaved(RegisterSet.General...)
+	convention.CalleeSaved(RegisterSet.Float...)
+
+	for _, paramType := range funcType.ParameterTypes {
+		convention.AddStackSource(architecture.ByteSize(paramType))
+	}
+	convention.SetStackDestination(architecture.ByteSize(funcType.ReturnType))
+
+	return convention
 }
 
 type internalCallSpec struct {
