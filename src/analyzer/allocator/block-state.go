@@ -303,6 +303,33 @@ func (state *BlockState) InitializeValueLocations() {
 		state.LocationIn)
 }
 
+func (state *BlockState) FinalizeLocationOut() {
+	state.LocationOut = LocationSet{}
+	for def, locs := range state.ValueLocations.Values {
+		var selected *architecture.DataLocation
+		for loc, _ := range locs {
+			if loc.OnTempStack {
+				panic("should never happen")
+			}
+
+			// TODO select locations that best match predetermined children locations.
+			// For now, prefer register locations over fixed stack location
+			if selected == nil ||
+				selected.OnFixedStack ||
+				(len(selected.Registers) > 0 &&
+					selected.Registers[0].Index > loc.Registers[0].Index) {
+				selected = loc
+			}
+		}
+
+		if selected == nil {
+			panic("should never happen")
+		}
+
+		state.LocationOut[def] = selected
+	}
+}
+
 // Log instruction execution without advancing CurrentInstIdx since the
 // instruction may have other tear down operations.
 //

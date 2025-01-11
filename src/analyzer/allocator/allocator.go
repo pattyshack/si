@@ -55,7 +55,7 @@ func (allocator *Allocator) Process(entry ast.SourceEntry) {
 	allocator.stripExplicitUnconditionalJumps()
 
 	allocator.initializeBlockStates()
-	allocator.initializeFuncDefDataLocations()
+	allocator.initializeEntryBlockLocationIn()
 	allocator.StartCurrentFrame()
 
 	dfsOrder, _ := util.DFS(funcDef)
@@ -106,8 +106,13 @@ func (allocator *Allocator) reorderBlocksAndUpdateJumps() {
 			}
 
 			last := block.Instructions[len(block.Instructions)-1]
-			_, ok := last.(*ast.Terminal)
-			if !ok {
+			switch inst := last.(type) {
+			case *ast.Terminal: // ok
+			case *ast.FuncCall:
+				if !inst.IsExitTerminal {
+					panic("should never happen")
+				}
+			default:
 				panic("should never happen")
 			}
 		case 1: // unconditional jump
@@ -179,7 +184,7 @@ func (allocator *Allocator) initializeBlockStates() {
 	}
 }
 
-func (allocator *Allocator) initializeFuncDefDataLocations() {
+func (allocator *Allocator) initializeEntryBlockLocationIn() {
 	spec := allocator.CallConvention(allocator.FuncDef.FuncType)
 	convention := spec.CallConstraints
 
@@ -214,20 +219,49 @@ func (allocator *Allocator) initializeFuncDefDataLocations() {
 	allocator.BlockStates[allocator.FuncDef.Blocks[0]].LocationIn = locations
 }
 
+func (allocator *Allocator) maybeInitializeChildBlockLocationIn(
+	parent *BlockState,
+	child *BlockState,
+) {
+	if child.LocationIn != nil {
+		return
+	}
+
+	nameLoc := map[string]*architecture.DataLocation{}
+	for def, loc := range parent.LocationOut {
+		nameLoc[def.Name] = loc
+	}
+
+	locationIn := LocationSet{}
+	for def, _ := range child.LiveIn {
+		loc, ok := nameLoc[def.Name]
+		if !ok {
+			continue // TODO panic once instruction level allocation is implemented
+		}
+
+		locationIn[def] = loc
+	}
+	child.LocationIn = locationIn
+}
+
 func (allocator *Allocator) processBlock(block *BlockState) {
 	block.ComputeLiveRangesAndPreferences(allocator.BlockStates)
 
-	// TODO actual allocator implementation.
-	// XXX: The following is only used for debugging stack frame's implementation
+	block.InitializeValueLocations()
 
 	for _, inst := range block.Instructions {
-		for _, src := range inst.Sources() {
-			ref, ok := src.(*ast.VariableReference)
-			if !ok {
-				continue
-			}
-			allocator.StackFrame.MaybeAddLocalVariable(ref.Name, ref.Type())
-		}
+		instAlloc := newInstructionAllocator(block, inst, block.Constraints[inst])
+		instAlloc.SetUpInstruction()
+		instAlloc.ExecuteInstruction()
+		instAlloc.TearDownInstruction()
+	}
+
+	block.FinalizeLocationOut()
+
+	for _, child := range block.Children {
+		allocator.maybeInitializeChildBlockLocationIn(
+			block,
+			allocator.BlockStates[child])
 	}
 }
 
