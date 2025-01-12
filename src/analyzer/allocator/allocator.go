@@ -254,6 +254,7 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 		instAlloc.SetUpInstruction()
 		instAlloc.ExecuteInstruction()
 		instAlloc.TearDownInstruction()
+		// TODO update preferences / next uses
 	}
 
 	block.FinalizeLocationOut()

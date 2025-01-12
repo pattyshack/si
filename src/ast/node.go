@@ -278,6 +278,9 @@ type IntImmediate struct {
 
 	Value      uint64
 	IsNegative bool
+
+	// Internal
+	BindedType Type // set by type checker
 }
 
 var _ Value = &IntImmediate{}
@@ -319,11 +322,12 @@ func (imm *IntImmediate) Walk(visitor Visitor) {
 }
 
 func (imm *IntImmediate) Type() Type {
-	if imm.IsNegative {
+	if imm.BindedType != nil {
+		return imm.BindedType
+	} else if imm.IsNegative {
 		return NewNegativeIntLiteralType(imm.StartEndPos)
-	} else {
-		return NewPositiveIntLiteralType(imm.StartEndPos)
 	}
+	return NewPositiveIntLiteralType(imm.StartEndPos)
 }
 
 type FloatImmediate struct {
@@ -331,6 +335,9 @@ type FloatImmediate struct {
 	parseutil.StartEndPos
 
 	Value float64
+
+	// Internal
+	BindedType Type // set by type checker
 }
 
 var _ Value = &FloatImmediate{}
@@ -360,5 +367,8 @@ func (imm *FloatImmediate) Walk(visitor Visitor) {
 }
 
 func (imm *FloatImmediate) Type() Type {
+	if imm.BindedType != nil {
+		return imm.BindedType
+	}
 	return NewFloatLiteralType(imm.StartEndPos)
 }

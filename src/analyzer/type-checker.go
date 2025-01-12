@@ -32,6 +32,38 @@ func CheckTypes(
 	}
 }
 
+// If immType is an literal type, return a largest corresponding real
+// (int/float) type.  Otherwise, return the original type.
+func (checker *typeChecker) convertImmediateType(
+	immType ast.Type,
+) ast.Type {
+	switch immType.(type) {
+	case *ast.PositiveIntLiteralType:
+		return ast.NewU64(immType.StartEnd())
+	case *ast.NegativeIntLiteralType:
+		return ast.NewI64(immType.StartEnd())
+	case *ast.FloatLiteralType:
+		return ast.NewF64(immType.StartEnd())
+	}
+	return immType
+}
+
+func (checker *typeChecker) bindImmediateToType(
+	value ast.Value,
+	realType ast.Type,
+) {
+	switch imm := value.(type) {
+	case *ast.IntImmediate:
+		if imm.BindedType == nil {
+			imm.BindedType = realType
+		}
+	case *ast.FloatImmediate:
+		if imm.BindedType == nil {
+			imm.BindedType = realType
+		}
+	}
+}
+
 func (checker *typeChecker) Process(entry ast.SourceEntry) {
 	funcDef, ok := entry.(*ast.FunctionDefinition)
 	if !ok {
@@ -65,6 +97,13 @@ func (checker *typeChecker) Process(entry ast.SourceEntry) {
 			dest := inst.Destination()
 			if dest != nil {
 				checker.processDestination(dest, evalType)
+				if !ast.IsErrorType(dest.Type) {
+					for _, src := range inst.Sources() {
+						// Backfill copy/non-conversion unary/binary operation immediate
+						// sources' type.
+						checker.bindImmediateToType(src, dest.Type)
+					}
+				}
 				checker.checkRedefinition(dest)
 			}
 		}
@@ -93,9 +132,11 @@ func (checker *typeChecker) evaluateInstruction(
 	case *ast.Jump:
 		return nil
 	case *ast.ConditionalJump:
-		return checker.evaluateConditionalJump(inst)
+		checker.evaluateConditionalJump(inst)
+		return nil
 	case *ast.Terminal:
-		return checker.evaluateTerminal(inst)
+		checker.evaluateTerminal(inst)
+		return nil
 	default:
 		panic(fmt.Sprintf("unhandled instruction type (%s)", in.Loc()))
 	}
@@ -107,6 +148,17 @@ func (checker *typeChecker) evaluateUnaryOperation(
 	opType := inst.Src.Type()
 	if ast.IsErrorType(opType) {
 		return opType
+	}
+
+	switch inst.Kind {
+	case ast.ToI8, ast.ToI16, ast.ToI32, ast.ToI64,
+		ast.ToU8, ast.ToU16, ast.ToU32, ast.ToU64,
+		ast.ToF32, ast.ToF64:
+
+		if ast.IsNumberSubType(opType) {
+			opType = checker.convertImmediateType(opType)
+			checker.bindImmediateToType(inst.Src, opType)
+		}
 	}
 
 	switch inst.Kind {
@@ -221,7 +273,7 @@ func (checker *typeChecker) evaluateSysCall(
 ) ast.Type {
 	sysCallSpec := checker.platform.SysCallSpec()
 	foundError := false
-	funcValueType := inst.Func.Type()
+	funcValueType := checker.convertImmediateType(inst.Func.Type())
 	if ast.IsErrorType(funcValueType) {
 		foundError = true
 	} else if !sysCallSpec.IsValidFuncValueType(funcValueType) {
@@ -230,6 +282,8 @@ func (checker *typeChecker) evaluateSysCall(
 			funcValueType.Loc(),
 			"invalid syscall function value type, found %s",
 			funcValueType)
+	} else {
+		checker.bindImmediateToType(inst.Func, funcValueType)
 	}
 
 	if len(inst.Args) > sysCallSpec.MaxNumberOfArgs() {
@@ -238,7 +292,8 @@ func (checker *typeChecker) evaluateSysCall(
 	}
 
 	for idx, arg := range inst.Args {
-		argType := arg.Type()
+		argType := checker.convertImmediateType(arg.Type())
+
 		if ast.IsErrorType(argType) {
 			foundError = true
 			continue
@@ -249,6 +304,8 @@ func (checker *typeChecker) evaluateSysCall(
 				"invalid %d-th syscall argument type, found %s",
 				idx,
 				argType)
+		} else {
+			checker.bindImmediateToType(arg, argType)
 		}
 	}
 
@@ -301,6 +358,8 @@ func (checker *typeChecker) evaluateCall(
 				paramType,
 				argType)
 			foundError = true
+		} else {
+			checker.bindImmediateToType(arg, paramType)
 		}
 	}
 
@@ -312,12 +371,12 @@ func (checker *typeChecker) evaluateCall(
 
 func (checker *typeChecker) evaluateConditionalJump(
 	inst *ast.ConditionalJump,
-) ast.Type {
+) {
 	type1 := inst.Src1.Type()
 	type2 := inst.Src2.Type()
 	if ast.IsErrorType(type1) || ast.IsErrorType(type2) {
 		// Source dependencies have type check error
-		return nil
+		return
 	}
 
 	var cmpType ast.Type
@@ -331,7 +390,7 @@ func (checker *typeChecker) evaluateConditionalJump(
 			"conditional jump cannot operate on different types: %s vs %s",
 			type1,
 			type2)
-		return nil
+		return
 	}
 
 	switch inst.Kind {
@@ -353,17 +412,21 @@ func (checker *typeChecker) evaluateConditionalJump(
 		panic(fmt.Sprintf("unhandled conditional jump kind (%s)", inst.Kind))
 	}
 
-	return nil
+	cmpType = checker.convertImmediateType(cmpType)
+	checker.bindImmediateToType(inst.Src1, cmpType)
+	checker.bindImmediateToType(inst.Src2, cmpType)
+
+	return
 }
 
 func (checker *typeChecker) evaluateTerminal(
 	inst *ast.Terminal,
-) ast.Type {
+) {
 	switch inst.Kind {
 	case ast.Ret:
 		retType := inst.RetVal.Type()
 		if ast.IsErrorType(retType) {
-			return nil
+			return
 		}
 
 		funcRetType := inst.ParentBlock().ParentFuncDef.ReturnType
@@ -373,11 +436,13 @@ func (checker *typeChecker) evaluateTerminal(
 				"invalid return value type %s, expected %s",
 				retType,
 				funcRetType)
+		} else {
+			checker.bindImmediateToType(inst.RetVal, funcRetType)
 		}
 	case ast.Exit:
 		exitValueType := inst.RetVal.Type()
 		if ast.IsErrorType(exitValueType) {
-			return nil
+			return
 		}
 
 		if !checker.platform.SysCallSpec().IsValidExitArgType(exitValueType) {
@@ -385,11 +450,15 @@ func (checker *typeChecker) evaluateTerminal(
 				inst.Loc(),
 				"invalid exit value type, found %s",
 				exitValueType)
+		} else {
+			checker.bindImmediateToType(
+				inst.RetVal,
+				checker.platform.SysCallSpec().ReturnType(inst.RetVal.StartEnd()))
 		}
 	default:
 		panic(fmt.Sprintf("unhandled terminal kind (%s)", inst.Kind))
 	}
-	return nil
+	return
 }
 
 func (checker *typeChecker) processDestination(
