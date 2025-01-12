@@ -15,6 +15,15 @@ type instructionAllocator struct {
 
 	srcValues []ast.Value
 	destDef   *ast.VariableDefinition
+
+	srcConstLocs map[*arch.LocationConstraint]*arch.DataLocation
+
+	// A temp stack destination allocated during the set up phase.
+	tempDestLoc *arch.DataLocation
+
+	// Note: the set up phase will create a placeholder destination location
+	// entry which won't be allocated until the tear down phase.
+	finalDestLoc *arch.DataLocation
 }
 
 func newInstructionAllocator(
@@ -23,22 +32,126 @@ func newInstructionAllocator(
 	constraints *arch.InstructionConstraints,
 ) *instructionAllocator {
 	return &instructionAllocator{
-		BlockState:  state,
-		instruction: inst,
-		constraints: constraints,
-		srcValues:   inst.Sources(),
-		destDef:     inst.Destination(),
+		BlockState:   state,
+		instruction:  inst,
+		constraints:  constraints,
+		srcValues:    inst.Sources(),
+		destDef:      inst.Destination(),
+		srcConstLocs: map[*arch.LocationConstraint]*arch.DataLocation{},
 	}
 }
 
-func (allocator *instructionAllocator) SetUpInstruction() {
+func (allocator *instructionAllocator) setUpTempStack() {
 	allocator.selectTempRegister()
 }
 
+func (allocator *instructionAllocator) reduceRegisterPressure() {
+}
+
+func (allocator *instructionAllocator) setUpRegisterSources() {
+}
+
+func (allocator *instructionAllocator) SetUpInstruction() {
+	allocator.setUpTempStack()
+	allocator.reduceRegisterPressure()
+	allocator.setUpRegisterSources()
+}
+
 func (allocator *instructionAllocator) ExecuteInstruction() {
+	_, ok := allocator.instruction.(*ast.CopyOperation)
+	if ok {
+		return // value already copied during the set up phase
+	}
+
+	srcLocs := []*arch.DataLocation{}
+	for _, constraint := range allocator.constraints.Sources {
+		loc, ok := allocator.srcConstLocs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+		srcLocs = append(srcLocs, loc)
+	}
+
+	destLoc := allocator.finalDestLoc
+	if allocator.tempDestLoc != nil {
+		destLoc = allocator.tempDestLoc
+	}
+
+	allocator.BlockState.ExecuteInstruction(
+		allocator.instruction,
+		srcLocs,
+		destLoc)
 }
 
 func (allocator *instructionAllocator) TearDownInstruction() {
+	// NOTE: temp register must be selected before freeing any location since
+	// the freed location may have the destination's data.
+	tempRegister := allocator.selectTempRegister()
+
+	// Free all clobbered source locations
+	for _, constraint := range allocator.constraints.Sources {
+		if !constraint.ClobberedByInstruction() {
+			continue
+		}
+
+		loc, ok := allocator.srcConstLocs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+		allocator.FreeLocation(loc)
+	}
+
+	// Free all dead definitions.
+	//
+	// Note: free location operations are not in deterministic order.  This is
+	// ok since free location won't emit any real instruction.
+	for def, locs := range allocator.ValueLocations.Values {
+		liveRange, ok := allocator.LiveRanges[def]
+		if !ok {
+			panic("should never happen")
+		}
+
+		if len(liveRange.NextUses) > 0 {
+			continue
+		}
+
+		for loc, _ := range locs {
+			allocator.FreeLocation(loc)
+		}
+	}
+
+	if allocator.destDef == nil {
+		return
+	}
+
+	if allocator.finalDestLoc == nil {
+		panic("should never happen")
+	} else if allocator.finalDestLoc.OnTempStack {
+		panic("should never happen")
+	} else if allocator.finalDestLoc.OnFixedStack {
+		// value must be on temp tack
+		if allocator.tempDestLoc == nil {
+			panic("should never happen")
+		}
+
+		allocator.finalDestLoc = allocator.AllocateFixedStackLocation(
+			allocator.destDef)
+	} else {
+		// Since sources and destination may share registers, register destination
+		// must be allocated after all clobbered sources are freed.
+		allocator.finalDestLoc = allocator.AllocateRegistersLocation(
+			allocator.destDef,
+			allocator.finalDestLoc.Registers...)
+	}
+
+	if allocator.tempDestLoc != nil {
+		// The destination value is on a temp stack
+		allocator.CopyLocation(
+			allocator.tempDestLoc,
+			allocator.finalDestLoc,
+			tempRegister)
+		allocator.FreeLocation(allocator.tempDestLoc)
+	}
 }
 
 // By construction, there's always at least one unused register (this

@@ -35,6 +35,11 @@ type LocationConstraint struct {
 	Registers []*RegisterCandidate
 }
 
+func (loc *LocationConstraint) ClobberedByInstruction() bool {
+	return loc.RequireOnStack ||
+		(loc.NumRegisters > 0 && loc.Registers[0].Clobbered)
+}
+
 // InstructionConstraints is used to specify instruction register constraints,
 // and call convention's registers selection / stack layout.
 //
