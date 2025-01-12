@@ -1,5 +1,9 @@
 package architecture
 
+import (
+	"github.com/pattyshack/chickadee/ast"
+)
+
 // A yet to be determined register.
 type RegisterCandidate struct {
 	// Clobbered registers are caller-saved; registers are callee-saved otherwise.
@@ -18,7 +22,7 @@ type RegisterCandidate struct {
 // Assumptions: A value must either be completely on register, or completely
 // on stack.
 type LocationConstraint struct {
-	Size int // in byte
+	NumRegisters int // size in number of registers
 
 	// When true, the data could be on either stack or registers
 	AnyLocation bool
@@ -160,18 +164,19 @@ func (constraints *InstructionConstraints) registerLocation(
 	}
 
 	return &LocationConstraint{
-		Registers: list,
+		NumRegisters: len(list),
+		Registers:    list,
 	}
 }
 
 func (constraints *InstructionConstraints) AddAnySource(
-	size int,
+	valueType ast.Type,
 ) {
 	constraints.Sources = append(
 		constraints.Sources,
 		&LocationConstraint{
-			Size:        size,
-			AnyLocation: true,
+			NumRegisters: NumRegisters(valueType),
+			AnyLocation:  true,
 		})
 }
 
@@ -186,10 +191,10 @@ func (constraints *InstructionConstraints) AddRegisterSource(
 }
 
 func (constraints *InstructionConstraints) AddStackSource(
-	size int,
+	valueType ast.Type,
 ) {
 	loc := &LocationConstraint{
-		Size:           size,
+		NumRegisters:   NumRegisters(valueType),
 		RequireOnStack: true,
 	}
 	constraints.SrcStackLocations = append(constraints.SrcStackLocations, loc)
@@ -228,14 +233,14 @@ func (constraints *InstructionConstraints) SetRegisterDestination(
 }
 
 func (constraints *InstructionConstraints) SetStackDestination(
-	size int,
+	valueType ast.Type,
 ) {
 	if constraints.Destination != nil {
 		panic("destination already set")
 	}
 
 	loc := &LocationConstraint{
-		Size:           size,
+		NumRegisters:   NumRegisters(valueType),
 		RequireOnStack: true,
 	}
 	constraints.DestStackLocation = loc
@@ -287,9 +292,9 @@ func (con *CallConvention) AddRegisterSource(
 }
 
 func (con *CallConvention) AddStackSource(
-	size int,
+	valueType ast.Type,
 ) {
-	con.CallConstraints.AddStackSource(size)
+	con.CallConstraints.AddStackSource(valueType)
 }
 
 func (con *CallConvention) SetFramePointerRegister(
@@ -312,10 +317,10 @@ func (con *CallConvention) SetRegisterDestination(
 }
 
 func (con *CallConvention) SetStackDestination(
-	size int,
+	valueType ast.Type,
 ) {
-	con.CallConstraints.SetStackDestination(size)
-	con.RetConstraints.AddStackSource(size)
+	con.CallConstraints.SetStackDestination(valueType)
+	con.RetConstraints.AddStackSource(valueType)
 }
 
 // All caller-saved registers that are clobbered by the call.

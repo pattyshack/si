@@ -52,9 +52,9 @@ func (internalCalleeSavedCallSpec) CallConvention(
 	convention.CalleeSaved(RegisterSet.Float...)
 
 	for _, paramType := range funcType.ParameterTypes {
-		convention.AddStackSource(architecture.ByteSize(paramType))
+		convention.AddStackSource(paramType)
 	}
-	convention.SetStackDestination(architecture.ByteSize(funcType.ReturnType))
+	convention.SetStackDestination(funcType.ReturnType)
 
 	return convention
 }
@@ -156,7 +156,7 @@ func (spec internalCallSpec) CallConvention(
 		}
 
 		if registers == nil { // need to be on memory
-			convention.AddStackSource(architecture.ByteSize(paramType))
+			convention.AddStackSource(paramType)
 		} else {
 			clobbered := true
 			if len(registers) > 0 {
@@ -176,7 +176,7 @@ func (spec internalCallSpec) CallConvention(
 		architecture.NumRegisters(funcType.ReturnType))
 
 	if registers == nil { // need to be on memory
-		convention.SetStackDestination(architecture.ByteSize(funcType.ReturnType))
+		convention.SetStackDestination(funcType.ReturnType)
 	} else {
 		convention.SetRegisterDestination(registers...)
 	}
@@ -277,7 +277,7 @@ func (systemVLiteCallSpec) CallConvention(
 	for _, paramType := range funcType.ParameterTypes {
 		register := picker.Pick(paramType)
 		if register == nil { // need to be on memory
-			convention.AddStackSource(architecture.ByteSize(paramType))
+			convention.AddStackSource(paramType)
 		} else {
 			convention.AddRegisterSource(true, register)
 		}

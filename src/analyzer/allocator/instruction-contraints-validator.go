@@ -303,7 +303,7 @@ func (validator *InstructionConstraintsValidator) ValidateLocation(
 		if len(constraint.Registers) > 0 {
 			panic(fmt.Sprintf("invalid: %s", pos))
 		}
-		if constraint.Size == 0 {
+		if constraint.NumRegisters == 0 {
 			panic(fmt.Sprintf("invalid: %s", pos))
 		}
 		if !canBeOnStack {
