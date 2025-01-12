@@ -16,7 +16,8 @@ type LiveRange struct {
 	Start int // first live distance (relative to beginning of current block)
 	End   int // last use distance, inclusive.
 
-	// NextUses are always at least one instruction ahead of CurrentInstIdx.
+	// NextUses are always at least one instruction ahead of the current,
+	// yet to be executed, instruction.
 	NextUses []int
 }
 
@@ -56,14 +57,13 @@ type BlockState struct {
 	LiveIn  LiveSet
 	LiveOut LiveSet
 
-	CurrentInstIdx int
+	Constraints map[ast.Instruction]*architecture.InstructionConstraints
 
 	// Note: unused definitions are not included in LiveRanges
 	LiveRanges map[*ast.VariableDefinition]*LiveRange
 
-	Constraints map[ast.Instruction]*architecture.InstructionConstraints
-
-	// Preferences are always at least one instruction ahead of CurrentInstIdx.
+	// Preferences are always at least one instruction ahead of the current,
+	// yet to be executed, instruction.
 	Preferences map[*architecture.Register][]PreferredAllocation
 
 	// Where data are located immediately prior to executing the block.
@@ -296,6 +296,34 @@ func (state *BlockState) maybeAddPreference(
 		})
 }
 
+func (state *BlockState) AdvanceLiveRangesAndPreferences(
+	currentInst int,
+) {
+	currentInst++
+
+	for def, liveRange := range state.LiveRanges {
+		if currentInst > liveRange.End {
+			delete(state.LiveRanges, def)
+			continue
+		}
+
+		for len(liveRange.NextUses) > 0 && liveRange.NextUses[0] <= currentInst {
+			liveRange.NextUses = liveRange.NextUses[1:]
+		}
+	}
+
+	for reg, pref := range state.Preferences {
+		origLen := len(pref)
+		for len(pref) > 0 && pref[0].Use <= currentInst {
+			pref = pref[1:]
+		}
+
+		if origLen > len(pref) {
+			state.Preferences[reg] = pref
+		}
+	}
+}
+
 func (state *BlockState) InitializeValueLocations() {
 	state.ValueLocations = NewValueLocations(
 		state.Platform,
@@ -330,9 +358,6 @@ func (state *BlockState) FinalizeLocationOut() {
 	}
 }
 
-// Log instruction execution without advancing CurrentInstIdx since the
-// instruction may have other tear down operations.
-//
 // Note: srcs must be allocated/tracked by ValueLocations.  dest's location is
 // allocated/tracked by ValueLocations prior to instruction execution iff the
 // location is on temp stack; register locations must be allocated/tracked by

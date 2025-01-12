@@ -249,12 +249,12 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 
 	block.InitializeValueLocations()
 
-	for _, inst := range block.Instructions {
+	for idx, inst := range block.Instructions {
 		instAlloc := newInstructionAllocator(block, inst, block.Constraints[inst])
 		instAlloc.SetUpInstruction()
 		instAlloc.ExecuteInstruction()
 		instAlloc.TearDownInstruction()
-		// TODO update preferences / next uses
+		block.AdvanceLiveRangesAndPreferences(idx)
 	}
 
 	block.FinalizeLocationOut()
