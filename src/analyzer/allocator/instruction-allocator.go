@@ -1,11 +1,19 @@
 package allocator
 
 import (
+	"fmt"
 	"strings"
 
 	arch "github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 )
+
+type defLoc struct {
+	def *ast.VariableDefinition
+	loc *arch.DataLocation
+
+	pseudoDefVal ast.Value // global ref or immediate
+}
 
 type instructionAllocator struct {
 	*BlockState
@@ -13,17 +21,14 @@ type instructionAllocator struct {
 	instruction ast.Instruction
 	constraints *arch.InstructionConstraints
 
-	srcValues []ast.Value
-	destDef   *ast.VariableDefinition
-
-	srcConstLocs map[*arch.LocationConstraint]*arch.DataLocation
+	srcs map[*arch.LocationConstraint]*defLoc
 
 	// A temp stack destination allocated during the set up phase.
-	tempDestLoc *arch.DataLocation
+	tempDest defLoc
 
 	// Note: the set up phase will create a placeholder destination location
 	// entry which won't be allocated until the tear down phase.
-	finalDestLoc *arch.DataLocation
+	finalDest defLoc
 }
 
 func newInstructionAllocator(
@@ -31,24 +36,33 @@ func newInstructionAllocator(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) *instructionAllocator {
-	return &instructionAllocator{
-		BlockState:   state,
-		instruction:  inst,
-		constraints:  constraints,
-		srcValues:    inst.Sources(),
-		destDef:      inst.Destination(),
-		srcConstLocs: map[*arch.LocationConstraint]*arch.DataLocation{},
+	srcs := map[*arch.LocationConstraint]*defLoc{}
+	for idx, value := range inst.Sources() {
+		entry := &defLoc{}
+		ref, ok := value.(*ast.VariableReference)
+		if ok {
+			entry.def = ref.UseDef
+		} else {
+			entry.def = &ast.VariableDefinition{
+				StartEndPos:       value.StartEnd(),
+				Name:              fmt.Sprintf("%%constant-source-%d", idx),
+				Type:              value.Type(),
+				ParentInstruction: inst,
+			}
+			entry.pseudoDefVal = value
+		}
+		srcs[constraints.Sources[idx]] = entry
 	}
-}
 
-func (allocator *instructionAllocator) setUpTempStack() {
-	allocator.selectTempRegister()
-}
-
-func (allocator *instructionAllocator) reduceRegisterPressure() {
-}
-
-func (allocator *instructionAllocator) setUpRegisterSources() {
+	return &instructionAllocator{
+		BlockState:  state,
+		instruction: inst,
+		constraints: constraints,
+		srcs:        srcs,
+		finalDest: defLoc{
+			def: inst.Destination(),
+		},
+	}
 }
 
 func (allocator *instructionAllocator) SetUpInstruction() {
@@ -65,16 +79,16 @@ func (allocator *instructionAllocator) ExecuteInstruction() {
 
 	srcLocs := []*arch.DataLocation{}
 	for _, constraint := range allocator.constraints.Sources {
-		loc, ok := allocator.srcConstLocs[constraint]
+		entry, ok := allocator.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
-		srcLocs = append(srcLocs, loc)
+		srcLocs = append(srcLocs, entry.loc)
 	}
 
-	destLoc := allocator.finalDestLoc
-	if allocator.tempDestLoc != nil {
-		destLoc = allocator.tempDestLoc
+	destLoc := allocator.finalDest.loc
+	if allocator.tempDest.loc != nil {
+		destLoc = allocator.tempDest.loc
 	}
 
 	allocator.BlockState.ExecuteInstruction(
@@ -94,11 +108,11 @@ func (allocator *instructionAllocator) TearDownInstruction() {
 			continue
 		}
 
-		loc, ok := allocator.srcConstLocs[constraint]
+		entry, ok := allocator.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
-		allocator.FreeLocation(loc)
+		allocator.FreeLocation(entry.loc)
 	}
 
 	// Free all dead definitions.
@@ -120,38 +134,127 @@ func (allocator *instructionAllocator) TearDownInstruction() {
 		}
 	}
 
-	if allocator.destDef == nil {
+	if allocator.finalDest.def == nil {
 		return
 	}
 
-	if allocator.finalDestLoc == nil {
+	if allocator.finalDest.loc == nil {
 		panic("should never happen")
-	} else if allocator.finalDestLoc.OnTempStack {
+	} else if allocator.finalDest.loc.OnTempStack {
 		panic("should never happen")
-	} else if allocator.finalDestLoc.OnFixedStack {
+	} else if allocator.finalDest.loc.OnFixedStack {
 		// value must be on temp tack
-		if allocator.tempDestLoc == nil {
+		if allocator.tempDest.loc == nil {
 			panic("should never happen")
 		}
 
-		allocator.finalDestLoc = allocator.AllocateFixedStackLocation(
-			allocator.destDef)
+		allocator.finalDest.loc = allocator.AllocateFixedStackLocation(
+			allocator.finalDest.def)
 	} else {
 		// Since sources and destination may share registers, register destination
 		// must be allocated after all clobbered sources are freed.
-		allocator.finalDestLoc = allocator.AllocateRegistersLocation(
-			allocator.destDef,
-			allocator.finalDestLoc.Registers...)
+		allocator.finalDest.loc = allocator.AllocateRegistersLocation(
+			allocator.finalDest.def,
+			allocator.finalDest.loc.Registers...)
 	}
 
-	if allocator.tempDestLoc != nil {
+	if allocator.tempDest.loc != nil {
 		// The destination value is on a temp stack
 		allocator.CopyLocation(
-			allocator.tempDestLoc,
-			allocator.finalDestLoc,
+			allocator.tempDest.loc,
+			allocator.finalDest.loc,
 			tempRegister)
-		allocator.FreeLocation(allocator.tempDestLoc)
+		allocator.FreeLocation(allocator.tempDest.loc)
 	}
+}
+
+func (allocator *instructionAllocator) setUpTempStack() {
+	tempRegister := allocator.selectTempRegister()
+
+	var srcDefs []*ast.VariableDefinition
+	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
+	for _, constraint := range allocator.constraints.SrcStackLocations {
+		entry, ok := allocator.srcs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+		srcDefs = append(srcDefs, entry.def)
+
+		if entry.pseudoDefVal != nil {
+			copySrcs[entry.def] = allocator.selectCopySourceLocation(entry.def)
+		}
+	}
+
+	if allocator.constraints.DestStackLocation != nil {
+		allocator.tempDest.def = &ast.VariableDefinition{
+			StartEndPos:       allocator.finalDest.def.StartEnd(),
+			Name:              "%temp-destination",
+			Type:              allocator.finalDest.def.Type,
+			ParentInstruction: allocator.instruction,
+		}
+	}
+
+	stackSrcLocs, tempDestLoc := allocator.AllocateTempStackLocations(
+		srcDefs,
+		allocator.tempDest.def)
+
+	for idx, constraint := range allocator.constraints.SrcStackLocations {
+		entry, ok := allocator.srcs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+
+		loc := stackSrcLocs[idx]
+		entry.loc = loc
+
+		if entry.pseudoDefVal != nil {
+			allocator.SetConstantValue(entry.pseudoDefVal, loc, tempRegister)
+		} else {
+			copySrc, ok := copySrcs[entry.def]
+			if !ok {
+				panic("should never happen")
+			}
+			allocator.CopyLocation(copySrc, loc, tempRegister)
+		}
+	}
+
+	allocator.tempDest.loc = tempDestLoc
+	if tempDestLoc != nil {
+		allocator.InitializeZeros(tempDestLoc, tempRegister)
+	}
+}
+
+func (allocator *instructionAllocator) selectCopySourceLocation(
+	def *ast.VariableDefinition,
+) *arch.DataLocation {
+	set, ok := allocator.ValueLocations.Values[def]
+	if !ok {
+		panic("should never happen")
+	}
+
+	var selected *arch.DataLocation
+	for loc, _ := range set {
+		if selected == nil ||
+			// Prefer register locations over stack location
+			selected.OnFixedStack ||
+			selected.OnTempStack ||
+			// Pick a deterministic register location
+			(len(selected.Registers) > 0 &&
+				selected.Registers[0].Index > loc.Registers[0].Index) {
+
+			selected = loc
+		}
+	}
+
+	return selected
+}
+
+func (allocator *instructionAllocator) reduceRegisterPressure() {
+	// TODO
+}
+
+func (allocator *instructionAllocator) setUpRegisterSources() {
+	// TODO
 }
 
 // By construction, there's always at least one unused register (this
