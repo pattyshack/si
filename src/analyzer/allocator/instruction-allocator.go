@@ -483,11 +483,93 @@ func (allocator *instructionAllocator) computeRegisterPressure() (
 	return registerPressure, candidates
 }
 
+// Free preferences (from highest to lowest):
+//   - most discardable extra copies (does not spill)
+//   - candidate is already on fixed stack (already spill)
+//   - callee-saved parameters (spill / use exactly once)
+//   - spill furthest nextUseDist (this heuristic hopeful keeps register
+//     pressure low for longer, but could cause instruction pipeline stall)
+//
+// All preferences are tie break by name to make the selection deterministic.
 func (allocator *instructionAllocator) selectFreeDefCandidate(
 	candidates map[*ast.VariableDefinition]*freeDefCandidate,
 ) *freeDefCandidate {
-	// TODO
-	return nil
+	// Prefer to free candidate with extra discardable copies
+	maxExtraCopies := 0
+	var selected *freeDefCandidate
+	for _, candidate := range candidates {
+		if candidate.numPreferred >= candidate.numActualCopies {
+			// The candidate cannot be unconditionally discarded
+			continue
+		}
+
+		extraCopies := candidate.numActualCopies - candidate.numClobbered
+		if extraCopies > maxExtraCopies {
+			maxExtraCopies = extraCopies
+			selected = candidate
+		} else if extraCopies == maxExtraCopies &&
+			arch.CompareDefinitionNames(
+				candidate.definition.Name,
+				selected.definition.Name) < 0 {
+			selected = candidate
+		}
+	}
+	if selected != nil {
+		return selected
+	}
+
+	// Prefer to free candidate that are already on stack
+	for _, candidate := range candidates {
+		if candidate.hasFixedStackCopy {
+			if selected == nil {
+				selected = candidate
+			} else if arch.CompareDefinitionNames(
+				candidate.definition.Name,
+				selected.definition.Name) < 0 {
+
+				selected = candidate
+			}
+		}
+	}
+	if selected != nil {
+		return selected
+	}
+
+	// Prefer callee-saved parameters
+	for _, candidate := range candidates {
+		if strings.HasPrefix(candidate.definition.Name, "%") {
+			if selected == nil {
+				selected = candidate
+			} else if arch.CompareDefinitionNames(
+				candidate.definition.Name,
+				selected.definition.Name) < 0 {
+
+				selected = candidate
+			}
+		}
+	}
+	if selected != nil {
+		return selected
+	}
+
+	// Prefer further nextUseDist
+	for _, candidate := range candidates {
+		if selected == nil {
+			selected = candidate
+		} else if candidate.nextUseDist > selected.nextUseDist {
+			selected = candidate
+		} else if candidate.nextUseDist == selected.nextUseDist &&
+			arch.CompareDefinitionNames(
+				candidate.definition.Name,
+				selected.definition.Name) < 0 {
+			selected = candidate
+		}
+	}
+
+	if selected == nil {
+		panic("should never happen")
+	}
+	return selected
 }
 
 func (allocator *instructionAllocator) selectFreeLocation(

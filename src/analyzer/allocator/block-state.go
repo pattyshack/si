@@ -418,7 +418,9 @@ func (state *BlockState) CopyLocation(
 ) {
 	state.ValueLocations.AssertAllocated(src)
 	state.ValueLocations.AssertAllocated(dest)
-	state.ValueLocations.AssertFree(temp)
+	if temp != nil {
+		state.ValueLocations.AssertFree(temp)
+	}
 
 	state.Operations = append(
 		state.Operations,
