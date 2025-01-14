@@ -7,6 +7,38 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
+func CompareDefinitionNames(
+	first string,
+	second string,
+) int {
+	if first == second {
+		return 0
+	}
+
+	// Frame pointer is always before other definitions
+	if first == PreviousFramePointer {
+		return -1
+	} else if second == PreviousFramePointer {
+		return 1
+	}
+
+	// Callee saved defintions are before real definitions
+	firstIsCalleeSaved := strings.HasPrefix(first, "%")
+	secondIsCalleeSaved := strings.HasPrefix(second, "%")
+	if firstIsCalleeSaved {
+		if !secondIsCalleeSaved {
+			return -1
+		}
+	} else if secondIsCalleeSaved {
+		return 1
+	}
+
+	if first < second {
+		return -1
+	}
+	return 1
+}
+
 // Stack frame layout from top to bottom:
 //
 // |              | (low address)
@@ -169,34 +201,8 @@ func (frame *StackFrame) FinalizeFrame() {
 	sort.Slice(
 		frameEntries,
 		func(i int, j int) bool {
-			first := frameEntries[i].Name
-			second := frameEntries[j].Name
-
-			if first == second {
-				panic("should never happen")
-			}
-
-			// Frame pointer is always at the bottom of the frame
-			if first == PreviousFramePointer {
-				return true
-			} else if second == PreviousFramePointer {
-				return false
-			}
-
-			firstIsCalleeSaved := strings.HasPrefix(first, "%")
-			secondIsCalleeSaved := strings.HasPrefix(second, "%")
-
-			// Callee saved are below real variables
-			if firstIsCalleeSaved {
-				if !secondIsCalleeSaved {
-					return true
-				}
-				return first < second
-			} else if secondIsCalleeSaved {
-				return false
-			}
-
-			return first < second
+			cmp := CompareDefinitionNames(frameEntries[i].Name, frameEntries[j].Name)
+			return cmp < 0
 		})
 
 	totalFrameSize := fixedSize + frame.MaxTempSize
