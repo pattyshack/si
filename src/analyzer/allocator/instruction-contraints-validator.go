@@ -40,6 +40,8 @@ func (validator *InstructionConstraintsValidator) Process(
 			isFuncCall := false
 			constraints := block.Constraints[in]
 			switch inst := in.(type) {
+			case *ast.CopyOperation:
+				validator.ValidateCopy(inst, constraints)
 			case *ast.FuncCall:
 				isFuncCall = true
 				validator.ValidateCall(inst, constraints)
@@ -185,6 +187,35 @@ func (validator *InstructionConstraintsValidator) ValidateFunctionDefinition(
 	validator.ValidateUniqueRegisters(funcDef.Loc(), constraints, true)
 }
 
+func (validator *InstructionConstraintsValidator) ValidateCopy(
+	inst *ast.CopyOperation,
+	constraints *architecture.InstructionConstraints,
+) {
+	validateAnyLocation := func(loc *architecture.LocationConstraint) {
+		if !loc.AnyLocation {
+			panic(fmt.Sprintf("invalid: %s", inst.Loc()))
+		}
+
+		if loc.RequireOnStack {
+			panic(fmt.Sprintf("invalid: %s", inst.Loc()))
+		}
+
+		if len(loc.Registers) > 0 {
+			panic(fmt.Sprintf("invalid: %s", inst.Loc()))
+		}
+	}
+
+	if len(constraints.Sources) != 1 {
+		panic(fmt.Sprintf("invalid: %s", inst.Loc()))
+	}
+	validateAnyLocation(constraints.Sources[0])
+
+	if constraints.Destination == nil {
+		panic(fmt.Sprintf("invalid: %s", inst.Loc()))
+	}
+	validateAnyLocation(constraints.Destination)
+}
+
 func (validator *InstructionConstraintsValidator) ValidateGenericInstruction(
 	inst ast.Instruction,
 	constraints *architecture.InstructionConstraints,
@@ -290,15 +321,7 @@ func (validator *InstructionConstraintsValidator) ValidateLocation(
 	canBeOnStack bool,
 ) {
 	if constraint.AnyLocation {
-		if constraint.RequireOnStack {
-			panic(fmt.Sprintf("invalid: %s", pos))
-		}
-		if len(constraint.Registers) > 0 {
-			panic(fmt.Sprintf("invalid: %s", pos))
-		}
-		if requireConcreteLocation {
-			panic(fmt.Sprintf("invalid: %s", pos))
-		}
+		panic(fmt.Sprintf("invalid: %s", pos))
 	} else if constraint.RequireOnStack {
 		if len(constraint.Registers) > 0 {
 			panic(fmt.Sprintf("invalid: %s", pos))

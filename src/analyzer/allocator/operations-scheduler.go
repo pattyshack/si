@@ -432,7 +432,9 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		if constraint.RequireOnStack {
 			// Do nothing.  We've already set up the temp stack
 		} else if constraint.AnyLocation { // only used by copy operation
-			candidate.numPreferred++
+			if candidate.numPreferred == candidate.numRequired {
+				candidate.numPreferred++
+			}
 		} else {
 			for _, reg := range constraint.Registers {
 				registerCandidates[reg] = struct{}{}

@@ -174,7 +174,8 @@ func (constraints *InstructionConstraints) registerLocation(
 	}
 }
 
-func (constraints *InstructionConstraints) AddAnySource(
+// Can only be used by ast.CopyOperation
+func (constraints *InstructionConstraints) AddAnyCopySource(
 	valueType ast.Type,
 ) {
 	constraints.Sources = append(
@@ -250,6 +251,20 @@ func (constraints *InstructionConstraints) SetStackDestination(
 	}
 	constraints.DestStackLocation = loc
 	constraints.Destination = loc
+}
+
+// Can only be used by ast.CopyOperation
+func (constraints *InstructionConstraints) SetAnyCopyDestination(
+	valueType ast.Type,
+) {
+	if constraints.Destination != nil {
+		panic("destination already set")
+	}
+
+	constraints.Destination = &LocationConstraint{
+		NumRegisters: NumRegisters(valueType),
+		AnyLocation:  true,
+	}
 }
 
 type CallConvention struct {
