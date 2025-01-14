@@ -15,6 +15,25 @@ type defLoc struct {
 	pseudoDefVal ast.Value // global ref or immediate
 }
 
+type freeDefCandidate struct {
+	definition   *ast.VariableDefinition
+	numRegisters int
+
+	nextUseDist int // 0 indicates the definition is dead after this instruction
+	constraints []*arch.LocationConstraint
+
+	// numRequired + 1 >= numPreferred >= numRequired >= numClobbered
+	//
+	// The extra copy in numPreferred is used to ensure the definition outlives
+	// the current instruction.
+	numPreferred int
+	numRequired  int
+	numClobbered int
+
+	numActualCopies   int
+	hasFixedStackCopy bool
+}
+
 type instructionAllocator struct {
 	*BlockState
 
@@ -67,8 +86,12 @@ func newInstructionAllocator(
 
 func (allocator *instructionAllocator) SetUpInstruction() {
 	allocator.setUpTempStack()
+
+	// Note: To maximize degrees of freedom / simplify accounting, register
+	// pressure is computed after setting up temp stack, which will likely free
+	// up some registers.
 	allocator.reduceRegisterPressure()
-	allocator.setUpRegisterSources()
+	allocator.setUpRegisters()
 }
 
 func (allocator *instructionAllocator) ExecuteInstruction() {
@@ -249,14 +272,6 @@ func (allocator *instructionAllocator) selectCopySourceLocation(
 	return selected
 }
 
-func (allocator *instructionAllocator) reduceRegisterPressure() {
-	// TODO
-}
-
-func (allocator *instructionAllocator) setUpRegisterSources() {
-	// TODO
-}
-
 // By construction, there's always at least one unused register (this
 // assumption is checked by the instruction constraints validator).  The
 // function entry point is the only place where all registers could be in
@@ -309,4 +324,179 @@ func (allocator *instructionAllocator) selectTempRegister() *arch.Register {
 	allocator.FreeLocation(regLoc)
 
 	return selected.Register
+}
+
+func (allocator *instructionAllocator) reduceRegisterPressure() {
+	pressure, freeDefCandidates := allocator.computeRegisterPressure()
+	threshold := len(allocator.ValueLocations.Registers) - 1
+	for pressure > threshold {
+		candidate := allocator.selectFreeDefCandidate(freeDefCandidates)
+
+		shouldSpill := false
+		if candidate.numActualCopies > candidate.numPreferred {
+			candidate.numActualCopies-- // Just free an extra copy
+		} else {
+			if candidate.numPreferred <= candidate.numRequired {
+				panic("should never happen")
+			}
+
+			if candidate.numActualCopies == candidate.numPreferred {
+				candidate.numActualCopies--
+			}
+
+			candidate.numPreferred--
+			shouldSpill = true
+		}
+
+		if shouldSpill && !candidate.hasFixedStackCopy {
+			src := allocator.selectCopySourceLocation(candidate.definition)
+			dest := allocator.AllocateFixedStackLocation(candidate.definition)
+			allocator.CopyLocation(src, dest, nil)
+			candidate.hasFixedStackCopy = true
+		}
+
+		allocator.FreeLocation(allocator.selectFreeLocation(candidate))
+		pressure -= candidate.numRegisters
+
+		// Prune unfreeable candidate
+		if candidate.numPreferred == candidate.numRequired &&
+			candidate.numRequired >= candidate.numActualCopies {
+
+			delete(freeDefCandidates, candidate.definition)
+		}
+	}
+}
+
+func (allocator *instructionAllocator) computeRegisterPressure() (
+	int,
+	map[*ast.VariableDefinition]*freeDefCandidate,
+) {
+	candidates := map[*ast.VariableDefinition]*freeDefCandidate{}
+	for def, locs := range allocator.ValueLocations.Values {
+		numRegisters := arch.NumRegisters(def.Type)
+		if numRegisters == 0 {
+			// Unit value type is never a candidate since it takes up no space
+			continue
+		}
+
+		liveRange, ok := allocator.LiveRanges[def]
+		if !ok {
+			panic("should never happen")
+		}
+		nextUseDist := 0
+		if len(liveRange.NextUses) > 0 {
+			nextUseDist = liveRange.NextUses[0]
+		}
+
+		candidate := &freeDefCandidate{
+			definition:   def,
+			numRegisters: numRegisters,
+			nextUseDist:  nextUseDist,
+		}
+		candidates[def] = candidate
+
+		for loc, _ := range locs {
+			if loc.OnFixedStack {
+				candidate.hasFixedStackCopy = true
+			} else if loc.OnTempStack {
+				// Do nothing.
+			} else {
+				candidate.numActualCopies++
+			}
+		}
+	}
+
+	registerPressure := 0
+	registerCandidates := map[*arch.RegisterCandidate]struct{}{}
+	for constraint, defLoc := range allocator.srcs {
+		if constraint.NumRegisters == 0 {
+			// Unit value type is never a candidate since it takes up no space
+			continue
+		}
+
+		candidate, ok := candidates[defLoc.def]
+		if !ok {
+			if defLoc.pseudoDefVal == nil {
+				panic("should never happen")
+			}
+
+			// Make room for the constant source value
+			registerPressure += constraint.NumRegisters
+			continue
+		}
+
+		if constraint.RequireOnStack {
+			// Do nothing.  We've already set up the temp stack
+		} else if constraint.AnyLocation { // only used by copy operation
+			candidate.numPreferred++
+		} else {
+			for _, reg := range constraint.Registers {
+				registerCandidates[reg] = struct{}{}
+			}
+
+			candidate.constraints = append(candidate.constraints, constraint)
+			candidate.numPreferred++
+			candidate.numRequired++
+
+			if constraint.ClobberedByInstruction() {
+				candidate.numClobbered++
+			}
+		}
+	}
+
+	// Account for destination registers that do not overlap with source registers
+	if allocator.constraints.Destination != nil {
+		for _, reg := range allocator.constraints.Destination.Registers {
+			_, ok := registerCandidates[reg]
+			if !ok {
+				registerPressure++
+			}
+		}
+	}
+
+	for def, candidate := range candidates {
+		numCopies := candidate.numActualCopies
+
+		// If the definition out lives the instruction, ensure at least one copy of
+		// the source definition survive.
+		if candidate.nextUseDist > 0 &&
+			candidate.numRequired == candidate.numClobbered &&
+			candidate.numPreferred == candidate.numRequired {
+
+			candidate.numPreferred++
+		}
+
+		// For now, assume there's enough room to keep everything on registers.
+		if candidate.numPreferred > numCopies {
+			numCopies = candidate.numPreferred
+		}
+		registerPressure += numCopies * candidate.numRegisters
+
+		// Prune candidates that can never be freed
+		if candidate.numRequired >= candidate.numActualCopies &&
+			candidate.numPreferred == candidate.numRequired {
+
+			delete(candidates, def)
+		}
+	}
+
+	return registerPressure, candidates
+}
+
+func (allocator *instructionAllocator) selectFreeDefCandidate(
+	candidates map[*ast.VariableDefinition]*freeDefCandidate,
+) *freeDefCandidate {
+	// TODO
+	return nil
+}
+
+func (allocator *instructionAllocator) selectFreeLocation(
+	candidate *freeDefCandidate,
+) *arch.DataLocation {
+	// TODO
+	return nil
+}
+
+func (allocator *instructionAllocator) setUpRegisters() {
+	// TODO
 }
