@@ -250,10 +250,8 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 	block.InitializeValueLocations()
 
 	for idx, inst := range block.Instructions {
-		instAlloc := newInstructionAllocator(block, inst, block.Constraints[inst])
-		instAlloc.SetUpInstruction()
-		instAlloc.ExecuteInstruction()
-		instAlloc.TearDownInstruction()
+		scheduler := newOperationsScheduler(block, inst, block.Constraints[inst])
+		scheduler.ScheduleOperations()
 		block.AdvanceLiveRangesAndPreferences(idx)
 	}
 

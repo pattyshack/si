@@ -34,7 +34,7 @@ type freeDefCandidate struct {
 	hasFixedStackCopy bool
 }
 
-type instructionAllocator struct {
+type operationsScheduler struct {
 	*BlockState
 
 	instruction ast.Instruction
@@ -50,11 +50,11 @@ type instructionAllocator struct {
 	finalDest defLoc
 }
 
-func newInstructionAllocator(
+func newOperationsScheduler(
 	state *BlockState,
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
-) *instructionAllocator {
+) *operationsScheduler {
 	srcs := map[*arch.LocationConstraint]*defLoc{}
 	for idx, value := range inst.Sources() {
 		entry := &defLoc{}
@@ -73,7 +73,7 @@ func newInstructionAllocator(
 		srcs[constraints.Sources[idx]] = entry
 	}
 
-	return &instructionAllocator{
+	return &operationsScheduler{
 		BlockState:  state,
 		instruction: inst,
 		constraints: constraints,
@@ -84,66 +84,70 @@ func newInstructionAllocator(
 	}
 }
 
-func (allocator *instructionAllocator) SetUpInstruction() {
-	allocator.setUpTempStack()
+func (scheduler *operationsScheduler) ScheduleOperations() {
+	_, ok := scheduler.instruction.(*ast.CopyOperation)
+	if ok {
+		// TODO schedule copy
+		return
+	}
+
+	scheduler.setUpTempStack()
 
 	// Note: To maximize degrees of freedom / simplify accounting, register
 	// pressure is computed after setting up temp stack, which will likely free
 	// up some registers.
-	allocator.reduceRegisterPressure()
-	allocator.setUpRegisters()
+	scheduler.reduceRegisterPressure()
+	scheduler.setUpRegisters()
+
+	scheduler.executeInstruction()
+	scheduler.tearDownInstruction()
 }
 
-func (allocator *instructionAllocator) ExecuteInstruction() {
-	_, ok := allocator.instruction.(*ast.CopyOperation)
-	if ok {
-		return // value already copied during the set up phase
-	}
-
+func (scheduler *operationsScheduler) executeInstruction() {
 	srcLocs := []*arch.DataLocation{}
-	for _, constraint := range allocator.constraints.Sources {
-		entry, ok := allocator.srcs[constraint]
+	for _, constraint := range scheduler.constraints.Sources {
+		entry, ok := scheduler.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
 		srcLocs = append(srcLocs, entry.loc)
 	}
 
-	destLoc := allocator.finalDest.loc
-	if allocator.tempDest.loc != nil {
-		destLoc = allocator.tempDest.loc
+	destLoc := scheduler.finalDest.loc
+	if scheduler.tempDest.loc != nil {
+		destLoc = scheduler.tempDest.loc
 	}
 
-	allocator.BlockState.ExecuteInstruction(
-		allocator.instruction,
+	scheduler.BlockState.ExecuteInstruction(
+		scheduler.instruction,
 		srcLocs,
 		destLoc)
 }
 
-func (allocator *instructionAllocator) TearDownInstruction() {
+func (scheduler *operationsScheduler) tearDownInstruction() {
 	// NOTE: temp register must be selected before freeing any location since
 	// the freed location may have the destination's data.
-	tempRegister := allocator.selectTempRegister()
+	tempRegister := scheduler.selectTempRegister()
 
 	// Free all clobbered source locations
-	for _, constraint := range allocator.constraints.Sources {
+	for _, constraint := range scheduler.constraints.Sources {
 		if !constraint.ClobberedByInstruction() {
 			continue
 		}
 
-		entry, ok := allocator.srcs[constraint]
+		entry, ok := scheduler.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
-		allocator.FreeLocation(entry.loc)
+		scheduler.FreeLocation(entry.loc)
 	}
 
 	// Free all dead definitions.
 	//
 	// Note: free location operations are not in deterministic order.  This is
 	// ok since free location won't emit any real instruction.
-	for def, locs := range allocator.ValueLocations.Values {
-		liveRange, ok := allocator.LiveRanges[def]
+	for def, locs := range scheduler.ValueLocations.Values {
+		liveRange, ok := scheduler.LiveRanges[def]
 		if !ok {
 			panic("should never happen")
 		}
@@ -153,76 +157,76 @@ func (allocator *instructionAllocator) TearDownInstruction() {
 		}
 
 		for loc, _ := range locs {
-			allocator.FreeLocation(loc)
+			scheduler.FreeLocation(loc)
 		}
 	}
 
-	if allocator.finalDest.def == nil {
+	if scheduler.finalDest.def == nil {
 		return
 	}
 
-	if allocator.finalDest.loc == nil {
+	if scheduler.finalDest.loc == nil {
 		panic("should never happen")
-	} else if allocator.finalDest.loc.OnTempStack {
+	} else if scheduler.finalDest.loc.OnTempStack {
 		panic("should never happen")
-	} else if allocator.finalDest.loc.OnFixedStack {
+	} else if scheduler.finalDest.loc.OnFixedStack {
 		// value must be on temp tack
-		if allocator.tempDest.loc == nil {
+		if scheduler.tempDest.loc == nil {
 			panic("should never happen")
 		}
 
-		allocator.finalDest.loc = allocator.AllocateFixedStackLocation(
-			allocator.finalDest.def)
+		scheduler.finalDest.loc = scheduler.AllocateFixedStackLocation(
+			scheduler.finalDest.def)
 	} else {
 		// Since sources and destination may share registers, register destination
 		// must be allocated after all clobbered sources are freed.
-		allocator.finalDest.loc = allocator.AllocateRegistersLocation(
-			allocator.finalDest.def,
-			allocator.finalDest.loc.Registers...)
+		scheduler.finalDest.loc = scheduler.AllocateRegistersLocation(
+			scheduler.finalDest.def,
+			scheduler.finalDest.loc.Registers...)
 	}
 
-	if allocator.tempDest.loc != nil {
+	if scheduler.tempDest.loc != nil {
 		// The destination value is on a temp stack
-		allocator.CopyLocation(
-			allocator.tempDest.loc,
-			allocator.finalDest.loc,
+		scheduler.CopyLocation(
+			scheduler.tempDest.loc,
+			scheduler.finalDest.loc,
 			tempRegister)
-		allocator.FreeLocation(allocator.tempDest.loc)
+		scheduler.FreeLocation(scheduler.tempDest.loc)
 	}
 }
 
-func (allocator *instructionAllocator) setUpTempStack() {
-	tempRegister := allocator.selectTempRegister()
+func (scheduler *operationsScheduler) setUpTempStack() {
+	tempRegister := scheduler.selectTempRegister()
 
 	var srcDefs []*ast.VariableDefinition
 	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
-	for _, constraint := range allocator.constraints.SrcStackLocations {
-		entry, ok := allocator.srcs[constraint]
+	for _, constraint := range scheduler.constraints.SrcStackLocations {
+		entry, ok := scheduler.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
 		srcDefs = append(srcDefs, entry.def)
 
 		if entry.pseudoDefVal != nil {
-			copySrcs[entry.def] = allocator.selectCopySourceLocation(entry.def)
+			copySrcs[entry.def] = scheduler.selectCopySourceLocation(entry.def)
 		}
 	}
 
-	if allocator.constraints.DestStackLocation != nil {
-		allocator.tempDest.def = &ast.VariableDefinition{
-			StartEndPos:       allocator.finalDest.def.StartEnd(),
+	if scheduler.constraints.DestStackLocation != nil {
+		scheduler.tempDest.def = &ast.VariableDefinition{
+			StartEndPos:       scheduler.finalDest.def.StartEnd(),
 			Name:              "%temp-destination",
-			Type:              allocator.finalDest.def.Type,
-			ParentInstruction: allocator.instruction,
+			Type:              scheduler.finalDest.def.Type,
+			ParentInstruction: scheduler.instruction,
 		}
 	}
 
-	stackSrcLocs, tempDestLoc := allocator.AllocateTempStackLocations(
+	stackSrcLocs, tempDestLoc := scheduler.AllocateTempStackLocations(
 		srcDefs,
-		allocator.tempDest.def)
+		scheduler.tempDest.def)
 
-	for idx, constraint := range allocator.constraints.SrcStackLocations {
-		entry, ok := allocator.srcs[constraint]
+	for idx, constraint := range scheduler.constraints.SrcStackLocations {
+		entry, ok := scheduler.srcs[constraint]
 		if !ok {
 			panic("should never happen")
 		}
@@ -231,26 +235,26 @@ func (allocator *instructionAllocator) setUpTempStack() {
 		entry.loc = loc
 
 		if entry.pseudoDefVal != nil {
-			allocator.SetConstantValue(entry.pseudoDefVal, loc, tempRegister)
+			scheduler.SetConstantValue(entry.pseudoDefVal, loc, tempRegister)
 		} else {
 			copySrc, ok := copySrcs[entry.def]
 			if !ok {
 				panic("should never happen")
 			}
-			allocator.CopyLocation(copySrc, loc, tempRegister)
+			scheduler.CopyLocation(copySrc, loc, tempRegister)
 		}
 	}
 
-	allocator.tempDest.loc = tempDestLoc
+	scheduler.tempDest.loc = tempDestLoc
 	if tempDestLoc != nil {
-		allocator.InitializeZeros(tempDestLoc, tempRegister)
+		scheduler.InitializeZeros(tempDestLoc, tempRegister)
 	}
 }
 
-func (allocator *instructionAllocator) selectCopySourceLocation(
+func (scheduler *operationsScheduler) selectCopySourceLocation(
 	def *ast.VariableDefinition,
 ) *arch.DataLocation {
-	set, ok := allocator.ValueLocations.Values[def]
+	set, ok := scheduler.ValueLocations.Values[def]
 	if !ok {
 		panic("should never happen")
 	}
@@ -277,9 +281,9 @@ func (allocator *instructionAllocator) selectCopySourceLocation(
 // function entry point is the only place where all registers could be in
 // used; in this case, at least one of the register is a pseudo-source
 // callee-saved register that is never used by the function.
-func (allocator *instructionAllocator) selectTempRegister() *arch.Register {
+func (scheduler *operationsScheduler) selectTempRegister() *arch.Register {
 	// The common case fast path
-	for _, regInfo := range allocator.ValueLocations.Registers {
+	for _, regInfo := range scheduler.ValueLocations.Registers {
 		if regInfo.UsedBy == nil {
 			return regInfo.Register
 		}
@@ -288,7 +292,7 @@ func (allocator *instructionAllocator) selectTempRegister() *arch.Register {
 	// Slow path to handle function entry point
 
 	var selected *RegisterInfo
-	for _, regInfo := range allocator.ValueLocations.Registers {
+	for _, regInfo := range scheduler.ValueLocations.Registers {
 		defName := regInfo.UsedBy.Name
 
 		// Registers holding real definitions are not eligible
@@ -314,23 +318,23 @@ func (allocator *instructionAllocator) selectTempRegister() *arch.Register {
 	}
 
 	regLoc := selected.UsedBy
-	def, ok := allocator.ValueLocations.ValueNames[regLoc.Name]
+	def, ok := scheduler.ValueLocations.ValueNames[regLoc.Name]
 	if !ok {
 		panic("should never happen")
 	}
 
-	stackLoc := allocator.AllocateFixedStackLocation(def)
-	allocator.CopyLocation(regLoc, stackLoc, nil)
-	allocator.FreeLocation(regLoc)
+	stackLoc := scheduler.AllocateFixedStackLocation(def)
+	scheduler.CopyLocation(regLoc, stackLoc, nil)
+	scheduler.FreeLocation(regLoc)
 
 	return selected.Register
 }
 
-func (allocator *instructionAllocator) reduceRegisterPressure() {
-	pressure, freeDefCandidates := allocator.computeRegisterPressure()
-	threshold := len(allocator.ValueLocations.Registers) - 1
+func (scheduler *operationsScheduler) reduceRegisterPressure() {
+	pressure, freeDefCandidates := scheduler.computeRegisterPressure()
+	threshold := len(scheduler.ValueLocations.Registers) - 1
 	for pressure > threshold {
-		candidate := allocator.selectFreeDefCandidate(freeDefCandidates)
+		candidate := scheduler.selectFreeDefCandidate(freeDefCandidates)
 
 		shouldSpill := false
 		if candidate.numActualCopies > candidate.numPreferred {
@@ -349,13 +353,13 @@ func (allocator *instructionAllocator) reduceRegisterPressure() {
 		}
 
 		if shouldSpill && !candidate.hasFixedStackCopy {
-			src := allocator.selectCopySourceLocation(candidate.definition)
-			dest := allocator.AllocateFixedStackLocation(candidate.definition)
-			allocator.CopyLocation(src, dest, nil)
+			src := scheduler.selectCopySourceLocation(candidate.definition)
+			dest := scheduler.AllocateFixedStackLocation(candidate.definition)
+			scheduler.CopyLocation(src, dest, nil)
 			candidate.hasFixedStackCopy = true
 		}
 
-		allocator.FreeLocation(allocator.selectFreeLocation(candidate))
+		scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
 		pressure -= candidate.numRegisters
 
 		// Prune unfreeable candidate
@@ -367,19 +371,19 @@ func (allocator *instructionAllocator) reduceRegisterPressure() {
 	}
 }
 
-func (allocator *instructionAllocator) computeRegisterPressure() (
+func (scheduler *operationsScheduler) computeRegisterPressure() (
 	int,
 	map[*ast.VariableDefinition]*freeDefCandidate,
 ) {
 	candidates := map[*ast.VariableDefinition]*freeDefCandidate{}
-	for def, locs := range allocator.ValueLocations.Values {
+	for def, locs := range scheduler.ValueLocations.Values {
 		numRegisters := arch.NumRegisters(def.Type)
 		if numRegisters == 0 {
 			// Unit value type is never a candidate since it takes up no space
 			continue
 		}
 
-		liveRange, ok := allocator.LiveRanges[def]
+		liveRange, ok := scheduler.LiveRanges[def]
 		if !ok {
 			panic("should never happen")
 		}
@@ -408,7 +412,7 @@ func (allocator *instructionAllocator) computeRegisterPressure() (
 
 	registerPressure := 0
 	registerCandidates := map[*arch.RegisterCandidate]struct{}{}
-	for constraint, defLoc := range allocator.srcs {
+	for constraint, defLoc := range scheduler.srcs {
 		if constraint.NumRegisters == 0 {
 			// Unit value type is never a candidate since it takes up no space
 			continue
@@ -445,8 +449,8 @@ func (allocator *instructionAllocator) computeRegisterPressure() (
 	}
 
 	// Account for destination registers that do not overlap with source registers
-	if allocator.constraints.Destination != nil {
-		for _, reg := range allocator.constraints.Destination.Registers {
+	if scheduler.constraints.Destination != nil {
+		for _, reg := range scheduler.constraints.Destination.Registers {
 			_, ok := registerCandidates[reg]
 			if !ok {
 				registerPressure++
@@ -491,7 +495,7 @@ func (allocator *instructionAllocator) computeRegisterPressure() (
 //     pressure low for longer, but could cause instruction pipeline stall)
 //
 // All preferences are tie break by name to make the selection deterministic.
-func (allocator *instructionAllocator) selectFreeDefCandidate(
+func (scheduler *operationsScheduler) selectFreeDefCandidate(
 	candidates map[*ast.VariableDefinition]*freeDefCandidate,
 ) *freeDefCandidate {
 	// Prefer to free candidate with extra discardable copies
@@ -572,13 +576,13 @@ func (allocator *instructionAllocator) selectFreeDefCandidate(
 	return selected
 }
 
-func (allocator *instructionAllocator) selectFreeLocation(
+func (scheduler *operationsScheduler) selectFreeLocation(
 	candidate *freeDefCandidate,
 ) *arch.DataLocation {
 	// TODO
 	return nil
 }
 
-func (allocator *instructionAllocator) setUpRegisters() {
+func (scheduler *operationsScheduler) setUpRegisters() {
 	// TODO
 }
