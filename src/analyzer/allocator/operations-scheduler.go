@@ -2,6 +2,7 @@ package allocator
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	arch "github.com/pattyshack/chickadee/architecture"
@@ -578,8 +579,42 @@ func (scheduler *operationsScheduler) selectFreeDefCandidate(
 func (scheduler *operationsScheduler) selectFreeLocation(
 	candidate *freeDefCandidate,
 ) *arch.DataLocation {
-	// TODO
-	return nil
+	worstMatch := math.MaxInt32
+	var selected *arch.DataLocation
+	for loc, _ := range scheduler.ValueLocations.Values[candidate.definition] {
+		if loc.OnFixedStack || loc.OnTempStack {
+			continue
+		}
+
+		match := 0
+		for _, constraint := range candidate.constraints {
+			numSatisfied := 0
+			for idx, reg := range loc.Registers {
+				if constraint.Registers[idx].SatisfyBy(reg) {
+					numSatisfied++
+				}
+			}
+
+			if numSatisfied > match {
+				match = numSatisfied
+			}
+		}
+
+		if worstMatch > match {
+			worstMatch = match
+			selected = loc
+		} else if worstMatch == match &&
+			loc.Registers[0].Index > selected.Registers[0].Index {
+
+			// (arbitrary) deterministic tie break
+			selected = loc
+		}
+	}
+
+	if selected == nil {
+		panic("should never happen")
+	}
+	return selected
 }
 
 func (scheduler *operationsScheduler) setUpRegisters() {

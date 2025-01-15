@@ -17,6 +17,22 @@ type RegisterCandidate struct {
 	Require *Register
 }
 
+func (candidate *RegisterCandidate) SatisfyBy(register *Register) bool {
+	if candidate.Require != nil {
+		return candidate.Require == register
+	}
+
+	if candidate.AnyGeneral && register.AllowGeneralOp {
+		return true
+	}
+
+	if candidate.AnyFloat && register.AllowFloatOp {
+		return true
+	}
+
+	return false
+}
+
 // Where the data is located.
 //
 // Assumptions: A value must either be completely on register, or completely
