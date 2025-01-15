@@ -337,15 +337,9 @@ func (scheduler *operationsScheduler) reduceRegisterPressure() {
 		candidate := scheduler.selectFreeDefCandidate(freeDefCandidates)
 
 		shouldSpill := false
-		if candidate.numActualCopies > candidate.numPreferred {
-			candidate.numActualCopies-- // Just free an extra copy
-		} else {
+		if candidate.numPreferred >= candidate.numActualCopies {
 			if candidate.numPreferred <= candidate.numRequired {
 				panic("should never happen")
-			}
-
-			if candidate.numActualCopies == candidate.numPreferred {
-				candidate.numActualCopies--
 			}
 
 			candidate.numPreferred--
@@ -359,7 +353,10 @@ func (scheduler *operationsScheduler) reduceRegisterPressure() {
 			candidate.hasFixedStackCopy = true
 		}
 
-		scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
+		if candidate.numActualCopies > candidate.numPreferred {
+			scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
+			candidate.numActualCopies--
+		}
 		pressure -= candidate.numRegisters
 
 		// Prune unfreeable candidate
