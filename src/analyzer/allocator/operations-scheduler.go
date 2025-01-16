@@ -20,7 +20,9 @@ type defAlloc struct {
 	definition   *ast.VariableDefinition
 	numRegisters int
 
-	nextUseDist int // 0 indicates the definition is dead after this instruction
+	// 0 indicates the definition is dead after this instruction
+	nextUseDelta int // = nextUseDist - currentDist
+
 	constraints []*arch.LocationConstraint
 
 	// numRequired + 1 >= numPreferred >= numRequired >= numClobbered
@@ -38,6 +40,7 @@ type defAlloc struct {
 type operationsScheduler struct {
 	*BlockState
 
+	currentDist int
 	instruction ast.Instruction
 	constraints *arch.InstructionConstraints
 
@@ -53,6 +56,7 @@ type operationsScheduler struct {
 
 func newOperationsScheduler(
 	state *BlockState,
+	currentDist int,
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) *operationsScheduler {
@@ -76,6 +80,7 @@ func newOperationsScheduler(
 
 	return &operationsScheduler{
 		BlockState:  state,
+		currentDist: currentDist,
 		instruction: inst,
 		constraints: constraints,
 		srcs:        srcs,
@@ -400,15 +405,15 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		if !ok {
 			panic("should never happen")
 		}
-		nextUseDist := 0
+		nextUseDelta := 0
 		if len(liveRange.NextUses) > 0 {
-			nextUseDist = liveRange.NextUses[0]
+			nextUseDelta = liveRange.NextUses[0] - scheduler.currentDist
 		}
 
 		return &defAlloc{
 			definition:   def,
 			numRegisters: arch.NumRegisters(def.Type),
-			nextUseDist:  nextUseDist,
+			nextUseDelta: nextUseDelta,
 		}
 	}
 
@@ -468,7 +473,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		if constraint.AnyLocation || constraint.RequireOnStack {
 			// Note: If numPreferred is 0 after pressure reduction, the final
 			// destination is on fixed stack (we can skip copying to final
-			// destination if nextUseDist is also 0)
+			// destination if nextUseDelta is also 0)
 			defAllocs[scheduler.finalDest.def] = newDefAlloc(scheduler.finalDest.def)
 		} else {
 			// Account for destination registers that do not overlap with source
@@ -487,7 +492,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 
 		// If the definition out lives the instruction, ensure at least one copy of
 		// the source definition survive.
-		if candidate.nextUseDist > 0 &&
+		if candidate.nextUseDelta > 0 &&
 			candidate.numRequired == candidate.numClobbered &&
 			candidate.numPreferred == candidate.numRequired {
 
@@ -504,14 +509,13 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 	return registerPressure, defAllocs
 }
 
-// TODO prioritize large objects
-//
 // Free preferences (from highest to lowest):
 //   - most discardable extra copies (does not spill)
 //   - candidate is already on fixed stack (already spill)
 //   - callee-saved parameters (spill / use exactly once)
-//   - spill furthest nextUseDist (this heuristic hopeful keeps register
-//     pressure low for longer, but could cause instruction pipeline stall)
+//   - spill largest (numRegisters * nextUseDelta).  This heuristic balances
+//     between keeping more small values on registers, and keeping register
+//     pressure low for longer (but could cause instruction pipeline stall).
 //
 // All preferences are tie break by name to make the selection deterministic.
 func (scheduler *operationsScheduler) selectFreeDefCandidate(
@@ -575,13 +579,16 @@ func (scheduler *operationsScheduler) selectFreeDefCandidate(
 		return selected
 	}
 
-	// Prefer further nextUseDist
+	// Prefer largest (numRegisters * nextUseDelta)
+	// TODO: improve heuristic
+	largestHeuristic := -1
 	for _, candidate := range candidates {
-		if selected == nil {
+		heuristic := candidate.numRegisters * candidate.nextUseDelta
+
+		if heuristic > largestHeuristic {
+			largestHeuristic = heuristic
 			selected = candidate
-		} else if candidate.nextUseDist > selected.nextUseDist {
-			selected = candidate
-		} else if candidate.nextUseDist == selected.nextUseDist &&
+		} else if largestHeuristic == heuristic &&
 			arch.CompareDefinitionNames(
 				candidate.definition.Name,
 				selected.definition.Name) < 0 {

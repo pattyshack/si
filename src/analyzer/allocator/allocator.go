@@ -250,9 +250,14 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 	block.InitializeValueLocations()
 
 	for idx, inst := range block.Instructions {
-		scheduler := newOperationsScheduler(block, inst, block.Constraints[inst])
+		currentDist := idx + 1 // +1 for phi
+		scheduler := newOperationsScheduler(
+			block,
+			currentDist,
+			inst,
+			block.Constraints[inst])
 		scheduler.ScheduleOperations()
-		block.AdvanceLiveRangesAndPreferences(idx)
+		block.AdvanceLiveRangesAndPreferences(currentDist)
 	}
 
 	block.FinalizeLocationOut()

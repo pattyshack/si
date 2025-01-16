@@ -297,24 +297,24 @@ func (state *BlockState) maybeAddPreference(
 }
 
 func (state *BlockState) AdvanceLiveRangesAndPreferences(
-	currentInst int,
+	currentDist int,
 ) {
-	currentInst++
+	nextDist := currentDist + 1
 
 	for def, liveRange := range state.LiveRanges {
-		if currentInst > liveRange.End {
+		if nextDist > liveRange.End {
 			delete(state.LiveRanges, def)
 			continue
 		}
 
-		for len(liveRange.NextUses) > 0 && liveRange.NextUses[0] <= currentInst {
+		for len(liveRange.NextUses) > 0 && liveRange.NextUses[0] <= nextDist {
 			liveRange.NextUses = liveRange.NextUses[1:]
 		}
 	}
 
 	for reg, pref := range state.Preferences {
 		origLen := len(pref)
-		for len(pref) > 0 && pref[0].Use <= currentInst {
+		for len(pref) > 0 && pref[0].Use <= nextDist {
 			pref = pref[1:]
 		}
 
