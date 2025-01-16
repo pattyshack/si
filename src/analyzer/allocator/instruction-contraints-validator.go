@@ -71,6 +71,8 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 	}
 
 	numRegistersNeeded := 0
+	numAnyGeneral := 0
+	numAnyFloat := 0
 	uniqueSrcCandidates := map[*architecture.RegisterCandidate]struct{}{}
 	uniqueSrcRegisters := map[*architecture.Register]struct{}{}
 	for _, loc := range constraints.Sources {
@@ -84,6 +86,14 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 			uniqueSrcCandidates[reg] = struct{}{}
 
 			if reg.Require == nil {
+				if reg.AnyGeneral {
+					numAnyGeneral++
+				}
+
+				if reg.AnyFloat {
+					numAnyFloat++
+				}
+
 				continue
 			}
 
@@ -95,9 +105,9 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 		}
 	}
 
+	uniqueDestRegisters := map[*architecture.Register]struct{}{}
 	if constraints.Destination != nil {
 		uniqueDestCandidates := map[*architecture.RegisterCandidate]struct{}{}
-		uniqueDestRegisters := map[*architecture.Register]struct{}{}
 		for _, reg := range constraints.Destination.Registers {
 			_, ok := uniqueDestCandidates[reg]
 			if ok {
@@ -108,6 +118,14 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 			if reg.Require == nil {
 				_, ok := uniqueSrcCandidates[reg]
 				if !ok { // a new register not used by any source
+					if reg.AnyGeneral {
+						numAnyGeneral++
+					}
+
+					if reg.AnyFloat {
+						numAnyFloat++
+					}
+
 					numRegistersNeeded++
 				}
 
@@ -127,16 +145,36 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 		}
 	}
 
+	// All candidates must either only use required registers, or only use
+	// AnyGeneral / AnyFloat.
+	if numAnyGeneral+numAnyFloat > 0 &&
+		len(uniqueSrcRegisters)+len(uniqueDestRegisters) > 0 {
+
+		panic(fmt.Sprintf("invalid: %s", pos))
+	}
+
+	registerSet := validator.Platform.ArchitectureRegisters()
+
+	// Ensure there are enough general registers.
+	if numAnyGeneral > len(registerSet.General) {
+		panic(fmt.Sprintf("invalid: %s", pos))
+	}
+
+	// Ensure there are enough float registers.
+	if numAnyFloat > len(registerSet.Float) {
+		panic(fmt.Sprintf("invalid: %s", pos))
+	}
+
 	// We'll assume all instructions must leave at least one register unused.
 	// The allocator will make use of the unused register for data shuffling.
 	// This mostly impact call convention since most real architecture
 	// instruction use at most 3 registers.
-	totalRegisters := len(validator.Platform.ArchitectureRegisters().Data)
+	totalRegisters := len(registerSet.Data)
 	if numRegistersNeeded > totalRegisters-1 {
 		panic(fmt.Sprintf("invalid: %s", pos))
 	}
 
-	// call convention must fully specify all registers' clobber behavior
+	// Call convention must fully specify all registers' clobber behavior.
 	if isFuncDefOrCall && len(constraints.RequiredRegisters) != totalRegisters {
 		panic(fmt.Sprintf("invalid: %s", pos))
 	}
