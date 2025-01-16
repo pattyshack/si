@@ -73,17 +73,17 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 	numRegistersNeeded := 0
 	numAnyGeneral := 0
 	numAnyFloat := 0
-	uniqueSrcCandidates := map[*architecture.RegisterCandidate]struct{}{}
+	uniqueSrcConstraints := map[*architecture.RegisterConstraint]struct{}{}
 	uniqueSrcRegisters := map[*architecture.Register]struct{}{}
 	for _, loc := range constraints.Sources {
 		for _, reg := range loc.Registers {
 			numRegistersNeeded++
 
-			_, ok := uniqueSrcCandidates[reg]
+			_, ok := uniqueSrcConstraints[reg]
 			if ok {
 				panic(fmt.Sprintf("invalid: %s", pos))
 			}
-			uniqueSrcCandidates[reg] = struct{}{}
+			uniqueSrcConstraints[reg] = struct{}{}
 
 			if reg.Require == nil {
 				if reg.AnyGeneral {
@@ -107,16 +107,16 @@ func (validator *InstructionConstraintsValidator) ValidateUniqueRegisters(
 
 	uniqueDestRegisters := map[*architecture.Register]struct{}{}
 	if constraints.Destination != nil {
-		uniqueDestCandidates := map[*architecture.RegisterCandidate]struct{}{}
+		uniqueDestConstraints := map[*architecture.RegisterConstraint]struct{}{}
 		for _, reg := range constraints.Destination.Registers {
-			_, ok := uniqueDestCandidates[reg]
+			_, ok := uniqueDestConstraints[reg]
 			if ok {
 				panic(fmt.Sprintf("invalid: %s", pos))
 			}
-			uniqueDestCandidates[reg] = struct{}{}
+			uniqueDestConstraints[reg] = struct{}{}
 
 			if reg.Require == nil {
-				_, ok := uniqueSrcCandidates[reg]
+				_, ok := uniqueSrcConstraints[reg]
 				if !ok { // a new register not used by any source
 					if reg.AnyGeneral {
 						numAnyGeneral++

@@ -433,7 +433,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
-	registerCandidates := map[*arch.RegisterCandidate]struct{}{}
+	registerConstraints := map[*arch.RegisterConstraint]struct{}{}
 	for constraint, defLoc := range scheduler.srcs {
 		candidate, ok := defAllocs[defLoc.def]
 		if !ok {
@@ -454,7 +454,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			}
 		} else {
 			for _, reg := range constraint.Registers {
-				registerCandidates[reg] = struct{}{}
+				registerConstraints[reg] = struct{}{}
 			}
 
 			candidate.constraints = append(candidate.constraints, constraint)
@@ -479,7 +479,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			// Account for destination registers that do not overlap with source
 			// registers
 			for _, reg := range constraint.Registers {
-				_, ok := registerCandidates[reg]
+				_, ok := registerConstraints[reg]
 				if !ok {
 					registerPressure++
 				}

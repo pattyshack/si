@@ -5,7 +5,7 @@ import (
 )
 
 // A yet to be determined register.
-type RegisterCandidate struct {
+type RegisterConstraint struct {
 	// Clobbered registers are caller-saved; registers are callee-saved otherwise.
 	Clobbered bool
 
@@ -17,7 +17,7 @@ type RegisterCandidate struct {
 	Require *Register
 }
 
-func (candidate *RegisterCandidate) SatisfyBy(register *Register) bool {
+func (candidate *RegisterConstraint) SatisfyBy(register *Register) bool {
 	if candidate.Require != nil {
 		return candidate.Require == register
 	}
@@ -48,7 +48,7 @@ type LocationConstraint struct {
 
 	// The value is stored in an "array" formed by a list of registers.  The list
 	// could be empty to indicate a zero-sized type (e.g., empty struct)
-	Registers []*RegisterCandidate
+	Registers []*RegisterConstraint
 }
 
 func (loc *LocationConstraint) ClobberedByInstruction() bool {
@@ -61,7 +61,7 @@ func (loc *LocationConstraint) ClobberedByInstruction() bool {
 //
 // Note:
 //  1. Source and destination LocationConstraint that share the same
-//     AnyGeneral/AnyFloat RegisterCandidate pointer shares the same selected
+//     AnyGeneral/AnyFloat RegisterConstraint pointer shares the same selected
 //     register.
 //  2. it's safe to reuse the same instruction constraints for multiple
 //     instructions.
@@ -135,8 +135,8 @@ func (constraints *InstructionConstraints) AllSources() []*LocationConstraint {
 
 func (constraints *InstructionConstraints) SelectAnyGeneral(
 	clobbered bool,
-) *RegisterCandidate {
-	return &RegisterCandidate{
+) *RegisterConstraint {
+	return &RegisterConstraint{
 		Clobbered:  clobbered,
 		AnyGeneral: true,
 	}
@@ -144,8 +144,8 @@ func (constraints *InstructionConstraints) SelectAnyGeneral(
 
 func (constraints *InstructionConstraints) SelectAnyFloat(
 	clobbered bool,
-) *RegisterCandidate {
-	return &RegisterCandidate{
+) *RegisterConstraint {
+	return &RegisterConstraint{
 		Clobbered: clobbered,
 		AnyFloat:  true,
 	}
@@ -154,7 +154,7 @@ func (constraints *InstructionConstraints) SelectAnyFloat(
 func (constraints *InstructionConstraints) Require(
 	clobbered bool,
 	register *Register,
-) *RegisterCandidate {
+) *RegisterConstraint {
 	if register.IsStackPointer {
 		panic("cannot select stack pointer")
 	}
@@ -168,7 +168,7 @@ func (constraints *InstructionConstraints) Require(
 		constraints.RequiredRegisters[register] = clobbered
 	}
 
-	return &RegisterCandidate{
+	return &RegisterConstraint{
 		Clobbered: clobbered,
 		Require:   register,
 	}
@@ -176,7 +176,7 @@ func (constraints *InstructionConstraints) Require(
 
 func (constraints *InstructionConstraints) registerLocation(
 	isDest bool,
-	list ...*RegisterCandidate,
+	list ...*RegisterConstraint,
 ) *LocationConstraint {
 	for _, entry := range list {
 		if isDest {
@@ -205,7 +205,7 @@ func (constraints *InstructionConstraints) AddAnyCopySource(
 // The list could be empty if source value does not occupy any space,
 // e.g., empty struct)
 func (constraints *InstructionConstraints) AddRegisterSource(
-	registers ...*RegisterCandidate,
+	registers ...*RegisterConstraint,
 ) {
 	constraints.Sources = append(
 		constraints.Sources,
@@ -235,7 +235,7 @@ func (constraints *InstructionConstraints) SetFramePointerRegister(
 }
 
 func (constraints *InstructionConstraints) AddPseudoSource(
-	registers ...*RegisterCandidate,
+	registers ...*RegisterConstraint,
 ) {
 	constraints.PseudoSources = append(
 		constraints.PseudoSources,
@@ -245,7 +245,7 @@ func (constraints *InstructionConstraints) AddPseudoSource(
 // The list could be empty if the destination value does not occupy any
 // space, e.g., empty struct
 func (constraints *InstructionConstraints) SetRegisterDestination(
-	registers ...*RegisterCandidate,
+	registers ...*RegisterConstraint,
 ) {
 	if constraints.Destination != nil {
 		panic("destination already set")
@@ -308,14 +308,14 @@ func (con *CallConvention) AddRegisterSource(
 	clobbered bool,
 	registers ...*Register,
 ) {
-	callSrc := []*RegisterCandidate{}
+	callSrc := []*RegisterConstraint{}
 	for _, reg := range registers {
 		callSrc = append(callSrc, con.CallConstraints.Require(clobbered, reg))
 	}
 	con.CallConstraints.AddRegisterSource(callSrc...)
 
 	if !clobbered {
-		pseudoSrc := []*RegisterCandidate{}
+		pseudoSrc := []*RegisterConstraint{}
 		for _, reg := range registers {
 			pseudoSrc = append(pseudoSrc, con.RetConstraints.Require(false, reg))
 		}
@@ -342,8 +342,8 @@ func (con *CallConvention) SetFramePointerRegister(
 func (con *CallConvention) SetRegisterDestination(
 	registers ...*Register,
 ) {
-	callDest := []*RegisterCandidate{}
-	retSrc := []*RegisterCandidate{}
+	callDest := []*RegisterConstraint{}
+	retSrc := []*RegisterConstraint{}
 	for _, reg := range registers {
 		callDest = append(callDest, con.CallConstraints.Require(true, reg))
 		retSrc = append(retSrc, con.RetConstraints.Require(true, reg))

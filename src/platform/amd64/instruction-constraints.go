@@ -87,7 +87,7 @@ func newUnaryOpConstraints(
 	constraints := architecture.NewInstructionConstraints()
 
 	// Destination reuses the source register.
-	var reg *architecture.RegisterCandidate
+	var reg *architecture.RegisterConstraint
 	if isFloat {
 		reg = constraints.SelectAnyFloat(true)
 	} else {
