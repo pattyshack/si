@@ -16,7 +16,7 @@ type defLoc struct {
 	pseudoDefVal ast.Value // global ref or immediate
 }
 
-type freeDefCandidate struct {
+type defAlloc struct {
 	definition   *ast.VariableDefinition
 	numRegisters int
 
@@ -31,7 +31,7 @@ type freeDefCandidate struct {
 	numRequired  int
 	numClobbered int
 
-	numActualCopies   int
+	numActual         int
 	hasFixedStackCopy bool
 }
 
@@ -97,8 +97,9 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	// Note: To maximize degrees of freedom / simplify accounting, register
 	// pressure is computed after setting up temp stack, which will likely free
 	// up some registers.
-	scheduler.reduceRegisterPressure()
-	scheduler.setUpRegisters()
+	pressure, defAllocs := scheduler.computeRegisterPressure()
+	scheduler.reduceRegisterPressure(pressure, defAllocs)
+	scheduler.setUpRegisters(defAllocs)
 
 	scheduler.executeInstruction()
 	scheduler.tearDownInstruction()
@@ -331,20 +332,41 @@ func (scheduler *operationsScheduler) selectTempRegister() *arch.Register {
 	return selected.Register
 }
 
-func (scheduler *operationsScheduler) reduceRegisterPressure() {
-	pressure, freeDefCandidates := scheduler.computeRegisterPressure()
+func (scheduler *operationsScheduler) reduceRegisterPressure(
+	pressure int,
+	defAllocs map[*ast.VariableDefinition]*defAlloc,
+) {
+	candidates := map[*ast.VariableDefinition]*defAlloc{}
+	for def, alloc := range defAllocs {
+		if alloc.numRegisters == 0 { // unit data type takes up no space
+			continue
+		}
+
+		if alloc.numRequired == alloc.numPreferred &&
+			alloc.numRequired >= alloc.numActual {
+			continue // we can't free any more copies of this definition
+		}
+
+		candidates[def] = alloc
+	}
+
 	threshold := len(scheduler.ValueLocations.Registers) - 1
 	for pressure > threshold {
-		candidate := scheduler.selectFreeDefCandidate(freeDefCandidates)
+		candidate := scheduler.selectFreeDefCandidate(candidates)
 
 		shouldSpill := false
-		if candidate.numPreferred >= candidate.numActualCopies {
+		if candidate.numPreferred >= candidate.numActual {
 			if candidate.numPreferred <= candidate.numRequired {
 				panic("should never happen")
 			}
 
 			candidate.numPreferred--
-			shouldSpill = true
+
+			// Note: if candidate is finalDest, the destination's value is copy to
+			// fixed stack during instruction tear down.
+			if candidate.definition != scheduler.finalDest.def {
+				shouldSpill = true
+			}
 		}
 
 		if shouldSpill && !candidate.hasFixedStackCopy {
@@ -354,33 +376,26 @@ func (scheduler *operationsScheduler) reduceRegisterPressure() {
 			candidate.hasFixedStackCopy = true
 		}
 
-		if candidate.numActualCopies > candidate.numPreferred {
+		if candidate.numActual > candidate.numPreferred {
 			scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
-			candidate.numActualCopies--
+			candidate.numActual--
 		}
 		pressure -= candidate.numRegisters
 
 		// Prune unfreeable candidate
-		if candidate.numPreferred == candidate.numRequired &&
-			candidate.numRequired >= candidate.numActualCopies {
+		if candidate.numRequired == candidate.numPreferred &&
+			candidate.numRequired >= candidate.numActual {
 
-			delete(freeDefCandidates, candidate.definition)
+			delete(candidates, candidate.definition)
 		}
 	}
 }
 
 func (scheduler *operationsScheduler) computeRegisterPressure() (
 	int,
-	map[*ast.VariableDefinition]*freeDefCandidate,
+	map[*ast.VariableDefinition]*defAlloc,
 ) {
-	candidates := map[*ast.VariableDefinition]*freeDefCandidate{}
-	for def, locs := range scheduler.ValueLocations.Values {
-		numRegisters := arch.NumRegisters(def.Type)
-		if numRegisters == 0 {
-			// Unit value type is never a candidate since it takes up no space
-			continue
-		}
-
+	newDefAlloc := func(def *ast.VariableDefinition) *defAlloc {
 		liveRange, ok := scheduler.LiveRanges[def]
 		if !ok {
 			panic("should never happen")
@@ -390,12 +405,17 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			nextUseDist = liveRange.NextUses[0]
 		}
 
-		candidate := &freeDefCandidate{
+		return &defAlloc{
 			definition:   def,
-			numRegisters: numRegisters,
+			numRegisters: arch.NumRegisters(def.Type),
 			nextUseDist:  nextUseDist,
 		}
-		candidates[def] = candidate
+	}
+
+	defAllocs := map[*ast.VariableDefinition]*defAlloc{}
+	for def, locs := range scheduler.ValueLocations.Values {
+		candidate := newDefAlloc(def)
+		defAllocs[def] = candidate
 
 		for loc, _ := range locs {
 			if loc.OnFixedStack {
@@ -403,34 +423,28 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			} else if loc.OnTempStack {
 				// Do nothing.
 			} else {
-				candidate.numActualCopies++
+				candidate.numActual++
 			}
 		}
 	}
 
-	registerPressure := 0
 	registerCandidates := map[*arch.RegisterCandidate]struct{}{}
 	for constraint, defLoc := range scheduler.srcs {
-		if constraint.NumRegisters == 0 {
-			// Unit value type is never a candidate since it takes up no space
-			continue
-		}
-
-		candidate, ok := candidates[defLoc.def]
+		candidate, ok := defAllocs[defLoc.def]
 		if !ok {
 			if defLoc.pseudoDefVal == nil {
 				panic("should never happen")
 			}
 
-			// Make room for the constant source value
-			registerPressure += constraint.NumRegisters
-			continue
+			candidate = &defAlloc{
+				definition:   defLoc.def,
+				numRegisters: arch.NumRegisters(defLoc.pseudoDefVal.Type()),
+			}
+			defAllocs[defLoc.def] = candidate
 		}
 
-		if constraint.RequireOnStack {
-			// Do nothing.  We've already set up the temp stack
-		} else if constraint.AnyLocation { // only used by copy operation
-			if candidate.numPreferred == candidate.numRequired {
+		if constraint.AnyLocation || constraint.RequireOnStack {
+			if candidate.numRequired == candidate.numPreferred {
 				candidate.numPreferred++
 			}
 		} else {
@@ -448,18 +462,28 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
-	// Account for destination registers that do not overlap with source registers
+	registerPressure := 0
 	if scheduler.constraints.Destination != nil {
-		for _, reg := range scheduler.constraints.Destination.Registers {
-			_, ok := registerCandidates[reg]
-			if !ok {
-				registerPressure++
+		constraint := scheduler.constraints.Destination
+		if constraint.AnyLocation || constraint.RequireOnStack {
+			// Note: If numPreferred is 0 after pressure reduction, the final
+			// destination is on fixed stack (we can skip copying to final
+			// destination if nextUseDist is also 0)
+			defAllocs[scheduler.finalDest.def] = newDefAlloc(scheduler.finalDest.def)
+		} else {
+			// Account for destination registers that do not overlap with source
+			// registers
+			for _, reg := range constraint.Registers {
+				_, ok := registerCandidates[reg]
+				if !ok {
+					registerPressure++
+				}
 			}
 		}
 	}
 
-	for def, candidate := range candidates {
-		numCopies := candidate.numActualCopies
+	for _, candidate := range defAllocs {
+		numCopies := candidate.numActual
 
 		// If the definition out lives the instruction, ensure at least one copy of
 		// the source definition survive.
@@ -475,18 +499,13 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			numCopies = candidate.numPreferred
 		}
 		registerPressure += numCopies * candidate.numRegisters
-
-		// Prune candidates that can never be freed
-		if candidate.numRequired >= candidate.numActualCopies &&
-			candidate.numPreferred == candidate.numRequired {
-
-			delete(candidates, def)
-		}
 	}
 
-	return registerPressure, candidates
+	return registerPressure, defAllocs
 }
 
+// TODO prioritize large objects
+//
 // Free preferences (from highest to lowest):
 //   - most discardable extra copies (does not spill)
 //   - candidate is already on fixed stack (already spill)
@@ -496,18 +515,18 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 //
 // All preferences are tie break by name to make the selection deterministic.
 func (scheduler *operationsScheduler) selectFreeDefCandidate(
-	candidates map[*ast.VariableDefinition]*freeDefCandidate,
-) *freeDefCandidate {
+	candidates map[*ast.VariableDefinition]*defAlloc,
+) *defAlloc {
 	// Prefer to free candidate with extra discardable copies
 	maxExtraCopies := 0
-	var selected *freeDefCandidate
+	var selected *defAlloc
 	for _, candidate := range candidates {
-		if candidate.numPreferred >= candidate.numActualCopies {
+		if candidate.numPreferred >= candidate.numActual {
 			// The candidate cannot be unconditionally discarded
 			continue
 		}
 
-		extraCopies := candidate.numActualCopies - candidate.numClobbered
+		extraCopies := candidate.numActual - candidate.numClobbered
 		if extraCopies > maxExtraCopies {
 			maxExtraCopies = extraCopies
 			selected = candidate
@@ -577,7 +596,7 @@ func (scheduler *operationsScheduler) selectFreeDefCandidate(
 }
 
 func (scheduler *operationsScheduler) selectFreeLocation(
-	candidate *freeDefCandidate,
+	candidate *defAlloc,
 ) *arch.DataLocation {
 	worstMatch := math.MaxInt32
 	var selected *arch.DataLocation
@@ -617,6 +636,8 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 	return selected
 }
 
-func (scheduler *operationsScheduler) setUpRegisters() {
+func (scheduler *operationsScheduler) setUpRegisters(
+	defAllocs map[*ast.VariableDefinition]*defAlloc,
+) {
 	// TODO
 }
