@@ -402,11 +402,12 @@ func (state *BlockState) PopStackFrame() {
 func (state *BlockState) MoveRegister(
 	src *architecture.Register,
 	dest *architecture.Register,
-) {
-	state.ValueLocations.MoveRegister(src, dest)
+) *architecture.DataLocation {
+	newLoc := state.ValueLocations.MoveRegister(src, dest)
 	state.Operations = append(
 		state.Operations,
 		architecture.NewMoveRegisterOp(src, dest))
+	return newLoc
 }
 
 // Note: both src and dest must be allocated/tracked by ValueLocations. temp
