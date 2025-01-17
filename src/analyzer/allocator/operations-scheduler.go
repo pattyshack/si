@@ -163,7 +163,7 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 			continue
 		}
 
-		for loc, _ := range locs {
+		for _, loc := range locs {
 			scheduler.FreeLocation(loc)
 		}
 	}
@@ -261,13 +261,13 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 func (scheduler *operationsScheduler) selectCopySourceLocation(
 	def *ast.VariableDefinition,
 ) *arch.DataLocation {
-	set, ok := scheduler.ValueLocations.Values[def]
+	locs, ok := scheduler.ValueLocations.Values[def]
 	if !ok {
 		panic("should never happen")
 	}
 
 	var selected *arch.DataLocation
-	for loc, _ := range set {
+	for _, loc := range locs {
 		if selected == nil ||
 			// Prefer register locations over stack location
 			selected.OnFixedStack ||
@@ -422,7 +422,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		candidate := newDefAlloc(def)
 		defAllocs[def] = candidate
 
-		for loc, _ := range locs {
+		for _, loc := range locs {
 			if loc.OnFixedStack {
 				candidate.hasFixedStackCopy = true
 			} else if loc.OnTempStack {
@@ -607,7 +607,7 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 ) *arch.DataLocation {
 	worstMatch := math.MaxInt32
 	var selected *arch.DataLocation
-	for loc, _ := range scheduler.ValueLocations.Values[candidate.definition] {
+	for _, loc := range scheduler.ValueLocations.Values[candidate.definition] {
 		if loc.OnFixedStack || loc.OnTempStack {
 			continue
 		}

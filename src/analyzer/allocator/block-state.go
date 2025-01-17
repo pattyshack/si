@@ -335,7 +335,7 @@ func (state *BlockState) FinalizeLocationOut() {
 	state.LocationOut = LocationSet{}
 	for def, locs := range state.ValueLocations.Values {
 		var selected *architecture.DataLocation
-		for loc, _ := range locs {
+		for _, loc := range locs {
 			if loc.OnTempStack {
 				panic("should never happen")
 			}

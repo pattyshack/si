@@ -38,7 +38,7 @@ type ValueLocations struct {
 	// NOTE: Global reference, immediate, and temp stack argument/result values
 	// are tracked via pseudo variable definitions with internally generated
 	// names.
-	Values     map[*ast.VariableDefinition]map[*architecture.DataLocation]struct{}
+	Values     map[*ast.VariableDefinition][]*architecture.DataLocation
 	allocated  map[*architecture.DataLocation]*ast.VariableDefinition
 	ValueNames map[string]*ast.VariableDefinition
 }
@@ -51,7 +51,7 @@ func NewValueLocations(
 	locations := &ValueLocations{
 		StackFrame: frame,
 		Registers:  []*RegisterInfo{},
-		Values:     map[*ast.VariableDefinition]map[*architecture.DataLocation]struct{}{},
+		Values:     map[*ast.VariableDefinition][]*architecture.DataLocation{},
 		allocated:  map[*architecture.DataLocation]*ast.VariableDefinition{},
 		ValueNames: map[string]*ast.VariableDefinition{},
 	}
@@ -128,16 +128,6 @@ func (locations *ValueLocations) getRegInfo(
 	return locations.Registers[reg.Index]
 }
 
-func (locations *ValueLocations) GetLocations(
-	def *ast.VariableDefinition,
-) map[*architecture.DataLocation]struct{} {
-	set, ok := locations.Values[def]
-	if !ok {
-		panic("should never happen")
-	}
-	return set
-}
-
 func (locations *ValueLocations) allocate(
 	loc *architecture.DataLocation,
 	def *ast.VariableDefinition,
@@ -156,12 +146,14 @@ func (locations *ValueLocations) allocate(
 	}
 	locations.allocated[loc] = def
 
-	set, ok := locations.Values[def]
-	if !ok {
-		set = map[*architecture.DataLocation]struct{}{}
-		locations.Values[def] = set
+	locs := locations.Values[def]
+	for _, entry := range locs {
+		if loc == entry { // double allocate
+			panic("should never happen")
+		}
 	}
-	set[loc] = struct{}{}
+
+	locations.Values[def] = append(locs, loc)
 }
 
 func (locations *ValueLocations) allocateRegisters(
@@ -252,14 +244,24 @@ func (locations *ValueLocations) FreeLocation(
 	}
 	delete(locations.allocated, toFree)
 
-	set := locations.GetLocations(def)
-	_, ok = set[toFree]
+	locs, ok := locations.Values[def]
 	if !ok {
 		panic("should never happen")
 	}
 
-	if len(set) > 1 {
-		delete(set, toFree)
+	for idx, loc := range locs {
+		if loc == toFree {
+			if idx < len(locs)-1 {
+				locs[idx] = locs[len(locs)-1]
+			}
+
+			locs = locs[:len(locs)-1]
+			break
+		}
+	}
+
+	if len(locs) > 0 {
+		locations.Values[def] = locs
 	} else {
 		delete(locations.Values, def)
 		delete(locations.ValueNames, def.Name)
