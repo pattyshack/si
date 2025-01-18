@@ -342,11 +342,9 @@ func (state *BlockState) FinalizeLocationOut() {
 
 			// TODO select locations that best match predetermined children locations.
 			// For now, prefer register locations over fixed stack location
-			if selected == nil ||
-				selected.OnFixedStack ||
-				(len(selected.Registers) > 0 &&
-					selected.Registers[0].Index > loc.Registers[0].Index) {
-				selected = loc
+			selected = loc
+			if !selected.OnFixedStack {
+				break
 			}
 		}
 

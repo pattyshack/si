@@ -422,9 +422,6 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	}
 
 	// Free all dead definitions.
-	//
-	// Note: free location operations are not in deterministic order.  This is
-	// ok since free location won't emit any real instruction.
 	for def, locs := range scheduler.ValueLocations.Values {
 		liveRange, ok := scheduler.LiveRanges[def]
 		if !ok {
@@ -496,15 +493,10 @@ func (scheduler *operationsScheduler) selectCopySourceLocation(
 
 	var selected *arch.DataLocation
 	for _, loc := range locs {
-		if selected == nil ||
-			// Prefer register locations over stack location
-			selected.OnFixedStack ||
-			selected.OnTempStack ||
-			// Pick a deterministic register location
-			(len(selected.Registers) > 0 &&
-				selected.Registers[0].Index > loc.Registers[0].Index) {
-
-			selected = loc
+		// Prefer register locations over stack location
+		selected = loc
+		if !selected.OnFixedStack && !selected.OnTempStack {
+			break
 		}
 	}
 
@@ -633,11 +625,6 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 
 		if worstMatch > match {
 			worstMatch = match
-			selected = loc
-		} else if worstMatch == match &&
-			loc.Registers[0].Index > selected.Registers[0].Index {
-
-			// (arbitrary) deterministic tie break
 			selected = loc
 		}
 	}
