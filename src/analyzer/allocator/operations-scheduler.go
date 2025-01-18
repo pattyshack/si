@@ -122,94 +122,6 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	scheduler.tearDownInstruction()
 }
 
-func (scheduler *operationsScheduler) executeInstruction() {
-	srcLocs := []*arch.DataLocation{}
-	for _, constraint := range scheduler.constraints.Sources {
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
-		}
-		srcLocs = append(srcLocs, entry.loc)
-	}
-
-	destLoc := scheduler.finalDest.loc
-	if scheduler.tempDest.loc != nil {
-		destLoc = scheduler.tempDest.loc
-	}
-
-	scheduler.BlockState.ExecuteInstruction(
-		scheduler.instruction,
-		srcLocs,
-		destLoc)
-}
-
-func (scheduler *operationsScheduler) tearDownInstruction() {
-	// Free all clobbered source locations
-	for _, constraint := range scheduler.constraints.Sources {
-		if !constraint.ClobberedByInstruction() {
-			continue
-		}
-
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
-		}
-		scheduler.FreeLocation(entry.loc)
-	}
-
-	// Free all dead definitions.
-	//
-	// Note: free location operations are not in deterministic order.  This is
-	// ok since free location won't emit any real instruction.
-	for def, locs := range scheduler.ValueLocations.Values {
-		liveRange, ok := scheduler.LiveRanges[def]
-		if !ok {
-			panic("should never happen")
-		}
-
-		if len(liveRange.NextUses) > 0 {
-			continue
-		}
-
-		for _, loc := range locs {
-			scheduler.FreeLocation(loc)
-		}
-	}
-
-	if scheduler.finalDest.def == nil {
-		return
-	}
-
-	if scheduler.finalDest.loc == nil {
-		panic("should never happen")
-	} else if scheduler.finalDest.loc.OnTempStack {
-		panic("should never happen")
-	} else if scheduler.finalDest.loc.OnFixedStack {
-		// value must be on temp tack
-		if scheduler.tempDest.loc == nil {
-			panic("should never happen")
-		}
-
-		scheduler.finalDest.loc = scheduler.AllocateFixedStackLocation(
-			scheduler.finalDest.def)
-	} else {
-		// Since sources and destination may share registers, register destination
-		// must be allocated after all clobbered sources are freed.
-		scheduler.finalDest.loc = scheduler.AllocateRegistersLocation(
-			scheduler.finalDest.def,
-			scheduler.finalDest.loc.Registers...)
-	}
-
-	if scheduler.tempDest.loc != nil {
-		// The destination value is on a temp stack
-		scheduler.CopyLocation(
-			scheduler.tempDest.loc,
-			scheduler.finalDest.loc,
-			scheduler.destScratchRegister)
-		scheduler.FreeLocation(scheduler.tempDest.loc)
-	}
-}
-
 func (scheduler *operationsScheduler) setUpTempStack() {
 	scratchRegister := scheduler.SelectScratch()
 	defer scheduler.ReleaseScratch(scratchRegister)
@@ -264,90 +176,6 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 	scheduler.tempDest.loc = tempDestLoc
 	if tempDestLoc != nil {
 		scheduler.InitializeZeros(tempDestLoc, scratchRegister)
-	}
-}
-
-func (scheduler *operationsScheduler) selectCopySourceLocation(
-	def *ast.VariableDefinition,
-) *arch.DataLocation {
-	locs, ok := scheduler.ValueLocations.Values[def]
-	if !ok {
-		panic("should never happen")
-	}
-
-	var selected *arch.DataLocation
-	for _, loc := range locs {
-		if selected == nil ||
-			// Prefer register locations over stack location
-			selected.OnFixedStack ||
-			selected.OnTempStack ||
-			// Pick a deterministic register location
-			(len(selected.Registers) > 0 &&
-				selected.Registers[0].Index > loc.Registers[0].Index) {
-
-			selected = loc
-		}
-	}
-
-	return selected
-}
-
-func (scheduler *operationsScheduler) reduceRegisterPressure(
-	pressure int,
-	defAllocs map[*ast.VariableDefinition]*defAlloc,
-) {
-	candidates := map[*ast.VariableDefinition]*defAlloc{}
-	for def, alloc := range defAllocs {
-		if alloc.numRegisters == 0 { // unit data type takes up no space
-			continue
-		}
-
-		if alloc.numRequired == alloc.numPreferred &&
-			alloc.numRequired >= alloc.numActual {
-			continue // we can't free any more copies of this definition
-		}
-
-		candidates[def] = alloc
-	}
-
-	threshold := len(scheduler.ValueLocations.Registers) - 1
-	for pressure > threshold {
-		candidate := scheduler.selectFreeDefCandidate(candidates)
-
-		shouldSpill := false
-		if candidate.numPreferred >= candidate.numActual {
-			if candidate.numPreferred <= candidate.numRequired {
-				panic("should never happen")
-			}
-
-			candidate.numPreferred--
-
-			// Note: if candidate is finalDest, the destination's value is copy to
-			// fixed stack during instruction tear down.
-			if candidate.definition != scheduler.finalDest.def {
-				shouldSpill = true
-			}
-		}
-
-		if shouldSpill && !candidate.hasFixedStackCopy {
-			src := scheduler.selectCopySourceLocation(candidate.definition)
-			dest := scheduler.AllocateFixedStackLocation(candidate.definition)
-			scheduler.CopyLocation(src, dest, nil)
-			candidate.hasFixedStackCopy = true
-		}
-
-		if candidate.numActual > candidate.numPreferred {
-			scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
-			candidate.numActual--
-		}
-		pressure -= candidate.numRegisters
-
-		// Prune unfreeable candidate
-		if candidate.numRequired == candidate.numPreferred &&
-			candidate.numRequired >= candidate.numActual {
-
-			delete(candidates, candidate.definition)
-		}
 	}
 }
 
@@ -462,6 +290,209 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 	}
 
 	return registerPressure, defAllocs
+}
+
+func (scheduler *operationsScheduler) reduceRegisterPressure(
+	pressure int,
+	defAllocs map[*ast.VariableDefinition]*defAlloc,
+) {
+	candidates := map[*ast.VariableDefinition]*defAlloc{}
+	for def, alloc := range defAllocs {
+		if alloc.numRegisters == 0 { // unit data type takes up no space
+			continue
+		}
+
+		if alloc.numRequired == alloc.numPreferred &&
+			alloc.numRequired >= alloc.numActual {
+			continue // we can't free any more copies of this definition
+		}
+
+		candidates[def] = alloc
+	}
+
+	threshold := len(scheduler.ValueLocations.Registers) - 1
+	for pressure > threshold {
+		candidate := scheduler.selectFreeDefCandidate(candidates)
+
+		shouldSpill := false
+		if candidate.numPreferred >= candidate.numActual {
+			if candidate.numPreferred <= candidate.numRequired {
+				panic("should never happen")
+			}
+
+			candidate.numPreferred--
+
+			// Note: if candidate is finalDest, the destination's value is copy to
+			// fixed stack during instruction tear down.
+			if candidate.definition != scheduler.finalDest.def {
+				shouldSpill = true
+			}
+		}
+
+		if shouldSpill && !candidate.hasFixedStackCopy {
+			src := scheduler.selectCopySourceLocation(candidate.definition)
+			dest := scheduler.AllocateFixedStackLocation(candidate.definition)
+			scheduler.CopyLocation(src, dest, nil)
+			candidate.hasFixedStackCopy = true
+		}
+
+		if candidate.numActual > candidate.numPreferred {
+			scheduler.FreeLocation(scheduler.selectFreeLocation(candidate))
+			candidate.numActual--
+		}
+		pressure -= candidate.numRegisters
+
+		// Prune unfreeable candidate
+		if candidate.numRequired == candidate.numPreferred &&
+			candidate.numRequired >= candidate.numActual {
+
+			delete(candidates, candidate.definition)
+		}
+	}
+}
+
+func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
+	finalDestLoc := &arch.DataLocation{}
+	scheduler.finalDest.loc = finalDestLoc
+
+	destLocConst := scheduler.constraints.Destination
+	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
+		if alloc.numPreferred == 0 {
+			finalDestLoc.OnFixedStack = true
+			scheduler.destScratchRegister = scheduler.SelectScratch()
+		} else if alloc.numRegisters > 0 {
+			for i := 0; i < alloc.numRegisters; i++ {
+				finalDestLoc.Registers = append(
+					finalDestLoc.Registers,
+					scheduler.Select(
+						&arch.RegisterConstraint{
+							Clobbered:  true,
+							AnyGeneral: true,
+							AnyFloat:   true,
+						},
+						true))
+			}
+		}
+	} else {
+		for _, regConst := range destLocConst.Registers {
+			finalDestLoc.Registers = append(
+				finalDestLoc.Registers,
+				scheduler.Select(regConst, false))
+		}
+	}
+}
+
+func (scheduler *operationsScheduler) executeInstruction() {
+	srcLocs := []*arch.DataLocation{}
+	for _, constraint := range scheduler.constraints.Sources {
+		entry, ok := scheduler.srcs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+		srcLocs = append(srcLocs, entry.loc)
+	}
+
+	destLoc := scheduler.finalDest.loc
+	if scheduler.tempDest.loc != nil {
+		destLoc = scheduler.tempDest.loc
+	}
+
+	scheduler.BlockState.ExecuteInstruction(
+		scheduler.instruction,
+		srcLocs,
+		destLoc)
+}
+
+func (scheduler *operationsScheduler) tearDownInstruction() {
+	// Free all clobbered source locations
+	for _, constraint := range scheduler.constraints.Sources {
+		if !constraint.ClobberedByInstruction() {
+			continue
+		}
+
+		entry, ok := scheduler.srcs[constraint]
+		if !ok {
+			panic("should never happen")
+		}
+		scheduler.FreeLocation(entry.loc)
+	}
+
+	// Free all dead definitions.
+	//
+	// Note: free location operations are not in deterministic order.  This is
+	// ok since free location won't emit any real instruction.
+	for def, locs := range scheduler.ValueLocations.Values {
+		liveRange, ok := scheduler.LiveRanges[def]
+		if !ok {
+			panic("should never happen")
+		}
+
+		if len(liveRange.NextUses) > 0 {
+			continue
+		}
+
+		for _, loc := range locs {
+			scheduler.FreeLocation(loc)
+		}
+	}
+
+	if scheduler.finalDest.def == nil {
+		return
+	}
+
+	if scheduler.finalDest.loc == nil {
+		panic("should never happen")
+	} else if scheduler.finalDest.loc.OnTempStack {
+		panic("should never happen")
+	} else if scheduler.finalDest.loc.OnFixedStack {
+		// value must be on temp tack
+		if scheduler.tempDest.loc == nil {
+			panic("should never happen")
+		}
+
+		scheduler.finalDest.loc = scheduler.AllocateFixedStackLocation(
+			scheduler.finalDest.def)
+	} else {
+		// Since sources and destination may share registers, register destination
+		// must be allocated after all clobbered sources are freed.
+		scheduler.finalDest.loc = scheduler.AllocateRegistersLocation(
+			scheduler.finalDest.def,
+			scheduler.finalDest.loc.Registers...)
+	}
+
+	if scheduler.tempDest.loc != nil {
+		// The destination value is on a temp stack
+		scheduler.CopyLocation(
+			scheduler.tempDest.loc,
+			scheduler.finalDest.loc,
+			scheduler.destScratchRegister)
+		scheduler.FreeLocation(scheduler.tempDest.loc)
+	}
+}
+
+func (scheduler *operationsScheduler) selectCopySourceLocation(
+	def *ast.VariableDefinition,
+) *arch.DataLocation {
+	locs, ok := scheduler.ValueLocations.Values[def]
+	if !ok {
+		panic("should never happen")
+	}
+
+	var selected *arch.DataLocation
+	for _, loc := range locs {
+		if selected == nil ||
+			// Prefer register locations over stack location
+			selected.OnFixedStack ||
+			selected.OnTempStack ||
+			// Pick a deterministic register location
+			(len(selected.Registers) > 0 &&
+				selected.Registers[0].Index > loc.Registers[0].Index) {
+
+			selected = loc
+		}
+	}
+
+	return selected
 }
 
 // Free preferences (from highest to lowest):
@@ -596,35 +627,4 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 		panic("should never happen")
 	}
 	return selected
-}
-
-func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
-	finalDestLoc := &arch.DataLocation{}
-	scheduler.finalDest.loc = finalDestLoc
-
-	destLocConst := scheduler.constraints.Destination
-	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
-		if alloc.numPreferred == 0 {
-			finalDestLoc.OnFixedStack = true
-			scheduler.destScratchRegister = scheduler.SelectScratch()
-		} else if alloc.numRegisters > 0 {
-			for i := 0; i < alloc.numRegisters; i++ {
-				finalDestLoc.Registers = append(
-					finalDestLoc.Registers,
-					scheduler.Select(
-						&arch.RegisterConstraint{
-							Clobbered:  true,
-							AnyGeneral: true,
-							AnyFloat:   true,
-						},
-						true))
-			}
-		}
-	} else {
-		for _, regConst := range destLocConst.Registers {
-			finalDestLoc.Registers = append(
-				finalDestLoc.Registers,
-				scheduler.Select(regConst, false))
-		}
-	}
 }
