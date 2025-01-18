@@ -51,6 +51,11 @@ type operationsScheduler struct {
 	// A temp stack destination allocated during the set up phase.
 	tempDest defLoc
 
+	// Scratch register used for copying to fixed stack finalDest.
+	// Note that this register must be selected at the same time as final
+	// destination since final destination is defer allocated.
+	destScratchRegister *arch.Register
+
 	// Note: the set up phase will create a placeholder destination location
 	// entry which won't be allocated until the tear down phase.
 	finalDest defLoc
@@ -107,7 +112,11 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	// up some registers.
 	pressure, defAllocs := scheduler.computeRegisterPressure()
 	scheduler.reduceRegisterPressure(pressure, defAllocs)
-	scheduler.setUpRegisters(defAllocs)
+
+	// TODO setup register sources
+	if scheduler.finalDest.def != nil {
+		scheduler.setUpFinalDestination(defAllocs[scheduler.finalDest.def])
+	}
 
 	scheduler.executeInstruction()
 	scheduler.tearDownInstruction()
@@ -135,10 +144,6 @@ func (scheduler *operationsScheduler) executeInstruction() {
 }
 
 func (scheduler *operationsScheduler) tearDownInstruction() {
-	// THIS IS WRONG.  THIS NEEDS TO BE SELECTED AT THE SAME TIME AS FINAL DEST
-	scratchRegister := scheduler.SelectScratch()
-	defer scheduler.ReleaseScratch(scratchRegister)
-
 	// Free all clobbered source locations
 	for _, constraint := range scheduler.constraints.Sources {
 		if !constraint.ClobberedByInstruction() {
@@ -200,7 +205,7 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 		scheduler.CopyLocation(
 			scheduler.tempDest.loc,
 			scheduler.finalDest.loc,
-			scratchRegister)
+			scheduler.destScratchRegister)
 		scheduler.FreeLocation(scheduler.tempDest.loc)
 	}
 }
@@ -593,8 +598,33 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 	return selected
 }
 
-func (scheduler *operationsScheduler) setUpRegisters(
-	defAllocs map[*ast.VariableDefinition]*defAlloc,
-) {
-	// TODO
+func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
+	finalDestLoc := &arch.DataLocation{}
+	scheduler.finalDest.loc = finalDestLoc
+
+	destLocConst := scheduler.constraints.Destination
+	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
+		if alloc.numPreferred == 0 {
+			finalDestLoc.OnFixedStack = true
+			scheduler.destScratchRegister = scheduler.SelectScratch()
+		} else if alloc.numRegisters > 0 {
+			for i := 0; i < alloc.numRegisters; i++ {
+				finalDestLoc.Registers = append(
+					finalDestLoc.Registers,
+					scheduler.Select(
+						&arch.RegisterConstraint{
+							Clobbered:  true,
+							AnyGeneral: true,
+							AnyFloat:   true,
+						},
+						true))
+			}
+		}
+	} else {
+		for _, regConst := range destLocConst.Registers {
+			finalDestLoc.Registers = append(
+				finalDestLoc.Registers,
+				scheduler.Select(regConst, false))
+		}
+	}
 }

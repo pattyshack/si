@@ -39,6 +39,8 @@ func (selector *RegisterSelector) Reserve(
 	selector.assignment[constraint] = register
 }
 
+// TODO: use preference info for destination register selection
+//
 // Re-selecting the same constraint will return previously selected register
 // (This is used for source / destination register sharing).
 //
