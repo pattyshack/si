@@ -135,7 +135,7 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 		}
 		srcDefs = append(srcDefs, entry.def)
 
-		if entry.pseudoDefVal != nil {
+		if entry.pseudoDefVal == nil {
 			copySrcs[entry.def] = scheduler.selectCopySourceLocation(entry.def)
 		}
 	}
@@ -500,6 +500,9 @@ func (scheduler *operationsScheduler) selectCopySourceLocation(
 		}
 	}
 
+	if selected == nil {
+		panic("should never happen")
+	}
 	return selected
 }
 
