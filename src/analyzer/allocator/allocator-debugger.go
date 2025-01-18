@@ -166,10 +166,10 @@ func (debugger *AllocatorDebugger) printOperations(
 				printf("      StackFrame: %p\n", op.StackFrame)
 			}
 			if op.SrcRegister != nil {
-				printf("      SrcRegister: %p\n", op.SrcRegister)
+				printf("      SrcRegister: %s\n", op.SrcRegister.Name)
 			}
 			if op.DestRegister != nil {
-				printf("      DestRegister: %p\n", op.DestRegister)
+				printf("      DestRegister: %s\n", op.DestRegister.Name)
 			}
 		}
 	}
