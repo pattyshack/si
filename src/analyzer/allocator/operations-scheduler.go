@@ -358,8 +358,12 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 	destLocConst := scheduler.constraints.Destination
 	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
 		if alloc.numPreferred == 0 {
-			finalDestLoc.OnFixedStack = true
-			scheduler.destScratchRegister = scheduler.SelectScratch()
+			// We only need to copy the value to the final destination if the
+			// definition is used.
+			if alloc.nextUseDelta > 0 {
+				finalDestLoc.OnFixedStack = true
+				scheduler.destScratchRegister = scheduler.SelectScratch()
+			}
 		} else if alloc.numRegisters > 0 {
 			for i := 0; i < alloc.numRegisters; i++ {
 				finalDestLoc.Registers = append(
@@ -441,7 +445,10 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	}
 
 	if scheduler.finalDest.loc == nil {
-		panic("should never happen")
+		// value must be on temp tack
+		if scheduler.tempDest.loc == nil {
+			panic("should never happen")
+		}
 	} else if scheduler.finalDest.loc.OnTempStack {
 		panic("should never happen")
 	} else if scheduler.finalDest.loc.OnFixedStack {
@@ -461,11 +468,12 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	}
 
 	if scheduler.tempDest.loc != nil {
-		// The destination value is on a temp stack
-		scheduler.CopyLocation(
-			scheduler.tempDest.loc,
-			scheduler.finalDest.loc,
-			scheduler.destScratchRegister)
+		if scheduler.finalDest.loc != nil {
+			scheduler.CopyLocation(
+				scheduler.tempDest.loc,
+				scheduler.finalDest.loc,
+				scheduler.destScratchRegister)
+		}
 		scheduler.FreeLocation(scheduler.tempDest.loc)
 	}
 }
