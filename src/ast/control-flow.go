@@ -130,6 +130,23 @@ const (
 	Exit = TerminalKind("exit")
 )
 
+// This returns true if the instruction is either
+//  1. a *Terminal, or
+//  2. a *FuncCall with IsExitTerminal set.
+func IsTerminal(inst Instruction) bool {
+	_, ok := inst.(*Terminal)
+	if ok {
+		return true
+	}
+
+	funcCall, ok := inst.(*FuncCall)
+	if ok {
+		return funcCall.IsExitTerminal
+	}
+
+	return false
+}
+
 // Terminal instruction of the form: <op> <src>
 //
 // Note: exit instruction is translated into a syscall instruction immediately

@@ -444,6 +444,14 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 		return
 	}
 
+	if ast.IsTerminal(scheduler.instruction) {
+		if scheduler.tempDest.loc != nil {
+			scheduler.FreeLocation(scheduler.tempDest.loc)
+		}
+
+		return
+	}
+
 	if scheduler.finalDest.loc == nil {
 		// value must be on temp tack
 		if scheduler.tempDest.loc == nil {
