@@ -40,6 +40,8 @@ type defAlloc struct {
 type operationsScheduler struct {
 	*BlockState
 
+	*RegisterSelector
+
 	currentDist int
 	instruction ast.Instruction
 	constraints *arch.InstructionConstraints
@@ -79,11 +81,12 @@ func newOperationsScheduler(
 	}
 
 	return &operationsScheduler{
-		BlockState:  state,
-		currentDist: currentDist,
-		instruction: inst,
-		constraints: constraints,
-		srcs:        srcs,
+		BlockState:       state,
+		RegisterSelector: NewRegisterSelector(state),
+		currentDist:      currentDist,
+		instruction:      inst,
+		constraints:      constraints,
+		srcs:             srcs,
 		finalDest: defLoc{
 			def: inst.Destination(),
 		},
@@ -132,9 +135,9 @@ func (scheduler *operationsScheduler) executeInstruction() {
 }
 
 func (scheduler *operationsScheduler) tearDownInstruction() {
-	// NOTE: temp register must be selected before freeing any location since
-	// the freed location may have the destination's data.
-	tempRegister := scheduler.selectTempRegister()
+	// THIS IS WRONG.  THIS NEEDS TO BE SELECTED AT THE SAME TIME AS FINAL DEST
+	scratchRegister := scheduler.SelectScratch()
+	defer scheduler.ReleaseScratch(scratchRegister)
 
 	// Free all clobbered source locations
 	for _, constraint := range scheduler.constraints.Sources {
@@ -197,13 +200,14 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 		scheduler.CopyLocation(
 			scheduler.tempDest.loc,
 			scheduler.finalDest.loc,
-			tempRegister)
+			scratchRegister)
 		scheduler.FreeLocation(scheduler.tempDest.loc)
 	}
 }
 
 func (scheduler *operationsScheduler) setUpTempStack() {
-	tempRegister := scheduler.selectTempRegister()
+	scratchRegister := scheduler.SelectScratch()
+	defer scheduler.ReleaseScratch(scratchRegister)
 
 	var srcDefs []*ast.VariableDefinition
 	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
@@ -242,19 +246,19 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 		entry.loc = loc
 
 		if entry.pseudoDefVal != nil {
-			scheduler.SetConstantValue(entry.pseudoDefVal, loc, tempRegister)
+			scheduler.SetConstantValue(entry.pseudoDefVal, loc, scratchRegister)
 		} else {
 			copySrc, ok := copySrcs[entry.def]
 			if !ok {
 				panic("should never happen")
 			}
-			scheduler.CopyLocation(copySrc, loc, tempRegister)
+			scheduler.CopyLocation(copySrc, loc, scratchRegister)
 		}
 	}
 
 	scheduler.tempDest.loc = tempDestLoc
 	if tempDestLoc != nil {
-		scheduler.InitializeZeros(tempDestLoc, tempRegister)
+		scheduler.InitializeZeros(tempDestLoc, scratchRegister)
 	}
 }
 
@@ -281,60 +285,6 @@ func (scheduler *operationsScheduler) selectCopySourceLocation(
 	}
 
 	return selected
-}
-
-// By construction, there's always at least one unused register (this
-// assumption is checked by the instruction constraints validator).  The
-// function entry point is the only place where all registers could be in
-// used; in this case, at least one of the register is a pseudo-source
-// callee-saved register that is never used by the function.
-func (scheduler *operationsScheduler) selectTempRegister() *arch.Register {
-	// The common case fast path
-	for _, regInfo := range scheduler.ValueLocations.Registers {
-		if regInfo.UsedBy == nil {
-			return regInfo.Register
-		}
-	}
-
-	// Slow path to handle function entry point
-
-	var selected *RegisterInfo
-	for _, regInfo := range scheduler.ValueLocations.Registers {
-		defName := regInfo.UsedBy.Name
-
-		// Registers holding real definitions are not eligible
-		if !strings.HasPrefix(defName, "%") ||
-			strings.HasPrefix(defName, "%%") {
-			continue
-		}
-
-		// Previous frame pointer has highest spill priority
-		if defName == arch.PreviousFramePointer {
-			selected = regInfo
-			break
-		}
-
-		// Pick a register deterministically.  Any one will do.
-		if selected == nil || selected.Index > regInfo.Index {
-			selected = regInfo
-		}
-	}
-
-	if selected == nil {
-		panic("should never happen")
-	}
-
-	regLoc := selected.UsedBy
-	def, ok := scheduler.ValueLocations.ValueNames[regLoc.Name]
-	if !ok {
-		panic("should never happen")
-	}
-
-	stackLoc := scheduler.AllocateFixedStackLocation(def)
-	scheduler.CopyLocation(regLoc, stackLoc, nil)
-	scheduler.FreeLocation(regLoc)
-
-	return selected.Register
 }
 
 func (scheduler *operationsScheduler) reduceRegisterPressure(
