@@ -408,55 +408,63 @@ func (state *BlockState) MoveRegister(
 	return newLoc
 }
 
-// Note: both src and dest must be allocated/tracked by ValueLocations. temp
+// Note: both src and dest must be allocated/tracked by ValueLocations. scratch
 // register must not be in use.
 func (state *BlockState) CopyLocation(
 	src *architecture.DataLocation,
 	dest *architecture.DataLocation,
-	temp *architecture.Register,
+	scratch *architecture.Register,
 ) {
 	state.ValueLocations.AssertAllocated(src)
 	state.ValueLocations.AssertAllocated(dest)
-	if temp != nil {
-		state.ValueLocations.AssertFree(temp)
+	if src.IsOnStack() && dest.IsOnStack() && scratch == nil {
+		panic("should never happen")
+	}
+
+	if scratch != nil {
+		state.ValueLocations.AssertFree(scratch)
 	}
 
 	state.Operations = append(
 		state.Operations,
-		architecture.NewCopyLocationOp(src, dest, temp))
+		architecture.NewCopyLocationOp(src, dest, scratch))
 }
 
-// Note: dest must be allocated/tracked by ValueLocations. temp register must
-// not be in use.
+// Note: dest must be allocated/tracked by ValueLocations. scratch register
+// must not be in use.
 func (state *BlockState) SetConstantValue(
 	value ast.Value,
 	dest *architecture.DataLocation,
-	temp *architecture.Register,
+	scratch *architecture.Register,
 ) {
 	state.ValueLocations.AssertAllocated(dest)
-	state.ValueLocations.AssertFree(temp)
+	if dest.IsOnStack() && scratch == nil {
+		panic("should never happen")
+	}
+	if scratch != nil {
+		state.ValueLocations.AssertFree(scratch)
+	}
 
 	state.Operations = append(
 		state.Operations,
-		architecture.NewSetConstantValueOp(value, dest, temp))
+		architecture.NewSetConstantValueOp(value, dest, scratch))
 }
 
-// Note: dest must be allocated/tracked by ValueLocations. temp register must
+// Note: dest must be allocated/tracked by ValueLocations. scratch register must
 // not be in use.
 func (state *BlockState) InitializeZeros(
 	dest *architecture.DataLocation,
-	temp *architecture.Register,
+	scratch *architecture.Register,
 ) {
 	state.ValueLocations.AssertAllocated(dest)
-
 	if !dest.OnTempStack {
 		panic("should never happen")
 	}
-	state.ValueLocations.AssertFree(temp)
+	state.ValueLocations.AssertFree(scratch)
 
 	state.Operations = append(
 		state.Operations,
-		architecture.NewInitializeZerosOp(dest, temp))
+		architecture.NewInitializeZerosOp(dest, scratch))
 }
 
 func (state *BlockState) AllocateRegistersLocation(

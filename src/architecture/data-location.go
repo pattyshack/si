@@ -107,3 +107,7 @@ func (loc *DataLocation) String() string {
 		loc.Offset,
 		loc.Type)
 }
+
+func (loc *DataLocation) IsOnStack() bool {
+	return loc.OnTempStack || loc.OnFixedStack
+}
