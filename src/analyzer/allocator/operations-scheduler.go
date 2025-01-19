@@ -114,6 +114,7 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	scheduler.reduceRegisterPressure(pressure, defAllocs)
 
 	// TODO setup register sources
+
 	if scheduler.finalDest.def != nil {
 		scheduler.setUpFinalDestination(defAllocs[scheduler.finalDest.def])
 	}
@@ -184,12 +185,9 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 	map[*ast.VariableDefinition]*defAlloc,
 ) {
 	newDefAlloc := func(def *ast.VariableDefinition) *defAlloc {
-		liveRange, ok := scheduler.LiveRanges[def]
-		if !ok {
-			panic("should never happen")
-		}
 		nextUseDelta := 0
-		if len(liveRange.NextUses) > 0 {
+		liveRange, ok := scheduler.LiveRanges[def]
+		if ok && len(liveRange.NextUses) > 0 {
 			nextUseDelta = liveRange.NextUses[0] - scheduler.currentDist
 		}
 
@@ -418,17 +416,14 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 		if !ok {
 			panic("should never happen")
 		}
+
 		scheduler.FreeLocation(entry.loc)
 	}
 
 	// Free all dead definitions.
 	for def, locs := range scheduler.ValueLocations.Values {
 		liveRange, ok := scheduler.LiveRanges[def]
-		if !ok {
-			panic("should never happen")
-		}
-
-		if len(liveRange.NextUses) > 0 {
+		if ok && len(liveRange.NextUses) > 0 {
 			continue
 		}
 
