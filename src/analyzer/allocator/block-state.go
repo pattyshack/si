@@ -523,3 +523,14 @@ func (state *BlockState) FreeLocation(
 		state.Operations,
 		architecture.NewFreeLocationOp(loc))
 }
+
+// For internal debugging only.
+func (state *BlockState) printValueLocations() {
+	fmt.Println("VALUE LOCATIONS:")
+	for def, locs := range state.ValueLocations.Values {
+		fmt.Println("  DEFINTIION:", def.Name)
+		for _, loc := range locs {
+			fmt.Println("    LOCATION:", loc)
+		}
+	}
+}
