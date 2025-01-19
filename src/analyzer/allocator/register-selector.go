@@ -68,7 +68,7 @@ func (selector *RegisterSelector) Select(
 			continue
 		}
 
-		if regInfo.UsedBy == nil && constraint.SatisfyBy(regInfo.Register) {
+		if regInfo.UsedBy == nil {
 			if constraint.SatisfyBy(regInfo.Register) {
 				selector.Reserve(regInfo.Register, constraint)
 				return regInfo.Register
@@ -96,8 +96,10 @@ func (selector *RegisterSelector) Select(
 
 		if constraint.SatisfyBy(free) {
 			selector.Reserve(free, constraint)
-			return candidate
+			return free
 		}
+
+		// free != candidate since free doesn't Satisfy constraint.
 	}
 
 	selector.MoveRegister(candidate, free)
