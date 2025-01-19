@@ -22,6 +22,17 @@ func NewRegisterSelector(block *BlockState) *RegisterSelector {
 	}
 }
 
+// This return if any of the location's registers is selected.
+func (selector *RegisterSelector) IsSelected(loc *arch.DataLocation) bool {
+	for _, reg := range loc.Registers {
+		_, ok := selector.selected[reg]
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
 func (selector *RegisterSelector) Reserve(
 	register *arch.Register,
 	constraint *arch.RegisterConstraint,
