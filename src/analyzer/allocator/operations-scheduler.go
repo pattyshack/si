@@ -3,6 +3,7 @@ package allocator
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	arch "github.com/pattyshack/chickadee/architecture"
@@ -12,13 +13,17 @@ import (
 type defLoc struct {
 	def *ast.VariableDefinition
 
-	// NOTE: loc is fully selected iff loc != nil and misplacedChunks is empty.
+	// NOTE: loc is fully allocated iff loc != nil and misplacedChunks is empty
 	loc *arch.DataLocation
 
 	pseudoDefVal ast.Value // global ref or immediate
 
 	constraint      *arch.LocationConstraint
 	misplacedChunks []int
+
+	// When false, loc has not been allocated, and loc.Registers is partially
+	// reserved and may include nils
+	hasAllocated bool
 }
 
 type defAlloc struct {
@@ -28,7 +33,7 @@ type defAlloc struct {
 	// 0 indicates the definition is dead after this instruction
 	nextUseDelta int // = nextUseDist - currentDist
 
-	constraints []*arch.LocationConstraint
+	constrained []*defLoc // only used by sources
 
 	// numRequired + 1 >= numPreferred >= numRequired >= numClobbered
 	//
@@ -139,13 +144,13 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	// Note: To maximize degrees of freedom / simplify accounting, register
 	// pressure is computed after setting up temp stack, which will likely free
 	// up some registers.
-	pressure, defAllocs := scheduler.computeRegisterPressure()
+	pressure, defAllocs, finalDestAlloc := scheduler.computeRegisterPressure()
 	scheduler.reduceRegisterPressure(pressure, defAllocs)
 
 	// TODO setup register sources
 
 	if scheduler.finalDest.def != nil {
-		scheduler.setUpFinalDestination(defAllocs[scheduler.finalDest.def])
+		scheduler.setUpFinalDestination(finalDestAlloc)
 	}
 
 	scheduler.executeInstruction()
@@ -178,8 +183,6 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 
 	for idx, src := range tempStackSrcs {
 		loc := stackSrcLocs[idx]
-		src.loc = loc
-
 		if src.pseudoDefVal != nil {
 			scheduler.SetConstantValue(src.pseudoDefVal, loc, scratchRegister)
 		} else {
@@ -189,17 +192,22 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 			}
 			scheduler.CopyLocation(copySrc, loc, scratchRegister)
 		}
+
+		src.loc = loc
+		src.hasAllocated = true
 	}
 
 	scheduler.tempDest.loc = tempDestLoc
 	if tempDestLoc != nil {
 		scheduler.InitializeZeros(tempDestLoc, scratchRegister)
+		scheduler.tempDest.hasAllocated = true
 	}
 }
 
 func (scheduler *operationsScheduler) computeRegisterPressure() (
 	int,
-	map[*ast.VariableDefinition]*defAlloc,
+	[]*defAlloc,
+	*defAlloc,
 ) {
 	newDefAlloc := func(def *ast.VariableDefinition) *defAlloc {
 		nextUseDelta := 0
@@ -215,10 +223,10 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
-	defAllocs := map[*ast.VariableDefinition]*defAlloc{}
+	mappedDefAllocs := map[*ast.VariableDefinition]*defAlloc{}
 	for def, locs := range scheduler.ValueLocations.Values {
 		candidate := newDefAlloc(def)
-		defAllocs[def] = candidate
+		mappedDefAllocs[def] = candidate
 
 		for _, loc := range locs {
 			if loc.OnFixedStack {
@@ -233,7 +241,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 
 	registerConstraints := map[*arch.RegisterConstraint]struct{}{}
 	for _, src := range scheduler.srcs {
-		candidate, ok := defAllocs[src.def]
+		candidate, ok := mappedDefAllocs[src.def]
 		if !ok {
 			if src.pseudoDefVal == nil {
 				panic("should never happen")
@@ -243,7 +251,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 				definition:   src.def,
 				numRegisters: arch.NumRegisters(src.pseudoDefVal.Type()),
 			}
-			defAllocs[src.def] = candidate
+			mappedDefAllocs[src.def] = candidate
 		}
 
 		if src.constraint.AnyLocation || src.constraint.RequireOnStack {
@@ -255,7 +263,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 				registerConstraints[reg] = struct{}{}
 			}
 
-			candidate.constraints = append(candidate.constraints, src.constraint)
+			candidate.constrained = append(candidate.constrained, src)
 			candidate.numPreferred++
 			candidate.numRequired++
 
@@ -265,6 +273,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
+	var finalDestAlloc *defAlloc
 	registerPressure := 0
 	if scheduler.constraints.Destination != nil {
 		constraint := scheduler.constraints.Destination
@@ -272,7 +281,8 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			// Note: If numPreferred is 0 after pressure reduction, the final
 			// destination is on fixed stack (we can skip copying to final
 			// destination if nextUseDelta is also 0)
-			defAllocs[scheduler.finalDest.def] = newDefAlloc(scheduler.finalDest.def)
+			finalDestAlloc = newDefAlloc(scheduler.finalDest.def)
+			mappedDefAllocs[scheduler.finalDest.def] = finalDestAlloc
 		} else {
 			// Account for destination registers that do not overlap with source
 			// registers
@@ -285,7 +295,10 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
-	for _, candidate := range defAllocs {
+	defAllocs := []*defAlloc{}
+	for _, candidate := range mappedDefAllocs {
+		defAllocs = append(defAllocs, candidate)
+
 		numCopies := candidate.numActual
 
 		// If the definition out lives the instruction, ensure at least one copy of
@@ -304,18 +317,26 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		registerPressure += numCopies * candidate.numRegisters
 	}
 
-	return registerPressure, defAllocs
+	sort.Slice(
+		defAllocs,
+		func(i int, j int) bool {
+			return arch.CompareDefinitionNames(
+				defAllocs[i].definition.Name,
+				defAllocs[j].definition.Name) < 0
+		})
+
+	return registerPressure, defAllocs, finalDestAlloc
 }
 
 func (scheduler *operationsScheduler) reduceRegisterPressure(
 	pressure int,
-	defAllocs map[*ast.VariableDefinition]*defAlloc,
+	defAllocs []*defAlloc,
 ) {
 	scratchRegister := scheduler.SelectScratch()
 	defer scheduler.ReleaseScratch(scratchRegister)
 
-	candidates := map[*ast.VariableDefinition]*defAlloc{}
-	for def, alloc := range defAllocs {
+	candidates := []*defAlloc{}
+	for _, alloc := range defAllocs {
 		if alloc.numRegisters == 0 { // unit data type takes up no space
 			continue
 		}
@@ -325,12 +346,12 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 			continue // we can't free any more copies of this definition
 		}
 
-		candidates[def] = alloc
+		candidates = append(candidates, alloc)
 	}
 
 	threshold := len(scheduler.ValueLocations.Registers) - 1
 	for pressure > threshold {
-		candidate := scheduler.selectFreeDefCandidate(candidates)
+		idx, candidate := scheduler.selectFreeDefCandidate(candidates)
 
 		shouldSpill := false
 		if candidate.numPreferred >= candidate.numActual {
@@ -364,7 +385,10 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 		if candidate.numRequired == candidate.numPreferred &&
 			candidate.numRequired >= candidate.numActual {
 
-			delete(candidates, candidate.definition)
+			if idx < len(candidates)-1 {
+				candidates[idx] = candidates[len(candidates)-1]
+			}
+			candidates = candidates[:len(candidates)-1]
 		}
 	}
 }
@@ -425,6 +449,15 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	// Free all clobbered source locations
 	for _, src := range scheduler.srcs {
 		if src.constraint.ClobberedByInstruction() {
+
+			//
+			// TODO REMOVE THIS. src.loc should never be nil once everything is
+			// correctly allocated
+			//
+			if src.loc == nil {
+				continue
+			}
+
 			scheduler.FreeLocation(src.loc)
 		}
 	}
@@ -525,12 +558,16 @@ func (scheduler *operationsScheduler) selectCopySourceLocation(
 //
 // All preferences are tie break by name to make the selection deterministic.
 func (scheduler *operationsScheduler) selectFreeDefCandidate(
-	candidates map[*ast.VariableDefinition]*defAlloc,
-) *defAlloc {
+	candidates []*defAlloc,
+) (
+	int,
+	*defAlloc,
+) {
 	// Prefer to free candidate with extra discardable copies
 	maxExtraCopies := 0
+	selectedIdx := -1
 	var selected *defAlloc
-	for _, candidate := range candidates {
+	for idx, candidate := range candidates {
 		if candidate.numPreferred >= candidate.numActual {
 			// The candidate cannot be unconditionally discarded
 			continue
@@ -539,65 +576,36 @@ func (scheduler *operationsScheduler) selectFreeDefCandidate(
 		extraCopies := candidate.numActual - candidate.numClobbered
 		if extraCopies > maxExtraCopies {
 			maxExtraCopies = extraCopies
-			selected = candidate
-		} else if extraCopies == maxExtraCopies &&
-			arch.CompareDefinitionNames(
-				candidate.definition.Name,
-				selected.definition.Name) < 0 {
+			selectedIdx = idx
 			selected = candidate
 		}
 	}
 	if selected != nil {
-		return selected
+		return selectedIdx, selected
 	}
 
 	// Prefer to free candidate that are already on stack
-	for _, candidate := range candidates {
+	for idx, candidate := range candidates {
 		if candidate.hasFixedStackCopy {
-			if selected == nil {
-				selected = candidate
-			} else if arch.CompareDefinitionNames(
-				candidate.definition.Name,
-				selected.definition.Name) < 0 {
-
-				selected = candidate
-			}
+			return idx, candidate
 		}
-	}
-	if selected != nil {
-		return selected
 	}
 
 	// Prefer callee-saved parameters
-	for _, candidate := range candidates {
+	for idx, candidate := range candidates {
 		if strings.HasPrefix(candidate.definition.Name, "%") {
-			if selected == nil {
-				selected = candidate
-			} else if arch.CompareDefinitionNames(
-				candidate.definition.Name,
-				selected.definition.Name) < 0 {
-
-				selected = candidate
-			}
+			return idx, candidate
 		}
-	}
-	if selected != nil {
-		return selected
 	}
 
 	// Prefer largest (numRegisters * nextUseDelta)
 	// TODO: improve heuristic
 	largestHeuristic := -1
-	for _, candidate := range candidates {
+	for idx, candidate := range candidates {
 		heuristic := candidate.numRegisters * candidate.nextUseDelta
-
 		if heuristic > largestHeuristic {
 			largestHeuristic = heuristic
-			selected = candidate
-		} else if largestHeuristic == heuristic &&
-			arch.CompareDefinitionNames(
-				candidate.definition.Name,
-				selected.definition.Name) < 0 {
+			selectedIdx = idx
 			selected = candidate
 		}
 	}
@@ -605,7 +613,7 @@ func (scheduler *operationsScheduler) selectFreeDefCandidate(
 	if selected == nil {
 		panic("should never happen")
 	}
-	return selected
+	return selectedIdx, selected
 }
 
 func (scheduler *operationsScheduler) selectFreeLocation(
@@ -619,10 +627,10 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 		}
 
 		match := 0
-		for _, constraint := range candidate.constraints {
+		for _, src := range candidate.constrained {
 			numSatisfied := 0
 			for idx, reg := range loc.Registers {
-				if constraint.Registers[idx].SatisfyBy(reg) {
+				if src.constraint.Registers[idx].SatisfyBy(reg) {
 					numSatisfied++
 				}
 			}

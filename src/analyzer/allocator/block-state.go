@@ -366,9 +366,12 @@ func (state *BlockState) ExecuteInstruction(
 	srcs []*architecture.DataLocation,
 	dest *architecture.DataLocation,
 ) {
+	/* TODO UNCOMMENT.
+
 	for _, src := range srcs {
 		state.ValueLocations.AssertAllocated(src)
 	}
+	*/
 
 	if dest == nil {
 		// Do nothing. This is a control flow instruction.
