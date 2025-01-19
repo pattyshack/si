@@ -76,9 +76,12 @@ type InstructionConstraints struct {
 	// funcDefConstraintsGenerator).
 	FramePointerRegister *Register
 
-	// Which sources/destination values should be on stack.  The layout is
-	// specified from top to bottom (stack destination is always at the bottom).
-	// Note: The stack layout depends on AddStackSource calls order.
+	// Source data locations are in the same order as the instruction's Sources().
+	// For call, the first entry is func value.
+	//
+	// Note that the call stack layout (from top to bottom) is in the same order
+	// as sources (register locations don't take up any stack space); stack
+	// destination is always at the bottom.
 	//
 	// Source value are copied into the stack slots, and destination's stack slot
 	// is initialized to zeros.
@@ -87,14 +90,8 @@ type InstructionConstraints struct {
 	// by the instruction/call.
 	// XXX: maybe add option to control this behavior
 	//
-	// That ret instruction uses caller's preallocated stack location rather than
+	// ret instruction will use caller's preallocated stack location rather than
 	// initializing a new location.
-	SrcStackLocations []*LocationConstraint
-	// nil if the destination is on registers
-	DestStackLocation *LocationConstraint
-
-	// Source data locations are in the same order as the instruction's Sources().
-	// For call, the first entry is func value.
 	Sources []*LocationConstraint
 	// Pseudo sources are used to track callee-saved pseudo source registers in
 	// function definition (populated by funcDefConstraintsGenerator).  It's also
@@ -219,7 +216,6 @@ func (constraints *InstructionConstraints) AddStackSource(
 		NumRegisters:   NumRegisters(valueType),
 		RequireOnStack: true,
 	}
-	constraints.SrcStackLocations = append(constraints.SrcStackLocations, loc)
 	constraints.Sources = append(constraints.Sources, loc)
 }
 
@@ -265,7 +261,6 @@ func (constraints *InstructionConstraints) SetStackDestination(
 		NumRegisters:   NumRegisters(valueType),
 		RequireOnStack: true,
 	}
-	constraints.DestStackLocation = loc
 	constraints.Destination = loc
 }
 

@@ -11,9 +11,14 @@ import (
 
 type defLoc struct {
 	def *ast.VariableDefinition
+
+	// NOTE: loc is fully selected iff loc != nil and misplacedChunks is empty.
 	loc *arch.DataLocation
 
 	pseudoDefVal ast.Value // global ref or immediate
+
+	constraint      *arch.LocationConstraint
+	misplacedChunks []int
 }
 
 type defAlloc struct {
@@ -46,7 +51,7 @@ type operationsScheduler struct {
 	instruction ast.Instruction
 	constraints *arch.InstructionConstraints
 
-	srcs map[*arch.LocationConstraint]*defLoc
+	srcs []*defLoc
 
 	// A temp stack destination allocated during the set up phase.
 	tempDest defLoc
@@ -67,9 +72,13 @@ func newOperationsScheduler(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) *operationsScheduler {
-	srcs := map[*arch.LocationConstraint]*defLoc{}
+	srcs := []*defLoc{}
 	for idx, value := range inst.Sources() {
-		entry := &defLoc{}
+		entry := &defLoc{
+			constraint: constraints.Sources[idx],
+		}
+		srcs = append(srcs, entry)
+
 		ref, ok := value.(*ast.VariableReference)
 		if ok {
 			entry.def = ref.UseDef
@@ -82,7 +91,28 @@ func newOperationsScheduler(
 			}
 			entry.pseudoDefVal = value
 		}
-		srcs[constraints.Sources[idx]] = entry
+	}
+
+	tempDest := defLoc{}
+	finalDest := defLoc{
+		def: inst.Destination(),
+	}
+
+	if constraints.Destination != nil && constraints.Destination.RequireOnStack {
+		tempDest.def = &ast.VariableDefinition{
+			StartEndPos:       finalDest.def.StartEnd(),
+			Name:              "%temp-destination",
+			Type:              finalDest.def.Type,
+			ParentInstruction: inst,
+		}
+		tempDest.constraint = constraints.Destination
+
+		finalDest.constraint = &arch.LocationConstraint{
+			NumRegisters: constraints.Destination.NumRegisters,
+			AnyLocation:  true,
+		}
+	} else {
+		finalDest.constraint = constraints.Destination
 	}
 
 	return &operationsScheduler{
@@ -92,9 +122,8 @@ func newOperationsScheduler(
 		instruction:      inst,
 		constraints:      constraints,
 		srcs:             srcs,
-		finalDest: defLoc{
-			def: inst.Destination(),
-		},
+		tempDest:         tempDest,
+		finalDest:        finalDest,
 	}
 }
 
@@ -127,26 +156,19 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 	scratchRegister := scheduler.SelectScratch()
 	defer scheduler.ReleaseScratch(scratchRegister)
 
+	var tempStackSrcs []*defLoc
 	var srcDefs []*ast.VariableDefinition
 	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
-	for _, constraint := range scheduler.constraints.SrcStackLocations {
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
+	for _, src := range scheduler.srcs {
+		if !src.constraint.RequireOnStack {
+			continue
 		}
-		srcDefs = append(srcDefs, entry.def)
 
-		if entry.pseudoDefVal == nil {
-			copySrcs[entry.def] = scheduler.selectCopySourceLocation(entry.def)
-		}
-	}
+		tempStackSrcs = append(tempStackSrcs, src)
+		srcDefs = append(srcDefs, src.def)
 
-	if scheduler.constraints.DestStackLocation != nil {
-		scheduler.tempDest.def = &ast.VariableDefinition{
-			StartEndPos:       scheduler.finalDest.def.StartEnd(),
-			Name:              "%temp-destination",
-			Type:              scheduler.finalDest.def.Type,
-			ParentInstruction: scheduler.instruction,
+		if src.pseudoDefVal == nil {
+			copySrcs[src.def] = scheduler.selectCopySourceLocation(src.def)
 		}
 	}
 
@@ -154,19 +176,14 @@ func (scheduler *operationsScheduler) setUpTempStack() {
 		srcDefs,
 		scheduler.tempDest.def)
 
-	for idx, constraint := range scheduler.constraints.SrcStackLocations {
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
-		}
-
+	for idx, src := range tempStackSrcs {
 		loc := stackSrcLocs[idx]
-		entry.loc = loc
+		src.loc = loc
 
-		if entry.pseudoDefVal != nil {
-			scheduler.SetConstantValue(entry.pseudoDefVal, loc, scratchRegister)
+		if src.pseudoDefVal != nil {
+			scheduler.SetConstantValue(src.pseudoDefVal, loc, scratchRegister)
 		} else {
-			copySrc, ok := copySrcs[entry.def]
+			copySrc, ok := copySrcs[src.def]
 			if !ok {
 				panic("should never happen")
 			}
@@ -215,34 +232,34 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 	}
 
 	registerConstraints := map[*arch.RegisterConstraint]struct{}{}
-	for constraint, defLoc := range scheduler.srcs {
-		candidate, ok := defAllocs[defLoc.def]
+	for _, src := range scheduler.srcs {
+		candidate, ok := defAllocs[src.def]
 		if !ok {
-			if defLoc.pseudoDefVal == nil {
+			if src.pseudoDefVal == nil {
 				panic("should never happen")
 			}
 
 			candidate = &defAlloc{
-				definition:   defLoc.def,
-				numRegisters: arch.NumRegisters(defLoc.pseudoDefVal.Type()),
+				definition:   src.def,
+				numRegisters: arch.NumRegisters(src.pseudoDefVal.Type()),
 			}
-			defAllocs[defLoc.def] = candidate
+			defAllocs[src.def] = candidate
 		}
 
-		if constraint.AnyLocation || constraint.RequireOnStack {
+		if src.constraint.AnyLocation || src.constraint.RequireOnStack {
 			if candidate.numRequired == candidate.numPreferred {
 				candidate.numPreferred++
 			}
 		} else {
-			for _, reg := range constraint.Registers {
+			for _, reg := range src.constraint.Registers {
 				registerConstraints[reg] = struct{}{}
 			}
 
-			candidate.constraints = append(candidate.constraints, constraint)
+			candidate.constraints = append(candidate.constraints, src.constraint)
 			candidate.numPreferred++
 			candidate.numRequired++
 
-			if constraint.ClobberedByInstruction() {
+			if src.constraint.ClobberedByInstruction() {
 				candidate.numClobbered++
 			}
 		}
@@ -386,11 +403,7 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 
 func (scheduler *operationsScheduler) executeInstruction() {
 	srcLocs := []*arch.DataLocation{}
-	for _, constraint := range scheduler.constraints.Sources {
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
-		}
+	for _, entry := range scheduler.srcs {
 		srcLocs = append(srcLocs, entry.loc)
 	}
 
@@ -407,17 +420,10 @@ func (scheduler *operationsScheduler) executeInstruction() {
 
 func (scheduler *operationsScheduler) tearDownInstruction() {
 	// Free all clobbered source locations
-	for _, constraint := range scheduler.constraints.Sources {
-		if !constraint.ClobberedByInstruction() {
-			continue
+	for _, src := range scheduler.srcs {
+		if src.constraint.ClobberedByInstruction() {
+			scheduler.FreeLocation(src.loc)
 		}
-
-		entry, ok := scheduler.srcs[constraint]
-		if !ok {
-			panic("should never happen")
-		}
-
-		scheduler.FreeLocation(entry.loc)
 	}
 
 	// Free all dead definitions.
