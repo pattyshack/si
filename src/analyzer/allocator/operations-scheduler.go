@@ -311,6 +311,9 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 	pressure int,
 	defAllocs map[*ast.VariableDefinition]*defAlloc,
 ) {
+	scratchRegister := scheduler.SelectScratch()
+	defer scheduler.ReleaseScratch(scratchRegister)
+
 	candidates := map[*ast.VariableDefinition]*defAlloc{}
 	for def, alloc := range defAllocs {
 		if alloc.numRegisters == 0 { // unit data type takes up no space
@@ -347,7 +350,7 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 		if shouldSpill && !candidate.hasFixedStackCopy {
 			src := scheduler.selectCopySourceLocation(candidate.definition)
 			dest := scheduler.AllocateFixedStackLocation(candidate.definition)
-			scheduler.CopyLocation(src, dest, nil)
+			scheduler.CopyLocation(src, dest, scratchRegister)
 			candidate.hasFixedStackCopy = true
 		}
 
@@ -428,6 +431,11 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 
 	// Free all dead definitions.
 	for def, locs := range scheduler.ValueLocations.Values {
+		if def == scheduler.tempDest.def {
+			// We need to copy the value to final destination before freeing.
+			continue
+		}
+
 		liveRange, ok := scheduler.LiveRanges[def]
 		if ok && len(liveRange.NextUses) > 0 {
 			continue
@@ -489,7 +497,7 @@ func (scheduler *operationsScheduler) selectCopySourceLocation(
 ) *arch.DataLocation {
 	locs, ok := scheduler.ValueLocations.Values[def]
 	if !ok {
-		panic("should never happen")
+		panic("should never happen. missing definition: " + def.Name)
 	}
 
 	var selected *arch.DataLocation
