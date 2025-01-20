@@ -7,6 +7,7 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
+// TODO register names should be in register set ordering, before other names
 func CompareDefinitionNames(
 	first string,
 	second string,

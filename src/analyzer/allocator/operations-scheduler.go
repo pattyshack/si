@@ -98,16 +98,17 @@ func newOperationsScheduler(
 		}
 	}
 
+	destDef := inst.Destination()
 	tempDest := defLoc{}
 	finalDest := defLoc{
-		def: inst.Destination(),
+		def: destDef,
 	}
 
 	if constraints.Destination != nil && constraints.Destination.RequireOnStack {
 		tempDest.def = &ast.VariableDefinition{
-			StartEndPos:       finalDest.def.StartEnd(),
+			StartEndPos:       destDef.StartEnd(),
 			Name:              "%temp-destination",
-			Type:              finalDest.def.Type,
+			Type:              destDef.Type,
 			ParentInstruction: inst,
 		}
 		tempDest.constraint = constraints.Destination
@@ -135,12 +136,11 @@ func newOperationsScheduler(
 func (scheduler *operationsScheduler) ScheduleOperations() {
 	_, ok := scheduler.instruction.(*ast.CopyOperation)
 	if ok {
-		// TODO schedule copy
+		scheduler.scheduleCopy()
 		return
 	}
 
 	scratchRegister := scheduler.SelectScratch()
-
 	scheduler.setUpTempStack(scratchRegister)
 
 	// Note: To maximize degrees of freedom / simplify accounting, register
@@ -161,6 +161,128 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 
 	scheduler.executeInstruction()
 	scheduler.tearDownInstruction()
+}
+
+func (scheduler *operationsScheduler) scheduleCopy() {
+	defer func() {
+		// Only invoke tear down to remove source definition (if it's dead).
+		scheduler.srcs = nil
+		scheduler.tempDest = defLoc{}
+		scheduler.finalDest = defLoc{}
+		scheduler.tearDownInstruction()
+	}()
+
+	if len(scheduler.srcs) != 1 {
+		panic("should never happen")
+	}
+	src := scheduler.srcs[0]
+
+	if src.pseudoDefVal != nil {
+		// We don't need to allocate space for global reference / immediate source,
+		// but we still need to allocate space for the destination.
+		scheduler.srcs = nil
+	}
+
+	pressure, defAllocs, finalDestAlloc := scheduler.computeRegisterPressure()
+
+	// If the dest defintion is never used, we only need to clean up dead
+	// source definition
+	if finalDestAlloc.nextUseDelta == 0 {
+		return
+	}
+
+	var srcAlloc *defAlloc
+	for _, alloc := range defAllocs {
+		if alloc.definition == src.def {
+			srcAlloc = alloc
+			break
+		}
+	}
+
+	destDef := finalDestAlloc.definition
+
+	// Src remains alive after this instruction, but there are multiple register
+	// copies of src. Just transfer one of the register copies to dest.
+	if srcAlloc != nil && srcAlloc.nextUseDelta > 0 && srcAlloc.numActual > 1 {
+		scheduler.transferLocations(src.def, destDef, true)
+		return
+	}
+
+	// Src and dest shares the same name, and src is dead after this instruction.
+	// Transfer all locations from src to dest.
+	if srcAlloc != nil && src.def.Name == destDef.Name {
+		scheduler.transferLocations(src.def, destDef, false)
+		return
+	}
+
+	// Src has register locations and is dead after this instruction.  Transfer
+	// all register locations from src to dest.
+	if srcAlloc != nil && srcAlloc.nextUseDelta == 0 && srcAlloc.numActual > 0 {
+		scheduler.transferLocations(src.def, destDef, false)
+		return
+	}
+
+	scratchRegister := scheduler.SelectScratch()
+	scheduler.reduceRegisterPressure(pressure, defAllocs, scratchRegister)
+	scheduler.ReleaseScratch(scratchRegister)
+
+	scheduler.setUpFinalDestination(finalDestAlloc)
+	destLoc := scheduler.finalDest.loc
+	if destLoc == nil || destLoc.OnTempStack {
+		panic("should never happen")
+	} else if destLoc.OnFixedStack {
+		destLoc = scheduler.AllocateFixedStackLocation(destDef)
+	} else {
+		destLoc = scheduler.AllocateRegistersLocation(destDef, destLoc.Registers...)
+	}
+
+	scratchRegister = scheduler.destScratchRegister
+	if scratchRegister == nil {
+		scratchRegister = scheduler.SelectScratch()
+	}
+
+	if src.pseudoDefVal != nil {
+		scheduler.SetConstantValue(src.pseudoDefVal, destLoc, scratchRegister)
+	} else {
+		scheduler.CopyLocation(
+			scheduler.selectCopySourceLocation(src.def),
+			destLoc,
+			scratchRegister)
+	}
+}
+
+func (scheduler *operationsScheduler) transferLocations(
+	srcDef *ast.VariableDefinition,
+	destDef *ast.VariableDefinition,
+	singleRegisterCopy bool,
+) {
+	locs := append(
+		[]*arch.DataLocation{},
+		scheduler.ValueLocations.Values[srcDef]...)
+	for _, loc := range locs {
+		if loc.OnTempStack {
+			panic("should never happen")
+		} else if loc.OnFixedStack {
+			if srcDef.Name != destDef.Name {
+				// We can't transfer the fixed stack location since src and dest occupy
+				// different stack locations.
+				continue
+			}
+			scheduler.FreeLocation(loc)
+			scheduler.AllocateFixedStackLocation(destDef)
+		} else {
+			scheduler.FreeLocation(loc)
+			scheduler.AllocateRegistersLocation(destDef, loc.Registers...)
+
+			if singleRegisterCopy {
+				return
+			}
+		}
+	}
+
+	if singleRegisterCopy {
+		panic("should never reach here")
+	}
 }
 
 func (scheduler *operationsScheduler) setUpTempStack(
@@ -388,6 +510,9 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 		if candidate.numRequired == candidate.numPreferred &&
 			candidate.numRequired >= candidate.numActual {
 
+			// TODO shift all remaining candidates left to preserve ordering.
+			// swapping the last element unintentionally favors spilling float
+			// registers before general registers.
 			if idx < len(candidates)-1 {
 				candidates[idx] = candidates[len(candidates)-1]
 			}
@@ -495,14 +620,15 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	}
 
 	if scheduler.finalDest.loc == nil {
-		// value must be on temp tack
+		// If the destination definition is not used, finalDest could be nil (but
+		// only if the value is on temp stack).
 		if scheduler.tempDest.loc == nil {
 			panic("should never happen")
 		}
 	} else if scheduler.finalDest.loc.OnTempStack {
 		panic("should never happen")
 	} else if scheduler.finalDest.loc.OnFixedStack {
-		// value must be on temp tack
+		// value must be on temp stack
 		if scheduler.tempDest.loc == nil {
 			panic("should never happen")
 		}

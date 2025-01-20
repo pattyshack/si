@@ -1,0 +1,5 @@
+define func @copy_from_register(%i I32) I32 {
+  %j = %i
+  %k = add %i, %j
+  ret %k
+}

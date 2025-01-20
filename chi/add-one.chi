@@ -1,0 +1,4 @@
+define func @addOne(%i I32) I32 {
+  %i = add %i, 1
+  ret %i
+}

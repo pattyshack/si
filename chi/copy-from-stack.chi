@@ -1,0 +1,73 @@
+define func @copy_from_stack(%i I32) I32 {
+  // fill registers with junk for %i to spill
+  %junk1 I32 = 1
+  %junk2 I32 = 1
+  %junk3 I32 = 1
+  %junk4 I32 = 1
+  %junk5 I32 = 1
+  %junk6 I32 = 1
+  %junk7 I32 = 1
+  %junk8 I32 = 1
+  %junk9 I32 = 1
+  %junk10 I32 = 1
+  %junk11 I32 = 1
+  %junk12 I32 = 1
+  %junk13 I32 = 1
+  %junk14 I32 = 1
+  %junk15 I32 = 1
+  %junk16 I32 = 1
+  %junk17 I32 = 1
+  %junk18 I32 = 1
+  %junk19 I32 = 1
+  %junk20 I32 = 1
+  %junk21 I32 = 1
+  %junk22 I32 = 1
+  %junk23 I32 = 1
+  %junk24 I32 = 1
+  %junk25 I32 = 1
+  %junk26 I32 = 1
+  %junk27 I32 = 1
+  %junk28 I32 = 1
+  %junk29 I32 = 1
+  %junk30 I32 = 1
+  %junk31 I32 = 1
+  %junk32 I32 = 1
+  %j = %i
+
+
+:keep_junk_alive
+  %junk1  = add %j, %junk1
+  %junk2  = add %j, %junk2
+  %junk3  = add %j, %junk3
+  %junk4  = add %j, %junk4
+  %junk5  = add %j, %junk5
+  %junk6  = add %j, %junk6
+  %junk7  = add %j, %junk7
+  %junk8  = add %j, %junk8
+  %junk9  = add %j, %junk9
+  %junk10 = add %j, %junk10
+  %junk11 = add %j, %junk11
+  %junk12 = add %j, %junk12
+  %junk13 = add %j, %junk13
+  %junk14 = add %j, %junk14
+  %junk15 = add %j, %junk15
+  %junk16 = add %j, %junk16
+  %junk17 = add %j, %junk17
+  %junk18 = add %j, %junk18
+  %junk19 = add %j, %junk19
+  %junk20 = add %j, %junk20
+  %junk21 = add %j, %junk21
+  %junk22 = add %j, %junk22
+  %junk23 = add %j, %junk23
+  %junk24 = add %j, %junk24
+  %junk25 = add %j, %junk25
+  %junk26 = add %j, %junk26
+  %junk27 = add %j, %junk27
+  %junk28 = add %j, %junk28
+  %junk29 = add %j, %junk29
+  %junk30 = add %j, %junk30
+  %junk31 = add %j, %junk31
+  %junk32 = add %j, %junk32
+:ret
+  ret %j
+}
