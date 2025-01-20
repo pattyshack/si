@@ -510,11 +510,12 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 		if candidate.numRequired == candidate.numPreferred &&
 			candidate.numRequired >= candidate.numActual {
 
-			// TODO shift all remaining candidates left to preserve ordering.
-			// swapping the last element unintentionally favors spilling float
-			// registers before general registers.
-			if idx < len(candidates)-1 {
-				candidates[idx] = candidates[len(candidates)-1]
+			// Shift all remaining candidates left to preserve ordering.
+			nextIdx := idx + 1
+			for nextIdx < len(candidates) {
+				candidates[idx] = candidates[nextIdx]
+				idx = nextIdx
+				nextIdx++
 			}
 			candidates = candidates[:len(candidates)-1]
 		}
