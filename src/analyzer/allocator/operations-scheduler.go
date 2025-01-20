@@ -139,13 +139,19 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 		return
 	}
 
-	scheduler.setUpTempStack()
+	scratchRegister := scheduler.SelectScratch()
+
+	scheduler.setUpTempStack(scratchRegister)
 
 	// Note: To maximize degrees of freedom / simplify accounting, register
 	// pressure is computed after setting up temp stack, which will likely free
 	// up some registers.
 	pressure, defAllocs, finalDestAlloc := scheduler.computeRegisterPressure()
-	scheduler.reduceRegisterPressure(pressure, defAllocs)
+	scheduler.reduceRegisterPressure(pressure, defAllocs, scratchRegister)
+
+	// Release scratch register before register selection since it may be picked
+	// by the instruction.
+	scheduler.ReleaseScratch(scratchRegister)
 
 	// TODO setup register sources
 
@@ -157,10 +163,9 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	scheduler.tearDownInstruction()
 }
 
-func (scheduler *operationsScheduler) setUpTempStack() {
-	scratchRegister := scheduler.SelectScratch()
-	defer scheduler.ReleaseScratch(scratchRegister)
-
+func (scheduler *operationsScheduler) setUpTempStack(
+	scratchRegister *arch.Register,
+) {
 	var tempStackSrcs []*defLoc
 	var srcDefs []*ast.VariableDefinition
 	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
@@ -331,10 +336,8 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 func (scheduler *operationsScheduler) reduceRegisterPressure(
 	pressure int,
 	defAllocs []*defAlloc,
+	scratchRegister *arch.Register,
 ) {
-	scratchRegister := scheduler.SelectScratch()
-	defer scheduler.ReleaseScratch(scratchRegister)
-
 	candidates := []*defAlloc{}
 	for _, alloc := range defAllocs {
 		if alloc.numRegisters == 0 { // unit data type takes up no space
