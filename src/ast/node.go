@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/pattyshack/gt/parseutil"
@@ -142,6 +143,9 @@ type Value interface {
 	SetParentInstruction(Instruction)
 
 	Type() Type
+
+	ShortString() string
+	String() string
 }
 
 type value struct {
@@ -211,6 +215,14 @@ func (ref *GlobalLabelReference) Type() Type {
 	return ref.Signature.Type()
 }
 
+func (ref *GlobalLabelReference) ShortString() string {
+	return fmt.Sprintf("@%s", ref.Label)
+}
+
+func (ref *GlobalLabelReference) String() string {
+	return fmt.Sprintf("@%s (%s)", ref.Label, ref.Loc())
+}
+
 // %-prefixed local variable reference.  Note that the '%' prefix is not part
 // of the name and is only used by the parser.
 type VariableReference struct {
@@ -272,6 +284,14 @@ func (ref *VariableReference) Type() Type {
 	return ref.UseDef.Type
 }
 
+func (ref *VariableReference) ShortString() string {
+	return fmt.Sprintf("%%%s", ref.Name)
+}
+
+func (ref *VariableReference) String() string {
+	return fmt.Sprintf("%%%s (%s)", ref.Name, ref.Loc())
+}
+
 type IntImmediate struct {
 	value
 	parseutil.StartEndPos
@@ -330,6 +350,18 @@ func (imm *IntImmediate) Type() Type {
 	return NewPositiveIntLiteralType(imm.StartEndPos)
 }
 
+func (imm *IntImmediate) ShortString() string {
+	sign := ""
+	if imm.IsNegative {
+		sign = "-"
+	}
+	return fmt.Sprintf("%s%d", sign, imm.Value)
+}
+
+func (imm *IntImmediate) String() string {
+	return fmt.Sprintf("%s (%s)", imm.ShortString(), imm.Loc())
+}
+
 type FloatImmediate struct {
 	value
 	parseutil.StartEndPos
@@ -371,4 +403,12 @@ func (imm *FloatImmediate) Type() Type {
 		return imm.BindedType
 	}
 	return NewFloatLiteralType(imm.StartEndPos)
+}
+
+func (imm *FloatImmediate) ShortString() string {
+	return fmt.Sprintf("%g", imm.Value)
+}
+
+func (imm *FloatImmediate) String() string {
+	return fmt.Sprintf("%g (%s)", imm.Value, imm.Loc())
 }

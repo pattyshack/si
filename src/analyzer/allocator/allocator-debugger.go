@@ -160,7 +160,7 @@ func (debugger *AllocatorDebugger) printOperations(
 				printf("      Instruction: %v\n", op.Instruction)
 			}
 			if op.Value != nil {
-				printf("      Value: %v\n", op.Value)
+				printf("      Value: %s\n", op.Value)
 			}
 			if op.StackFrame != nil {
 				printf("      StackFrame: %p\n", op.StackFrame)
