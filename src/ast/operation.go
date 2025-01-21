@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"fmt"
+
 	"github.com/pattyshack/gt/parseutil"
 )
 
@@ -16,6 +18,8 @@ type Instruction interface {
 
 	Sources() []Value                 // empty if there are no src dependencies
 	Destination() *VariableDefinition // nil if instruction has no destination
+
+	String() string
 }
 
 type instruction struct {
@@ -65,6 +69,10 @@ func (copyOp *CopyOperation) Walk(visitor Visitor) {
 	copyOp.Dest.Walk(visitor)
 	copyOp.Src.Walk(visitor)
 	visitor.Exit(copyOp)
+}
+
+func (copyOp *CopyOperation) String() string {
+	return fmt.Sprintf("%s = %s", copyOp.Dest, copyOp.Src)
 }
 
 type UnaryOperationKind string
@@ -131,6 +139,10 @@ func (unary *UnaryOperation) Validate(emitter *parseutil.Emitter) {
 	default:
 		emitter.Emit(unary.Loc(), "unexpected unary operation (%s)", unary.Kind)
 	}
+}
+
+func (unary *UnaryOperation) String() string {
+	return fmt.Sprintf("%s = %s %s", unary.Dest, unary.Kind, unary.Src)
 }
 
 type BinaryOperationKind string
@@ -206,6 +218,15 @@ func (binary *BinaryOperation) Validate(emitter *parseutil.Emitter) {
 	}
 }
 
+func (binary *BinaryOperation) String() string {
+	return fmt.Sprintf(
+		"%s = %s %s %s",
+		binary.Dest,
+		binary.Kind,
+		binary.Src1,
+		binary.Src2)
+}
+
 type FuncCallKind string
 
 const (
@@ -273,4 +294,20 @@ func (call *FuncCall) Validate(emitter *parseutil.Emitter) {
 	default:
 		emitter.Emit(call.Loc(), "unexpected call operation (%s)", call.Kind)
 	}
+}
+
+func (call *FuncCall) String() string {
+	args := ""
+	for idx, arg := range call.Args {
+		if idx > 0 {
+			args += ", "
+		}
+		args += arg.String()
+	}
+	return fmt.Sprintf(
+		"%s = %s %s(%s)",
+		call.Dest,
+		call.Kind,
+		call.Func,
+		args)
 }

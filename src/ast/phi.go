@@ -66,3 +66,14 @@ func (phi *Phi) Discard() {
 		src.Discard()
 	}
 }
+
+func (phi *Phi) String() string {
+	result := "phi :"
+	for block, _ := range phi.Srcs {
+		if len(result) > 5 {
+			result += ", :"
+		}
+		result += block.Label
+	}
+	return result
+}

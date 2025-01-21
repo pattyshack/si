@@ -157,7 +157,10 @@ func (debugger *AllocatorDebugger) printOperations(
 				}
 			}
 			if op.Instruction != nil {
-				printf("      Instruction: %v\n", op.Instruction)
+				printf(
+					"      Instruction: %s // %s\n",
+					op.Instruction,
+					op.Instruction.Loc())
 			}
 			if op.Value != nil {
 				printf("      Value: %s\n", op.Value)

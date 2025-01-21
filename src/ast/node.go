@@ -119,6 +119,14 @@ func (def *VariableDefinition) NewRef(
 	return ref
 }
 
+func (def *VariableDefinition) String() string {
+	result := "%" + def.Name
+	if def.Type != nil {
+		result += " " + def.Type.String()
+	}
+	return result
+}
+
 // Local variable, global label, or immediate
 type Value interface {
 	Node
@@ -144,7 +152,6 @@ type Value interface {
 
 	Type() Type
 
-	ShortString() string
 	String() string
 }
 
@@ -215,12 +222,8 @@ func (ref *GlobalLabelReference) Type() Type {
 	return ref.Signature.Type()
 }
 
-func (ref *GlobalLabelReference) ShortString() string {
-	return fmt.Sprintf("@%s", ref.Label)
-}
-
 func (ref *GlobalLabelReference) String() string {
-	return fmt.Sprintf("@%s (%s)", ref.Label, ref.Loc())
+	return "@" + ref.Label
 }
 
 // %-prefixed local variable reference.  Note that the '%' prefix is not part
@@ -284,12 +287,8 @@ func (ref *VariableReference) Type() Type {
 	return ref.UseDef.Type
 }
 
-func (ref *VariableReference) ShortString() string {
-	return fmt.Sprintf("%%%s", ref.Name)
-}
-
 func (ref *VariableReference) String() string {
-	return fmt.Sprintf("%%%s (%s)", ref.Name, ref.Loc())
+	return "%" + ref.Name
 }
 
 type IntImmediate struct {
@@ -350,16 +349,12 @@ func (imm *IntImmediate) Type() Type {
 	return NewPositiveIntLiteralType(imm.StartEndPos)
 }
 
-func (imm *IntImmediate) ShortString() string {
+func (imm *IntImmediate) String() string {
 	sign := ""
 	if imm.IsNegative {
 		sign = "-"
 	}
 	return fmt.Sprintf("%s%d", sign, imm.Value)
-}
-
-func (imm *IntImmediate) String() string {
-	return fmt.Sprintf("%s (%s)", imm.ShortString(), imm.Loc())
 }
 
 type FloatImmediate struct {
@@ -405,10 +400,6 @@ func (imm *FloatImmediate) Type() Type {
 	return NewFloatLiteralType(imm.StartEndPos)
 }
 
-func (imm *FloatImmediate) ShortString() string {
-	return fmt.Sprintf("%g", imm.Value)
-}
-
 func (imm *FloatImmediate) String() string {
-	return fmt.Sprintf("%g (%s)", imm.Value, imm.Loc())
+	return fmt.Sprintf("%g", imm.Value)
 }

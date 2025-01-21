@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/pattyshack/gt/parseutil"
@@ -53,6 +54,10 @@ func (jump *Jump) Validate(emitter *parseutil.Emitter) {
 	if strings.HasPrefix(jump.Label, ":") {
 		emitter.Emit(jump.Loc(), ":-prefixed label is reserved for internal use")
 	}
+}
+
+func (jump *Jump) String() string {
+	return fmt.Sprintf("jmp :%s", jump.Label)
 }
 
 type ConditionalJumpKind string
@@ -121,6 +126,15 @@ func (jump *ConditionalJump) Validate(emitter *parseutil.Emitter) {
 	default:
 		emitter.Emit(jump.Loc(), "unexpected conditional jump kind (%s)", jump.Kind)
 	}
+}
+
+func (jump *ConditionalJump) String() string {
+	return fmt.Sprintf(
+		"%s :%s, %s, %s",
+		jump.Kind,
+		jump.Label,
+		jump.Src1,
+		jump.Src2)
 }
 
 type TerminalKind string
@@ -214,4 +228,20 @@ func (term *Terminal) Validate(emitter *parseutil.Emitter) {
 	default:
 		emitter.Emit(term.Loc(), "unexpected terminate kind (%s)", term.Kind)
 	}
+}
+
+func (term *Terminal) String() string {
+	calleeSavedParameters := ""
+	for idx, val := range term.CalleeSavedSources {
+		if idx > 0 {
+			calleeSavedParameters += ", "
+		}
+		calleeSavedParameters += val.String()
+	}
+
+	return fmt.Sprintf(
+		"%s %s [%s]",
+		term.Kind,
+		term.RetVal,
+		calleeSavedParameters)
 }
