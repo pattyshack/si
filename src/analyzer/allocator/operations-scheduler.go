@@ -22,7 +22,8 @@ type defLoc struct {
 	misplacedChunks []int
 
 	// When false, loc has not been allocated, and loc.Registers is partially
-	// reserved and may include nils
+	// reserved and may include nils.  When true, loc is allocated and
+	// correctly initialized.
 	hasAllocated bool
 }
 
@@ -153,7 +154,7 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	// by the instruction.
 	scheduler.ReleaseScratch(scratchRegister)
 
-	// TODO setup register sources
+	scheduler.setUpSourceRegisters(defAllocs)
 
 	if scheduler.finalDest.def != nil {
 		scheduler.setUpFinalDestination(finalDestAlloc)
@@ -520,6 +521,139 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 			candidates = candidates[:len(candidates)-1]
 		}
 	}
+}
+
+func (scheduler *operationsScheduler) setUpSourceRegisters(
+	defAllocs []*defAlloc,
+) {
+	misplaced := scheduler.initializePseudoDefValRegisterLocations(defAllocs)
+	// TODO initalize real definition sources
+	for len(misplaced) > 0 {
+		selectableChanged := false
+		misplaced, selectableChanged = scheduler.reduceMisplacedWithoutEvication(
+			misplaced)
+
+		if len(misplaced) == 0 {
+			break
+		}
+
+		if selectableChanged {
+			continue
+		}
+
+		// TODO: prefer to free unselected locations before force evication
+
+		// Evict a register used by a unselected location to make room for this
+		// constraint.
+		defLoc := misplaced[0]
+		regIdx := defLoc.misplacedChunks[0]
+		defLoc.misplacedChunks = defLoc.misplacedChunks[1:]
+
+		selected := scheduler.Select(defLoc.constraint.Registers[regIdx], false)
+		if defLoc.hasAllocated {
+			defLoc.loc = scheduler.MoveRegister(
+				defLoc.loc.Registers[regIdx],
+				selected)
+		} else {
+			defLoc.loc.Registers[regIdx] = selected
+		}
+
+		if len(defLoc.misplacedChunks) == 0 {
+			scheduler.finalizeSourceRegistersLocation(defLoc)
+			misplaced = misplaced[1:]
+		}
+	}
+}
+
+func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
+	defAllocs []*defAlloc,
+) []*defLoc {
+	misplacedLocs := []*defLoc{}
+	for _, alloc := range defAllocs {
+		for _, defLoc := range alloc.constrained {
+			if defLoc.constraint.AnyLocation ||
+				defLoc.constraint.RequireOnStack ||
+				defLoc.pseudoDefVal == nil {
+				continue
+			}
+			if defLoc.loc != nil {
+				panic("should never happen")
+			}
+
+			misplacedRegs := make([]int, alloc.numRegisters)
+			for idx := 0; idx < alloc.numRegisters; idx++ {
+				misplacedRegs[idx] = idx
+			}
+
+			defLoc.loc = &arch.DataLocation{
+				Registers: make([]*arch.Register, alloc.numRegisters),
+			}
+			defLoc.misplacedChunks = misplacedRegs
+
+			misplacedLocs = append(misplacedLocs, defLoc)
+		}
+	}
+	return misplacedLocs
+}
+
+func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
+	misplacedLocs []*defLoc,
+) (
+	[]*defLoc,
+	bool,
+) {
+	updatedMisplacedLocs := []*defLoc{}
+	selectableChanged := false
+	for _, defLoc := range misplacedLocs {
+		misplacedRegs := []int{}
+		for _, idx := range defLoc.misplacedChunks {
+			selected := scheduler.Select(defLoc.constraint.Registers[idx], true)
+			if selected == nil {
+				misplacedRegs = append(misplacedRegs, idx)
+				continue
+			}
+
+			if defLoc.hasAllocated {
+				defLoc.loc = scheduler.MoveRegister(defLoc.loc.Registers[idx], selected)
+				selectableChanged = true
+			} else {
+				defLoc.loc.Registers[idx] = selected
+			}
+		}
+
+		defLoc.misplacedChunks = misplacedRegs
+		if len(misplacedRegs) == 0 {
+			scheduler.finalizeSourceRegistersLocation(defLoc)
+		} else {
+			updatedMisplacedLocs = append(updatedMisplacedLocs, defLoc)
+		}
+	}
+
+	return updatedMisplacedLocs, selectableChanged
+}
+
+func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
+	defLoc *defLoc,
+) {
+	if defLoc.hasAllocated {
+		return
+	}
+
+	var src *arch.DataLocation
+	if defLoc.pseudoDefVal == nil {
+		src = scheduler.selectCopySourceLocation(defLoc.def)
+	}
+
+	defLoc.loc = scheduler.AllocateRegistersLocation(
+		defLoc.def,
+		defLoc.loc.Registers...)
+
+	if defLoc.pseudoDefVal == nil {
+		scheduler.CopyLocation(src, defLoc.loc, nil)
+	} else {
+		scheduler.SetConstantValue(defLoc.pseudoDefVal, defLoc.loc, nil)
+	}
+	defLoc.hasAllocated = true
 }
 
 func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {

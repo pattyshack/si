@@ -440,6 +440,9 @@ func (state *BlockState) SetConstantValue(
 	dest *architecture.DataLocation,
 	scratch *architecture.Register,
 ) {
+	if value == nil {
+		panic("should never happen")
+	}
 	state.ValueLocations.AssertAllocated(dest)
 	if dest.IsOnStack() && scratch == nil {
 		panic("should never happen")
