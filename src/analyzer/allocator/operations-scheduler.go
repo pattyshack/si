@@ -10,7 +10,7 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 )
 
-type defLoc struct {
+type constrainedLocation struct {
 	def *ast.VariableDefinition
 
 	// NOTE: loc is fully allocated iff loc != nil and misplacedChunks is empty
@@ -34,7 +34,7 @@ type defAlloc struct {
 	// 0 indicates the definition is dead after this instruction
 	nextUseDelta int // = nextUseDist - currentDist
 
-	constrained []*defLoc // only used by sources
+	constrained []*constrainedLocation // only used by sources
 
 	// numRequired + 1 >= numPreferred >= numRequired >= numClobbered
 	//
@@ -57,10 +57,10 @@ type operationsScheduler struct {
 	instruction ast.Instruction
 	constraints *arch.InstructionConstraints
 
-	srcs []*defLoc
+	srcs []*constrainedLocation
 
 	// A temp stack destination allocated during the set up phase.
-	tempDest defLoc
+	tempDest constrainedLocation
 
 	// Scratch register used for copying to fixed stack finalDest.
 	// Note that this register must be selected at the same time as final
@@ -69,7 +69,7 @@ type operationsScheduler struct {
 
 	// Note: the set up phase will create a placeholder destination location
 	// entry which won't be allocated until the tear down phase.
-	finalDest defLoc
+	finalDest constrainedLocation
 }
 
 func newOperationsScheduler(
@@ -78,9 +78,9 @@ func newOperationsScheduler(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) *operationsScheduler {
-	srcs := []*defLoc{}
+	srcs := []*constrainedLocation{}
 	for idx, value := range inst.Sources() {
-		entry := &defLoc{
+		entry := &constrainedLocation{
 			constraint: constraints.Sources[idx],
 		}
 		srcs = append(srcs, entry)
@@ -100,8 +100,8 @@ func newOperationsScheduler(
 	}
 
 	destDef := inst.Destination()
-	tempDest := defLoc{}
-	finalDest := defLoc{
+	tempDest := constrainedLocation{}
+	finalDest := constrainedLocation{
 		def: destDef,
 	}
 
@@ -168,8 +168,8 @@ func (scheduler *operationsScheduler) scheduleCopy() {
 	defer func() {
 		// Only invoke tear down to remove source definition (if it's dead).
 		scheduler.srcs = nil
-		scheduler.tempDest = defLoc{}
-		scheduler.finalDest = defLoc{}
+		scheduler.tempDest = constrainedLocation{}
+		scheduler.finalDest = constrainedLocation{}
 		scheduler.tearDownInstruction()
 	}()
 
@@ -289,7 +289,7 @@ func (scheduler *operationsScheduler) transferLocations(
 func (scheduler *operationsScheduler) setUpTempStack(
 	scratchRegister *arch.Register,
 ) {
-	var tempStackSrcs []*defLoc
+	var tempStackSrcs []*constrainedLocation
 	var srcDefs []*ast.VariableDefinition
 	copySrcs := map[*ast.VariableDefinition]*arch.DataLocation{}
 	for _, src := range scheduler.srcs {
@@ -545,21 +545,21 @@ func (scheduler *operationsScheduler) setUpSourceRegisters(
 
 		// Evict a register used by a unselected location to make room for this
 		// constraint.
-		defLoc := misplaced[0]
-		regIdx := defLoc.misplacedChunks[0]
-		defLoc.misplacedChunks = defLoc.misplacedChunks[1:]
+		loc := misplaced[0]
+		regIdx := loc.misplacedChunks[0]
+		loc.misplacedChunks = loc.misplacedChunks[1:]
 
-		selected := scheduler.Select(defLoc.constraint.Registers[regIdx], false)
-		if defLoc.hasAllocated {
-			defLoc.loc = scheduler.MoveRegister(
-				defLoc.loc.Registers[regIdx],
+		selected := scheduler.Select(loc.constraint.Registers[regIdx], false)
+		if loc.hasAllocated {
+			loc.loc = scheduler.MoveRegister(
+				loc.loc.Registers[regIdx],
 				selected)
 		} else {
-			defLoc.loc.Registers[regIdx] = selected
+			loc.loc.Registers[regIdx] = selected
 		}
 
-		if len(defLoc.misplacedChunks) == 0 {
-			scheduler.finalizeSourceRegistersLocation(defLoc)
+		if len(loc.misplacedChunks) == 0 {
+			scheduler.finalizeSourceRegistersLocation(loc)
 			misplaced = misplaced[1:]
 		}
 	}
@@ -567,16 +567,16 @@ func (scheduler *operationsScheduler) setUpSourceRegisters(
 
 func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
 	defAllocs []*defAlloc,
-) []*defLoc {
-	misplacedLocs := []*defLoc{}
+) []*constrainedLocation {
+	misplacedLocs := []*constrainedLocation{}
 	for _, alloc := range defAllocs {
-		for _, defLoc := range alloc.constrained {
-			if defLoc.constraint.AnyLocation ||
-				defLoc.constraint.RequireOnStack ||
-				defLoc.pseudoDefVal == nil {
+		for _, loc := range alloc.constrained {
+			if loc.constraint.AnyLocation ||
+				loc.constraint.RequireOnStack ||
+				loc.pseudoDefVal == nil {
 				continue
 			}
-			if defLoc.loc != nil {
+			if loc.loc != nil {
 				panic("should never happen")
 			}
 
@@ -585,47 +585,47 @@ func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
 				misplacedRegs[idx] = idx
 			}
 
-			defLoc.loc = &arch.DataLocation{
+			loc.loc = &arch.DataLocation{
 				Registers: make([]*arch.Register, alloc.numRegisters),
 			}
-			defLoc.misplacedChunks = misplacedRegs
+			loc.misplacedChunks = misplacedRegs
 
-			misplacedLocs = append(misplacedLocs, defLoc)
+			misplacedLocs = append(misplacedLocs, loc)
 		}
 	}
 	return misplacedLocs
 }
 
 func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
-	misplacedLocs []*defLoc,
+	misplacedLocs []*constrainedLocation,
 ) (
-	[]*defLoc,
+	[]*constrainedLocation,
 	bool,
 ) {
-	updatedMisplacedLocs := []*defLoc{}
+	updatedMisplacedLocs := []*constrainedLocation{}
 	selectableChanged := false
-	for _, defLoc := range misplacedLocs {
+	for _, loc := range misplacedLocs {
 		misplacedRegs := []int{}
-		for _, idx := range defLoc.misplacedChunks {
-			selected := scheduler.Select(defLoc.constraint.Registers[idx], true)
+		for _, idx := range loc.misplacedChunks {
+			selected := scheduler.Select(loc.constraint.Registers[idx], true)
 			if selected == nil {
 				misplacedRegs = append(misplacedRegs, idx)
 				continue
 			}
 
-			if defLoc.hasAllocated {
-				defLoc.loc = scheduler.MoveRegister(defLoc.loc.Registers[idx], selected)
+			if loc.hasAllocated {
+				loc.loc = scheduler.MoveRegister(loc.loc.Registers[idx], selected)
 				selectableChanged = true
 			} else {
-				defLoc.loc.Registers[idx] = selected
+				loc.loc.Registers[idx] = selected
 			}
 		}
 
-		defLoc.misplacedChunks = misplacedRegs
+		loc.misplacedChunks = misplacedRegs
 		if len(misplacedRegs) == 0 {
-			scheduler.finalizeSourceRegistersLocation(defLoc)
+			scheduler.finalizeSourceRegistersLocation(loc)
 		} else {
-			updatedMisplacedLocs = append(updatedMisplacedLocs, defLoc)
+			updatedMisplacedLocs = append(updatedMisplacedLocs, loc)
 		}
 	}
 
@@ -633,27 +633,27 @@ func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
 }
 
 func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
-	defLoc *defLoc,
+	loc *constrainedLocation,
 ) {
-	if defLoc.hasAllocated {
+	if loc.hasAllocated {
 		return
 	}
 
 	var src *arch.DataLocation
-	if defLoc.pseudoDefVal == nil {
-		src = scheduler.selectCopySourceLocation(defLoc.def)
+	if loc.pseudoDefVal == nil {
+		src = scheduler.selectCopySourceLocation(loc.def)
 	}
 
-	defLoc.loc = scheduler.AllocateRegistersLocation(
-		defLoc.def,
-		defLoc.loc.Registers...)
+	loc.loc = scheduler.AllocateRegistersLocation(
+		loc.def,
+		loc.loc.Registers...)
 
-	if defLoc.pseudoDefVal == nil {
-		scheduler.CopyLocation(src, defLoc.loc, nil)
+	if loc.pseudoDefVal == nil {
+		scheduler.CopyLocation(src, loc.loc, nil)
 	} else {
-		scheduler.SetConstantValue(defLoc.pseudoDefVal, defLoc.loc, nil)
+		scheduler.SetConstantValue(loc.pseudoDefVal, loc.loc, nil)
 	}
-	defLoc.hasAllocated = true
+	loc.hasAllocated = true
 }
 
 func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
