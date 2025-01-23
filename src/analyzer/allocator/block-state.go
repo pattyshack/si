@@ -352,7 +352,7 @@ func (state *BlockState) FinalizeLocationOut() {
 			panic("should never happen")
 		}
 
-		state.LocationOut[def] = selected
+		state.LocationOut[def] = selected.Copy()
 	}
 }
 

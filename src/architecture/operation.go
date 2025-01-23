@@ -64,10 +64,19 @@ func NewExecuteInstructionOp(
 	srcs []*DataLocation,
 	dest *DataLocation,
 ) Operation {
+	copiedSrcs := make([]*DataLocation, len(srcs))
+	for idx, src := range srcs {
+		copiedSrcs[idx] = src.Copy()
+	}
+
+	if dest != nil {
+		dest = dest.Copy()
+	}
+
 	return Operation{
 		Kind:        ExecuteInstruction,
 		Destination: dest,
-		Sources:     srcs,
+		Sources:     copiedSrcs,
 		Instruction: inst,
 	}
 }
@@ -101,8 +110,8 @@ func NewCopyLocationOp(
 ) Operation {
 	return Operation{
 		Kind:         CopyLocation,
-		Sources:      []*DataLocation{src},
-		Destination:  dest,
+		Sources:      []*DataLocation{src.Copy()},
+		Destination:  dest.Copy(),
 		DestRegister: temp,
 	}
 }
@@ -114,7 +123,7 @@ func NewSetConstantValueOp(
 ) Operation {
 	return Operation{
 		Kind:         SetConstantValue,
-		Destination:  dest,
+		Destination:  dest.Copy(),
 		Value:        value,
 		DestRegister: temp,
 	}
@@ -126,7 +135,7 @@ func NewInitializeZerosOp(
 ) Operation {
 	return Operation{
 		Kind:         InitializeZeros,
-		Destination:  dest,
+		Destination:  dest.Copy(),
 		DestRegister: temp,
 	}
 }
@@ -134,13 +143,13 @@ func NewInitializeZerosOp(
 func NewAllocateLocationOp(loc *DataLocation) Operation {
 	return Operation{
 		Kind:        AllocateLocation,
-		Destination: loc,
+		Destination: loc.Copy(),
 	}
 }
 
 func NewFreeLocationOp(loc *DataLocation) Operation {
 	return Operation{
 		Kind:        FreeLocation,
-		Destination: loc,
+		Destination: loc.Copy(),
 	}
 }
