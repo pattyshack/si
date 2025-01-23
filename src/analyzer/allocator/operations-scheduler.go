@@ -78,8 +78,9 @@ func newOperationsScheduler(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) *operationsScheduler {
-	srcs := []*constrainedLocation{}
-	for idx, value := range inst.Sources() {
+	srcValues := inst.Sources()
+	srcs := make([]*constrainedLocation, 0, len(srcValues))
+	for idx, value := range srcValues {
 		entry := &constrainedLocation{
 			constraint: constraints.Sources[idx],
 		}
@@ -423,7 +424,7 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		}
 	}
 
-	defAllocs := []*defAlloc{}
+	defAllocs := make([]*defAlloc, 0, len(mappedDefAllocs))
 	for _, candidate := range mappedDefAllocs {
 		defAllocs = append(defAllocs, candidate)
 
@@ -461,7 +462,7 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 	defAllocs []*defAlloc,
 	scratchRegister *arch.Register,
 ) {
-	candidates := []*defAlloc{}
+	candidates := make([]*defAlloc, 0, len(defAllocs))
 	for _, alloc := range defAllocs {
 		if alloc.numRegisters == 0 { // unit data type takes up no space
 			continue
@@ -551,9 +552,7 @@ func (scheduler *operationsScheduler) setUpSourceRegisters(
 
 		selected := scheduler.Select(loc.constraint.Registers[regIdx], false)
 		if loc.hasAllocated {
-			loc.loc = scheduler.MoveRegister(
-				loc.loc.Registers[regIdx],
-				selected)
+			scheduler.MoveRegister(loc.loc.Registers[regIdx], selected)
 		} else {
 			loc.loc.Registers[regIdx] = selected
 		}
@@ -602,19 +601,30 @@ func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
 	[]*constrainedLocation,
 	bool,
 ) {
-	updatedMisplacedLocs := []*constrainedLocation{}
+	updatedMisplacedLocs := make([]*constrainedLocation, 0, len(misplacedLocs))
 	selectableChanged := false
 	for _, loc := range misplacedLocs {
-		misplacedRegs := []int{}
+		misplacedRegs := make([]int, 0, len(loc.misplacedChunks))
 		for _, idx := range loc.misplacedChunks {
-			selected := scheduler.Select(loc.constraint.Registers[idx], true)
+			constraint := loc.constraint.Registers[idx]
+			existingReg := loc.loc.Registers[idx]
+
+			// NOTE: We need to recheck the existing register since register
+			// eviction may have replaced a previous register with a register that
+			// satisfy the constraint.
+			if loc.hasAllocated && constraint.SatisfyBy(existingReg) {
+				scheduler.Reserve(existingReg, constraint)
+				continue
+			}
+
+			selected := scheduler.Select(constraint, true)
 			if selected == nil {
 				misplacedRegs = append(misplacedRegs, idx)
 				continue
 			}
 
 			if loc.hasAllocated {
-				loc.loc = scheduler.MoveRegister(loc.loc.Registers[idx], selected)
+				scheduler.MoveRegister(existingReg, selected)
 				selectableChanged = true
 			} else {
 				loc.loc.Registers[idx] = selected
@@ -692,11 +702,6 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 }
 
 func (scheduler *operationsScheduler) executeInstruction() {
-	srcLocs := []*arch.DataLocation{}
-	for _, entry := range scheduler.srcs {
-		srcLocs = append(srcLocs, entry.loc)
-	}
-
 	destLoc := scheduler.finalDest.loc
 	if scheduler.tempDest.loc != nil {
 		destLoc = scheduler.tempDest.loc
@@ -704,7 +709,7 @@ func (scheduler *operationsScheduler) executeInstruction() {
 
 	scheduler.BlockState.ExecuteInstruction(
 		scheduler.instruction,
-		srcLocs,
+		scheduler.srcs,
 		destLoc)
 }
 

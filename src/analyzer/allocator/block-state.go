@@ -363,15 +363,22 @@ func (state *BlockState) FinalizeLocationOut() {
 // source registers (dest cannot be on fixed stack).
 func (state *BlockState) ExecuteInstruction(
 	inst ast.Instruction,
-	srcs []*architecture.DataLocation,
+	srcs []*constrainedLocation,
 	dest *architecture.DataLocation,
 ) {
-	/* TODO UNCOMMENT.
-
+	srcLocs := make([]*architecture.DataLocation, 0, len(srcs))
 	for _, src := range srcs {
-		state.ValueLocations.AssertAllocated(src)
+
+		//
+		// TODO REMOVE THIS. src.loc should never be nil
+		//
+		if src == nil || src.loc == nil {
+			continue
+		}
+
+		state.ValueLocations.AssertAllocated(src.loc)
+		srcLocs = append(srcLocs, src.loc)
 	}
-	*/
 
 	if dest == nil {
 		// Do nothing. This is a control flow instruction.
@@ -385,7 +392,7 @@ func (state *BlockState) ExecuteInstruction(
 
 	state.Operations = append(
 		state.Operations,
-		architecture.NewExecuteInstructionOp(inst, srcs, dest))
+		architecture.NewExecuteInstructionOp(inst, srcLocs, dest))
 }
 
 func (state *BlockState) PushStackFrame() {
@@ -403,12 +410,11 @@ func (state *BlockState) PopStackFrame() {
 func (state *BlockState) MoveRegister(
 	src *architecture.Register,
 	dest *architecture.Register,
-) *architecture.DataLocation {
-	newLoc := state.ValueLocations.MoveRegister(src, dest)
+) {
+	state.ValueLocations.MoveRegister(src, dest)
 	state.Operations = append(
 		state.Operations,
 		architecture.NewMoveRegisterOp(src, dest))
-	return newLoc
 }
 
 // Note: both src and dest must be allocated/tracked by ValueLocations. scratch

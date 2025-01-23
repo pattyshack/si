@@ -271,7 +271,7 @@ func (locations *ValueLocations) FreeLocation(
 func (locations *ValueLocations) MoveRegister(
 	srcRegister *architecture.Register,
 	destRegister *architecture.Register,
-) *architecture.DataLocation {
+) {
 	srcInfo := locations.getRegInfo(srcRegister)
 	if srcInfo.UsedBy == nil {
 		panic("should never happen")
@@ -282,15 +282,14 @@ func (locations *ValueLocations) MoveRegister(
 		panic("should never happen")
 	}
 
-	oldLoc := srcInfo.UsedBy
-	def := locations.allocated[oldLoc]
-	locations.FreeLocation(oldLoc)
+	loc := srcInfo.UsedBy
+	def := locations.allocated[loc]
+	locations.FreeLocation(loc)
 
 	modifiedCount := 0
-	newLoc := oldLoc.Copy()
-	for idx, reg := range newLoc.Registers {
+	for idx, reg := range loc.Registers {
 		if reg == srcRegister {
-			newLoc.Registers[idx] = destRegister
+			loc.Registers[idx] = destRegister
 			modifiedCount++
 		}
 	}
@@ -299,6 +298,7 @@ func (locations *ValueLocations) MoveRegister(
 		panic("should never happen")
 	}
 
-	locations.allocateRegisters(newLoc, def)
-	return newLoc
+	// NOTE: reallocate the same loc object to give an external appearance that
+	// the register only moved.
+	locations.allocateRegisters(loc, def)
 }
