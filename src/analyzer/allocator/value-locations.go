@@ -251,11 +251,10 @@ func (locations *ValueLocations) FreeLocation(
 
 	for idx, loc := range locs {
 		if loc == toFree {
-			if idx < len(locs)-1 {
-				locs[idx] = locs[len(locs)-1]
+			if idx > 0 {
+				locs[idx] = locs[0]
 			}
-
-			locs = locs[:len(locs)-1]
+			locs = locs[1:]
 			break
 		}
 	}
