@@ -301,3 +301,22 @@ func (locations *ValueLocations) MoveRegister(
 	// the register only moved.
 	locations.allocateRegisters(loc, def)
 }
+
+func (locations *ValueLocations) RegisterLocations(
+	def *ast.VariableDefinition,
+) []*architecture.DataLocation {
+	locs, ok := locations.Values[def]
+	if !ok {
+		panic("should never happen")
+	}
+
+	candidates := make([]*architecture.DataLocation, 0, len(locs))
+	for _, loc := range locs {
+		if loc.OnFixedStack || loc.OnTempStack {
+			continue
+		}
+		candidates = append(candidates, loc)
+	}
+
+	return candidates
+}

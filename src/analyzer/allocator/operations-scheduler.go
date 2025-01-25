@@ -50,6 +50,18 @@ type defAlloc struct {
 	isPseudoDefVal bool
 }
 
+func (alloc *defAlloc) RegisterLocations() []*constrainedLocation {
+	locs := make([]*constrainedLocation, 0, len(alloc.constrained))
+	for _, loc := range alloc.constrained {
+		if loc.constraint.AnyLocation || loc.constraint.RequireOnStack {
+			continue
+		}
+		locs = append(locs, loc)
+	}
+
+	return locs
+}
+
 type operationsScheduler struct {
 	*BlockState
 
@@ -530,6 +542,20 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 	}
 }
 
+func (scheduler *operationsScheduler) initUnitLocations(
+	alloc *defAlloc,
+) {
+	locs := scheduler.ValueLocations.RegisterLocations(alloc.definition)
+	if len(locs) != 1 {
+		panic("should never happen")
+	}
+
+	loc := locs[0]
+	for _, constrained := range alloc.RegisterLocations() {
+		scheduler.assignAllocatedLocation(constrained, loc)
+	}
+}
+
 func (scheduler *operationsScheduler) setUpRegisters(
 	allocs []*defAlloc,
 	finalDestAlloc *defAlloc,
@@ -539,9 +565,12 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		if len(alloc.constrained) == 0 || alloc == finalDestAlloc {
 			continue
 		} else if alloc.isPseudoDefVal {
-			misplaced = append(
-				misplaced,
-				scheduler.initializePseudoDefValRegisterLocations(alloc)...)
+			for _, loc := range alloc.RegisterLocations() {
+				scheduler.assignUnallocatedLocation(alloc, loc)
+				misplaced = append(misplaced, loc)
+			}
+		} else if alloc.numRegisters == 0 {
+			scheduler.initUnitLocations(alloc)
 		} else {
 			// TODO initalize real definition sources
 		}
@@ -668,30 +697,15 @@ func (scheduler *operationsScheduler) assignAllocatedLocation(
 	return false
 }
 
-func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
-	alloc *defAlloc,
-) []*constrainedLocation {
-	misplacedLocs := []*constrainedLocation{}
-	for _, loc := range alloc.constrained {
-		if loc.constraint.AnyLocation || loc.constraint.RequireOnStack {
-			continue
-		}
-
-		scheduler.assignUnallocatedLocation(alloc, loc)
-		misplacedLocs = append(misplacedLocs, loc)
-	}
-	return misplacedLocs
-}
-
 func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
-	misplacedLocs []*constrainedLocation,
+	misplaced []*constrainedLocation,
 ) (
 	[]*constrainedLocation,
 	bool,
 ) {
-	updatedMisplacedLocs := make([]*constrainedLocation, 0, len(misplacedLocs))
+	updatedMisplaced := make([]*constrainedLocation, 0, len(misplaced))
 	selectableChanged := false
-	for _, loc := range misplacedLocs {
+	for _, loc := range misplaced {
 		misplacedRegs := make([]int, 0, len(loc.misplacedChunks))
 		for _, idx := range loc.misplacedChunks {
 			constraint := loc.constraint.Registers[idx]
@@ -723,11 +737,11 @@ func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
 		if len(misplacedRegs) == 0 {
 			scheduler.finalizeSourceRegistersLocation(loc)
 		} else {
-			updatedMisplacedLocs = append(updatedMisplacedLocs, loc)
+			updatedMisplaced = append(updatedMisplaced, loc)
 		}
 	}
 
-	return updatedMisplacedLocs, selectableChanged
+	return updatedMisplaced, selectableChanged
 }
 
 func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
