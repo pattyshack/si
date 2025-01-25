@@ -9,31 +9,38 @@ import (
 type RegisterSelector struct {
 	*BlockState
 
-	selected   map[*arch.Register]struct{}
-	assignment map[*arch.RegisterConstraint]*arch.Register
-	scratch    *arch.Register
+	// selectedSrc & selectedDest may overlap, scratch must be disjoint.
+
+	selectedSrc map[*arch.Register]*arch.RegisterConstraint
+	assignedSrc map[*arch.RegisterConstraint]*arch.Register
+
+	selectedDest map[*arch.Register]*arch.RegisterConstraint
+	assignedDest map[*arch.RegisterConstraint]*arch.Register
+
+	scratch *arch.Register
 }
 
 func NewRegisterSelector(block *BlockState) *RegisterSelector {
 	return &RegisterSelector{
-		BlockState: block,
-		selected:   map[*arch.Register]struct{}{},
-		assignment: map[*arch.RegisterConstraint]*arch.Register{},
+		BlockState:   block,
+		selectedSrc:  map[*arch.Register]*arch.RegisterConstraint{},
+		assignedSrc:  map[*arch.RegisterConstraint]*arch.Register{},
+		selectedDest: map[*arch.Register]*arch.RegisterConstraint{},
+		assignedDest: map[*arch.RegisterConstraint]*arch.Register{},
 	}
 }
 
-// This return if any of the location's registers is selected.
-func (selector *RegisterSelector) IsSelected(loc *arch.DataLocation) bool {
-	for _, reg := range loc.Registers {
-		_, ok := selector.selected[reg]
-		if ok {
-			return true
-		}
+func (selector *RegisterSelector) isSelected(register *arch.Register) bool {
+	_, ok := selector.selectedSrc[register]
+	if ok {
+		return true
 	}
-	return false
+
+	_, ok = selector.selectedDest[register]
+	return ok
 }
 
-func (selector *RegisterSelector) Reserve(
+func (selector *RegisterSelector) ReserveSource(
 	register *arch.Register,
 	constraint *arch.RegisterConstraint,
 ) {
@@ -41,47 +48,74 @@ func (selector *RegisterSelector) Reserve(
 		panic("should never happen")
 	}
 
-	_, ok := selector.assignment[constraint]
+	if register == selector.scratch {
+		panic("should never happen")
+	}
+
+	_, ok := selector.assignedSrc[constraint]
 	if ok {
 		panic("should never happen")
 	}
 
-	selector.selected[register] = struct{}{}
-	selector.assignment[constraint] = register
+	_, ok = selector.selectedSrc[register]
+	if ok {
+		panic("should never happen")
+	}
+
+	selector.selectedSrc[register] = constraint
+	selector.assignedSrc[constraint] = register
 }
 
-// TODO: use preference info for destination register selection
-//
-// Re-selecting the same constraint will return previously selected register
-// (This is used for source / destination register sharing).
-//
+func (selector *RegisterSelector) reserveDestination(
+	register *arch.Register,
+	constraint *arch.RegisterConstraint,
+) {
+	if register == nil || constraint == nil {
+		panic("should never happen")
+	}
+
+	if register == selector.scratch {
+		panic("should never happen")
+	}
+
+	_, ok := selector.assignedDest[constraint]
+	if ok {
+		panic("should never happen")
+	}
+
+	_, ok = selector.selectedDest[register]
+	if ok {
+		panic("should never happen")
+	}
+
+	selector.selectedDest[register] = constraint
+	selector.assignedDest[constraint] = register
+}
+
 // When onlyUnusedRegister is true, select may return nil if no unused register
 // satisfies the constraint.  When false, select may move data to free up a
 // register that satisfies the constraint.
-func (selector *RegisterSelector) Select(
+func (selector *RegisterSelector) selectRegister(
 	constraint *arch.RegisterConstraint,
 	onlyUnusedRegister bool,
+	selected map[*arch.Register]*arch.RegisterConstraint,
+	reserve func(*arch.Register, *arch.RegisterConstraint),
 ) *arch.Register {
-	if constraint == nil {
+	if constraint == nil || selector.scratch != nil {
 		panic("should never happen")
-	}
-
-	register, ok := selector.assignment[constraint]
-	if ok {
-		return register
 	}
 
 	var free *arch.Register
 	var candidate *arch.Register
 	for _, regInfo := range selector.ValueLocations.Registers {
-		_, ok = selector.selected[regInfo.Register]
+		_, ok := selected[regInfo.Register]
 		if ok {
 			continue
 		}
 
 		if regInfo.UsedBy == nil {
 			if constraint.SatisfyBy(regInfo.Register) {
-				selector.Reserve(regInfo.Register, constraint)
+				reserve(regInfo.Register, constraint)
 				return regInfo.Register
 			}
 
@@ -106,7 +140,7 @@ func (selector *RegisterSelector) Select(
 		selector.ReleaseScratch(free)
 
 		if constraint.SatisfyBy(free) {
-			selector.Reserve(free, constraint)
+			reserve(free, constraint)
 			return free
 		}
 
@@ -114,22 +148,73 @@ func (selector *RegisterSelector) Select(
 	}
 
 	selector.MoveRegister(candidate, free)
-	selector.Reserve(candidate, constraint)
+	reserve(candidate, constraint)
 	return candidate
 }
 
-func (selector *RegisterSelector) SelectAnyFree() *arch.Register {
-	reg := selector.Select(
-		&arch.RegisterConstraint{
-			Clobbered:  true,
-			AnyGeneral: true,
-			AnyFloat:   true,
-		},
-		true)
-	if reg == nil {
+func (selector *RegisterSelector) SelectSourceRegister(
+	constraint *arch.RegisterConstraint,
+	onlyUnusedRegister bool,
+) *arch.Register {
+	if len(selector.selectedDest) > 0 {
 		panic("should never happen")
 	}
-	return reg
+
+	return selector.selectRegister(
+		constraint,
+		onlyUnusedRegister,
+		selector.selectedSrc,
+		selector.ReserveSource)
+}
+
+// TODO: use preference info for destination register selection
+func (selector *RegisterSelector) SelectDestinationRegister(
+	constraint *arch.RegisterConstraint,
+) *arch.Register {
+	register, ok := selector.assignedSrc[constraint]
+	if ok {
+		selector.reserveDestination(register, constraint)
+		return register
+	}
+
+	return selector.selectRegister(
+		constraint,
+		false,
+		selector.selectedDest,
+		selector.reserveDestination)
+}
+
+func (selector *RegisterSelector) getFreeRegister() *arch.Register {
+	for _, regInfo := range selector.ValueLocations.Registers {
+		if regInfo.UsedBy != nil {
+			continue
+		}
+
+		if selector.isSelected(regInfo.Register) {
+			continue
+		}
+
+		return regInfo.Register
+	}
+
+	return nil
+}
+
+func (selector *RegisterSelector) SelectFreeRegister() *arch.Register {
+	register := selector.getFreeRegister()
+	if register == nil {
+		panic("should never happen")
+	}
+
+	constraint := &arch.RegisterConstraint{
+		Clobbered:  true,
+		AnyGeneral: true,
+		AnyFloat:   true,
+	}
+
+	selector.ReserveSource(register, constraint)
+	selector.reserveDestination(register, constraint)
+	return register
 }
 
 // By construction, there's always at least one unused register (this
@@ -144,25 +229,17 @@ func (selector *RegisterSelector) SelectScratch() *arch.Register {
 
 	// The common case fast path
 
-	for _, regInfo := range selector.ValueLocations.Registers {
-		_, ok := selector.selected[regInfo.Register]
-		if ok {
-			continue
-		}
-
-		if regInfo.UsedBy == nil {
-			selector.selected[regInfo.Register] = struct{}{}
-			selector.scratch = regInfo.Register
-			return regInfo.Register
-		}
+	register := selector.getFreeRegister()
+	if register != nil {
+		selector.scratch = register
+		return register
 	}
 
 	// Slow path to handle function entry point
 
 	var candidate *RegisterInfo
 	for _, regInfo := range selector.ValueLocations.Registers {
-		_, ok := selector.selected[regInfo.Register]
-		if ok {
+		if selector.isSelected(regInfo.Register) {
 			continue
 		}
 
@@ -200,7 +277,6 @@ func (selector *RegisterSelector) SelectScratch() *arch.Register {
 	selector.CopyLocation(regLoc, stackLoc, nil)
 	selector.FreeLocation(regLoc)
 
-	selector.selected[candidate.Register] = struct{}{}
 	selector.scratch = candidate.Register
 	return candidate.Register
 }
@@ -210,6 +286,5 @@ func (selector *RegisterSelector) ReleaseScratch(register *arch.Register) {
 		panic("should never happen")
 	}
 
-	delete(selector.selected, register)
 	selector.scratch = nil
 }

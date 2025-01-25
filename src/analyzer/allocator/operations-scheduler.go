@@ -568,7 +568,9 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		regIdx := loc.misplacedChunks[0]
 		loc.misplacedChunks = loc.misplacedChunks[1:]
 
-		selected := scheduler.Select(loc.constraint.Registers[regIdx], false)
+		selected := scheduler.SelectSourceRegister(
+			loc.constraint.Registers[regIdx],
+			false)
 		if loc.hasAllocated {
 			scheduler.MoveRegister(loc.loc.Registers[regIdx], selected)
 		} else {
@@ -598,17 +600,16 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		numNeeded := alloc.numPreferred - alloc.numActual
 		if numNeeded <= 0 {
 			continue
-			/* TODO UNCOMMENT once constrained sources are allocated
-			   } else if numNeeded != 1 {
-			     panic("should never happen")
-			*/
+			// TODO UNCOMMENT once constrained sources are allocated
+			//   } else if numNeeded != 1 {
+			//     panic("should never happen")
 		}
 
 		src := scheduler.selectCopySourceLocation(alloc.definition)
 
 		registers := make([]*arch.Register, alloc.numRegisters)
 		for idx, _ := range registers {
-			registers[idx] = scheduler.SelectAnyFree()
+			registers[idx] = scheduler.SelectFreeRegister()
 		}
 
 		loc := scheduler.AllocateRegistersLocation(alloc.definition, registers...)
@@ -654,7 +655,7 @@ func (scheduler *operationsScheduler) assignAllocatedLocation(
 	for regIdx, reg := range loc.Registers {
 		constraint := constrained.constraint.Registers[regIdx]
 		if constraint.SatisfyBy(reg) {
-			scheduler.Reserve(reg, constraint)
+			scheduler.ReserveSource(reg, constraint)
 		} else {
 			misplacedChunks = append(misplacedChunks, regIdx)
 		}
@@ -700,11 +701,11 @@ func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
 			// eviction may have replaced a previous register with a register that
 			// satisfy the constraint.
 			if loc.hasAllocated && constraint.SatisfyBy(existingReg) {
-				scheduler.Reserve(existingReg, constraint)
+				scheduler.ReserveSource(existingReg, constraint)
 				continue
 			}
 
-			selected := scheduler.Select(constraint, true)
+			selected := scheduler.SelectSourceRegister(constraint, true)
 			if selected == nil {
 				misplacedRegs = append(misplacedRegs, idx)
 				continue
@@ -770,14 +771,14 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 			for i := 0; i < alloc.numRegisters; i++ {
 				finalDestLoc.Registers = append(
 					finalDestLoc.Registers,
-					scheduler.SelectAnyFree())
+					scheduler.SelectFreeRegister())
 			}
 		}
 	} else {
 		for _, regConst := range destLocConst.Registers {
 			finalDestLoc.Registers = append(
 				finalDestLoc.Registers,
-				scheduler.Select(regConst, false))
+				scheduler.SelectDestinationRegister(regConst))
 		}
 	}
 }
