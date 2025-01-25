@@ -436,7 +436,14 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			candidate.numRequired == candidate.numClobbered &&
 			candidate.numPreferred == candidate.numRequired {
 
-			candidate.numPreferred++
+			// Ensure we don't eagerly load value back onto registers if the value
+			// only exist on stack and is not used by the instruction.
+			if !candidate.hasFixedStackCopy ||
+				candidate.numActual > 0 ||
+				candidate.numRequired > 0 {
+
+				candidate.numPreferred++
+			}
 		}
 
 		// For now, assume there's enough room to keep everything on registers.
