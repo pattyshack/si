@@ -584,25 +584,87 @@ func (scheduler *operationsScheduler) setUpRegisters(
 	if scheduler.finalDest.def != nil {
 		scheduler.setUpFinalDestination(finalDestAlloc)
 	}
+
+	// Create unconstrained preferred copies that only serve to keep definitions
+	// alive.
+	//
+	// NOTE: We must finalize destination before creating preferred copies since
+	// the destination may have specific register constraints.
+	for _, alloc := range allocs {
+		if alloc == finalDestAlloc || alloc.isPseudoDefVal {
+			continue
+		}
+
+		numNeeded := alloc.numPreferred - alloc.numActual
+		if numNeeded <= 0 {
+			continue
+			/* TODO UNCOMMENT once constrained sources are allocated
+			   } else if numNeeded != 1 {
+			     panic("should never happen")
+			*/
+		}
+
+		src := scheduler.selectCopySourceLocation(alloc.definition)
+
+		registers := make([]*arch.Register, alloc.numRegisters)
+		for idx, _ := range registers {
+			registers[idx] = scheduler.SelectAnyFree()
+		}
+
+		loc := scheduler.AllocateRegistersLocation(alloc.definition, registers...)
+		alloc.numActual++
+
+		scheduler.CopyLocation(src, loc, nil)
+	}
 }
 
 func (scheduler *operationsScheduler) assignUnallocatedLocation(
-	loc *constrainedLocation,
-	numRegisters int,
+	alloc *defAlloc,
+	constrained *constrainedLocation,
 ) {
-	if loc.loc != nil {
+	if constrained.loc != nil {
 		panic("should never happen")
 	}
 
-	misplacedChunks := make([]int, numRegisters)
-	for idx := 0; idx < numRegisters; idx++ {
+	misplacedChunks := make([]int, alloc.numRegisters)
+	for idx := 0; idx < alloc.numRegisters; idx++ {
 		misplacedChunks[idx] = idx
 	}
-	loc.misplacedChunks = misplacedChunks
+	constrained.misplacedChunks = misplacedChunks
 
-	loc.loc = &arch.DataLocation{
-		Registers: make([]*arch.Register, numRegisters),
+	constrained.loc = &arch.DataLocation{
+		Registers: make([]*arch.Register, alloc.numRegisters),
 	}
+
+	alloc.numActual++
+}
+
+func (scheduler *operationsScheduler) assignAllocatedLocation(
+	constrained *constrainedLocation,
+	loc *arch.DataLocation,
+) bool {
+	if constrained.loc != nil {
+		panic("should never happen")
+	}
+
+	constrained.loc = loc
+	constrained.hasAllocated = true
+
+	misplacedChunks := make([]int, 0, len(loc.Registers))
+	for regIdx, reg := range loc.Registers {
+		constraint := constrained.constraint.Registers[regIdx]
+		if constraint.SatisfyBy(reg) {
+			scheduler.Reserve(reg, constraint)
+		} else {
+			misplacedChunks = append(misplacedChunks, regIdx)
+		}
+	}
+
+	if len(misplacedChunks) > 0 {
+		constrained.misplacedChunks = misplacedChunks
+		return true
+	}
+	return false
 }
 
 func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
@@ -614,9 +676,7 @@ func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
 			continue
 		}
 
-		scheduler.assignUnallocatedLocation(loc, alloc.numRegisters)
-		alloc.numActual++
-
+		scheduler.assignUnallocatedLocation(alloc, loc)
 		misplacedLocs = append(misplacedLocs, loc)
 	}
 	return misplacedLocs
