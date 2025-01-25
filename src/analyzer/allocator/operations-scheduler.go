@@ -172,7 +172,9 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	scheduler.setUpRegisters(defAllocs, finalDestAlloc)
 
 	scheduler.executeInstruction()
-	scheduler.tearDownInstruction()
+
+	copyTempDest := finalDestAlloc != nil && finalDestAlloc.nextUseDelta > 0
+	scheduler.tearDownInstruction(copyTempDest)
 }
 
 func (scheduler *operationsScheduler) scheduleCopy() {
@@ -181,7 +183,7 @@ func (scheduler *operationsScheduler) scheduleCopy() {
 		scheduler.srcs = nil
 		scheduler.tempDest = constrainedLocation{}
 		scheduler.finalDest = constrainedLocation{}
-		scheduler.tearDownInstruction()
+		scheduler.tearDownInstruction(false)
 	}()
 
 	if len(scheduler.srcs) != 1 {
@@ -913,13 +915,9 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 	destLocConst := scheduler.constraints.Destination
 	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
 		if alloc.numPreferred == 0 {
-			// We only need to copy the value to the final destination if the
-			// definition is used.
-			if alloc.nextUseDelta > 0 {
-				finalDestLoc.OnFixedStack = true
-				scheduler.destScratchRegister = scheduler.SelectScratch()
-			}
-		} else if alloc.numRegisters > 0 {
+			finalDestLoc.OnFixedStack = true
+			scheduler.destScratchRegister = scheduler.SelectScratch()
+		} else {
 			for i := 0; i < alloc.numRegisters; i++ {
 				finalDestLoc.Registers = append(
 					finalDestLoc.Registers,
@@ -947,7 +945,9 @@ func (scheduler *operationsScheduler) executeInstruction() {
 		destLoc)
 }
 
-func (scheduler *operationsScheduler) tearDownInstruction() {
+func (scheduler *operationsScheduler) tearDownInstruction(
+	mustCopyTempDest bool,
+) {
 	// Free all clobbered source locations
 	for _, src := range scheduler.srcs {
 		if src.constraint.ClobberedByInstruction() {
@@ -1009,7 +1009,7 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	}
 
 	if scheduler.tempDest.loc != nil {
-		if scheduler.finalDest.loc != nil {
+		if mustCopyTempDest {
 			scheduler.CopyLocation(
 				scheduler.tempDest.loc,
 				scheduler.finalDest.loc,
