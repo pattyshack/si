@@ -534,7 +534,7 @@ func NewFunctionType(
 	}
 }
 
-func (funcType FunctionType) Walk(visitor Visitor) {
+func (funcType *FunctionType) Walk(visitor Visitor) {
 	visitor.Enter(funcType)
 	funcType.ReturnType.Walk(visitor)
 	for _, param := range funcType.ParameterTypes {

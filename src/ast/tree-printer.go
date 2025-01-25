@@ -249,7 +249,7 @@ func (printer *treePrinter) Enter(n Node) {
 		printer.list("[Phi:", "Src", len(node.Srcs), "Dest=")
 
 	default:
-		printer.write("unhandled node: %v", n)
+		printer.write("unhandled node: %T", n)
 	}
 }
 
@@ -274,7 +274,7 @@ func (printer *treePrinter) Exit(n Node) {
 	case *Terminal:
 		printer.endNode()
 
-	case FunctionType:
+	case *FunctionType:
 		printer.endList(len(node.ParameterTypes))
 
 	case *FunctionDefinition:

@@ -56,6 +56,8 @@ func (loc *LocationConstraint) ClobberedByInstruction() bool {
 		(loc.NumRegisters > 0 && loc.Registers[0].Clobbered)
 }
 
+// TODO Add option to allow register source reuse
+//
 // InstructionConstraints is used to specify instruction register constraints,
 // and call convention's registers selection / stack layout.
 //
