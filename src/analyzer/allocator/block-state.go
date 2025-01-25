@@ -368,14 +368,6 @@ func (state *BlockState) ExecuteInstruction(
 ) {
 	srcLocs := make([]*architecture.DataLocation, 0, len(srcs))
 	for _, src := range srcs {
-
-		//
-		// TODO REMOVE THIS. src.loc should never be nil
-		//
-		if src == nil || src.loc == nil {
-			continue
-		}
-
 		state.ValueLocations.AssertAllocated(src.loc)
 		srcLocs = append(srcLocs, src.loc)
 	}

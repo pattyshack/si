@@ -572,7 +572,7 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		} else if alloc.numRegisters == 0 {
 			scheduler.initUnitLocations(alloc)
 		} else {
-			// TODO initalize real definition sources
+			misplaced = scheduler.initSourceRegisterLocations(alloc, misplaced)
 		}
 	}
 
@@ -629,9 +629,8 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		numNeeded := alloc.numPreferred - alloc.numActual
 		if numNeeded <= 0 {
 			continue
-			// TODO UNCOMMENT once constrained sources are allocated
-			//   } else if numNeeded != 1 {
-			//     panic("should never happen")
+		} else if numNeeded != 1 {
+			panic("should never happen")
 		}
 
 		src := scheduler.selectCopySourceLocation(alloc.definition)
@@ -695,6 +694,145 @@ func (scheduler *operationsScheduler) assignAllocatedLocation(
 		return true
 	}
 	return false
+}
+
+func (scheduler *operationsScheduler) initSourceRegisterLocations(
+	alloc *defAlloc,
+	misplaced []*constrainedLocation,
+) []*constrainedLocation {
+	constrained := alloc.RegisterLocations()
+	if len(constrained) == 0 { // no required register locations
+		return nil
+	}
+
+	constrained, candidates, numAssigned, misplaced := scheduler.initCompatible(
+		constrained,
+		scheduler.ValueLocations.RegisterLocations(alloc.definition),
+		misplaced)
+	if len(constrained) == 0 {
+		return misplaced
+	}
+
+	maxCopies := alloc.numActual
+	if alloc.numPreferred > maxCopies {
+		maxCopies = alloc.numPreferred
+	}
+
+	numExtras := (alloc.numRequired + len(candidates)) - maxCopies
+	for i := 0; i < numExtras; i++ {
+		candidate := candidates[0]
+		candidates = candidates[1:]
+		if numAssigned == 0 &&
+			len(constrained) > 0 &&
+			alloc.numRequired == alloc.numPreferred {
+
+			// Ensure at least one copy of register location survive to speed up
+			// location copying.
+			loc := constrained[0]
+			constrained = constrained[1:]
+
+			scheduler.assignAllocatedLocation(loc, candidate)
+			misplaced = append(misplaced, loc)
+			numAssigned++
+		} else {
+			scheduler.FreeLocation(candidate)
+			alloc.numActual--
+		}
+	}
+
+	for _, loc := range constrained {
+		scheduler.assignUnallocatedLocation(alloc, loc)
+		misplaced = append(misplaced, loc)
+	}
+
+	return misplaced
+}
+
+func (scheduler *operationsScheduler) initCompatible(
+	constrained []*constrainedLocation,
+	candidates []*arch.DataLocation,
+	misplaced []*constrainedLocation,
+) (
+	[]*constrainedLocation,
+	[]*arch.DataLocation,
+	int,
+	[]*constrainedLocation,
+) {
+	if len(candidates) == 0 {
+		return constrained, candidates, 0, misplaced
+	}
+
+	type matIdx struct {
+		*constrainedLocation
+		*arch.DataLocation
+	}
+
+	compatibilities := make(map[matIdx]int, len(constrained)*len(candidates))
+	for _, constrained := range constrained {
+		for _, candidate := range candidates {
+			compatibility := 0
+			for regIdx, reg := range candidate.Registers {
+				constraint := constrained.constraint.Registers[regIdx]
+				if constraint.SatisfyBy(reg) {
+					compatibility++
+				}
+			}
+			if compatibility > 0 {
+				compatibilities[matIdx{constrained, candidate}] = compatibility
+			}
+		}
+	}
+
+	numAssigned := 0
+	for len(constrained) > 0 {
+		if len(candidates) == 0 {
+			break
+		}
+
+		bestCompatibility := 0
+		bestConstrainedIdx := -1
+		bestCandidateIdx := -1
+		for constrainedIdx, constrained := range constrained {
+			if constrained == nil {
+				continue
+			}
+			for candidateIdx, candidate := range candidates {
+				if candidate == nil {
+					continue
+				}
+				compatibility := compatibilities[matIdx{constrained, candidate}]
+				if compatibility > bestCompatibility {
+					bestCompatibility = compatibility
+					bestConstrainedIdx = constrainedIdx
+					bestCandidateIdx = candidateIdx
+				}
+			}
+		}
+
+		if bestCompatibility < 1 {
+			break
+		}
+
+		loc := constrained[bestConstrainedIdx]
+		candidate := candidates[bestCandidateIdx]
+		numAssigned++
+
+		if bestCandidateIdx > 0 {
+			candidates[bestCandidateIdx] = candidates[0]
+		}
+		candidates = candidates[1:]
+
+		if bestConstrainedIdx > 0 {
+			constrained[bestConstrainedIdx] = constrained[0]
+		}
+		constrained = constrained[1:]
+
+		if scheduler.assignAllocatedLocation(loc, candidate) {
+			misplaced = append(misplaced, loc)
+		}
+	}
+
+	return constrained, candidates, numAssigned, misplaced
 }
 
 func (scheduler *operationsScheduler) reduceMisplacedWithoutEvication(
@@ -813,15 +951,6 @@ func (scheduler *operationsScheduler) tearDownInstruction() {
 	// Free all clobbered source locations
 	for _, src := range scheduler.srcs {
 		if src.constraint.ClobberedByInstruction() {
-
-			//
-			// TODO REMOVE THIS. src.loc should never be nil once everything is
-			// correctly allocated
-			//
-			if src.loc == nil {
-				continue
-			}
-
 			scheduler.FreeLocation(src.loc)
 		}
 	}

@@ -236,7 +236,7 @@ func (allocator *Allocator) maybeInitializeChildBlockLocationIn(
 	for def, _ := range child.LiveIn {
 		loc, ok := nameLoc[def.Name]
 		if !ok {
-			continue // TODO panic once instruction level allocation is implemented
+			panic("should never happen")
 		}
 
 		locationIn[def] = loc
