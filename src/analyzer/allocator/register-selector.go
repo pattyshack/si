@@ -118,6 +118,20 @@ func (selector *RegisterSelector) Select(
 	return candidate
 }
 
+func (selector *RegisterSelector) SelectAnyFree() *arch.Register {
+	reg := selector.Select(
+		&arch.RegisterConstraint{
+			Clobbered:  true,
+			AnyGeneral: true,
+			AnyFloat:   true,
+		},
+		true)
+	if reg == nil {
+		panic("should never happen")
+	}
+	return reg
+}
+
 // By construction, there's always at least one unused register (this
 // assumption is checked by the instruction constraints validator).  The
 // function entry point is the only place where all registers could be in

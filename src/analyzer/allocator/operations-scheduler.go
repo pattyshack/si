@@ -46,6 +46,8 @@ type defAlloc struct {
 
 	numActual         int
 	hasFixedStackCopy bool
+
+	isPseudoDefVal bool
 }
 
 type operationsScheduler struct {
@@ -155,11 +157,7 @@ func (scheduler *operationsScheduler) ScheduleOperations() {
 	// by the instruction.
 	scheduler.ReleaseScratch(scratchRegister)
 
-	scheduler.setUpSourceRegisters(defAllocs)
-
-	if scheduler.finalDest.def != nil {
-		scheduler.setUpFinalDestination(finalDestAlloc)
-	}
+	scheduler.setUpRegisters(defAllocs, finalDestAlloc)
 
 	scheduler.executeInstruction()
 	scheduler.tearDownInstruction()
@@ -377,8 +375,9 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 			}
 
 			candidate = &defAlloc{
-				definition:   src.def,
-				numRegisters: arch.NumRegisters(src.pseudoDefVal.Type()),
+				definition:     src.def,
+				numRegisters:   arch.NumRegisters(src.pseudoDefVal.Type()),
+				isPseudoDefVal: true,
 			}
 			mappedDefAllocs[src.def] = candidate
 		}
@@ -531,11 +530,23 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 	}
 }
 
-func (scheduler *operationsScheduler) setUpSourceRegisters(
-	defAllocs []*defAlloc,
+func (scheduler *operationsScheduler) setUpRegisters(
+	allocs []*defAlloc,
+	finalDestAlloc *defAlloc,
 ) {
-	misplaced := scheduler.initializePseudoDefValRegisterLocations(defAllocs)
-	// TODO initalize real definition sources
+	misplaced := make([]*constrainedLocation, 0, len(scheduler.srcs))
+	for _, alloc := range allocs {
+		if len(alloc.constrained) == 0 || alloc == finalDestAlloc {
+			continue
+		} else if alloc.isPseudoDefVal {
+			misplaced = append(
+				misplaced,
+				scheduler.initializePseudoDefValRegisterLocations(alloc)...)
+		} else {
+			// TODO initalize real definition sources
+		}
+	}
+
 	for len(misplaced) > 0 {
 		selectableChanged := false
 		misplaced, selectableChanged = scheduler.reduceMisplacedWithoutEvication(
@@ -569,35 +580,44 @@ func (scheduler *operationsScheduler) setUpSourceRegisters(
 			misplaced = misplaced[1:]
 		}
 	}
+
+	if scheduler.finalDest.def != nil {
+		scheduler.setUpFinalDestination(finalDestAlloc)
+	}
+}
+
+func (scheduler *operationsScheduler) assignUnallocatedLocation(
+	loc *constrainedLocation,
+	numRegisters int,
+) {
+	if loc.loc != nil {
+		panic("should never happen")
+	}
+
+	misplacedChunks := make([]int, numRegisters)
+	for idx := 0; idx < numRegisters; idx++ {
+		misplacedChunks[idx] = idx
+	}
+	loc.misplacedChunks = misplacedChunks
+
+	loc.loc = &arch.DataLocation{
+		Registers: make([]*arch.Register, numRegisters),
+	}
 }
 
 func (scheduler *operationsScheduler) initializePseudoDefValRegisterLocations(
-	defAllocs []*defAlloc,
+	alloc *defAlloc,
 ) []*constrainedLocation {
 	misplacedLocs := []*constrainedLocation{}
-	for _, alloc := range defAllocs {
-		for _, loc := range alloc.constrained {
-			if loc.constraint.AnyLocation ||
-				loc.constraint.RequireOnStack ||
-				loc.pseudoDefVal == nil {
-				continue
-			}
-			if loc.loc != nil {
-				panic("should never happen")
-			}
-
-			misplacedRegs := make([]int, alloc.numRegisters)
-			for idx := 0; idx < alloc.numRegisters; idx++ {
-				misplacedRegs[idx] = idx
-			}
-
-			loc.loc = &arch.DataLocation{
-				Registers: make([]*arch.Register, alloc.numRegisters),
-			}
-			loc.misplacedChunks = misplacedRegs
-
-			misplacedLocs = append(misplacedLocs, loc)
+	for _, loc := range alloc.constrained {
+		if loc.constraint.AnyLocation || loc.constraint.RequireOnStack {
+			continue
 		}
+
+		scheduler.assignUnallocatedLocation(loc, alloc.numRegisters)
+		alloc.numActual++
+
+		misplacedLocs = append(misplacedLocs, loc)
 	}
 	return misplacedLocs
 }
@@ -690,13 +710,7 @@ func (scheduler *operationsScheduler) setUpFinalDestination(alloc *defAlloc) {
 			for i := 0; i < alloc.numRegisters; i++ {
 				finalDestLoc.Registers = append(
 					finalDestLoc.Registers,
-					scheduler.Select(
-						&arch.RegisterConstraint{
-							Clobbered:  true,
-							AnyGeneral: true,
-							AnyFloat:   true,
-						},
-						true))
+					scheduler.SelectAnyFree())
 			}
 		}
 	} else {
