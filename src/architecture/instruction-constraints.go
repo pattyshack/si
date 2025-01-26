@@ -57,6 +57,7 @@ func (loc *LocationConstraint) ClobberedByInstruction() bool {
 }
 
 // TODO Add option to allow register source reuse
+// TODO Add option to allow immediate bypassing register
 //
 // InstructionConstraints is used to specify instruction register constraints,
 // and call convention's registers selection / stack layout.

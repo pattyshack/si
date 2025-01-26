@@ -562,6 +562,7 @@ func (scheduler *operationsScheduler) setUpRegisters(
 	allocs []*defAlloc,
 	finalDestAlloc *defAlloc,
 ) {
+	// TODO setup frame pointer for calls
 	misplaced := make([]*constrainedLocation, 0, len(scheduler.srcs))
 	for _, alloc := range allocs {
 		if len(alloc.constrained) == 0 || alloc == finalDestAlloc {
