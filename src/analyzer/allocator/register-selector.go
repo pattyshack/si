@@ -37,7 +37,11 @@ func (selector *RegisterSelector) isSelected(register *arch.Register) bool {
 	}
 
 	_, ok = selector.selectedDest[register]
-	return ok
+	if ok {
+		return true
+	}
+
+	return register == selector.scratch
 }
 
 func (selector *RegisterSelector) ReserveSource(
