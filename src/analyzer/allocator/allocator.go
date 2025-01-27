@@ -178,7 +178,7 @@ func (allocator *Allocator) initializeBlockStates() {
 			LiveIn:     analyzer.LiveIn[block],
 			LiveOut:    analyzer.LiveOut[block],
 		}
-		state.GenerateConstraints(allocator.Platform)
+		state.GenerateConstraints()
 
 		allocator.BlockStates[block] = state
 	}
@@ -219,31 +219,6 @@ func (allocator *Allocator) initializeEntryBlockLocationIn() {
 	allocator.BlockStates[allocator.FuncDef.Blocks[0]].LocationIn = locations
 }
 
-func (allocator *Allocator) maybeInitializeChildBlockLocationIn(
-	parent *BlockState,
-	child *BlockState,
-) {
-	if child.LocationIn != nil {
-		return
-	}
-
-	nameLoc := map[string]*architecture.DataLocation{}
-	for def, loc := range parent.LocationOut {
-		nameLoc[def.Name] = loc
-	}
-
-	locationIn := LocationSet{}
-	for def, _ := range child.LiveIn {
-		loc, ok := nameLoc[def.Name]
-		if !ok {
-			panic("should never happen")
-		}
-
-		locationIn[def] = loc
-	}
-	child.LocationIn = locationIn
-}
-
 func (allocator *Allocator) processBlock(block *BlockState) {
 	block.ComputeLiveRangesAndPreferences(allocator.BlockStates)
 
@@ -259,8 +234,6 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 		scheduler.ScheduleOperations()
 		block.AdvanceLiveRangesAndPreferences(currentDist)
 	}
-
-	block.FinalizeLocationOut()
 
 	for _, child := range block.Children {
 		allocator.maybeInitializeChildBlockLocationIn(
@@ -286,12 +259,57 @@ func (allocator *Allocator) maybeInsertTransferBlocks() {
 	}
 }
 
-// If the parent's LocationOut data locations does not match the child's
-// expected LocationIn data locations, this inserts a transfer block between
+// NOTE: This deconstructs SSA PHIs for the case where value locations are
+// unconstrained / do not require relocation.
+func (allocator *Allocator) maybeInitializeChildBlockLocationIn(
+	parent *BlockState,
+	child *BlockState,
+) {
+	if child.LocationIn != nil {
+		return
+	}
+
+	defs := make(map[string]*ast.VariableDefinition, len(child.LiveIn))
+	for def, _ := range child.LiveIn {
+		defs[def.Name] = def
+	}
+
+	locationIn := LocationSet{}
+	for parentDef, locs := range parent.ValueLocations.Values {
+		def, ok := defs[parentDef.Name]
+		if !ok {
+			continue
+		}
+
+		var selected *architecture.DataLocation
+		for _, loc := range locs {
+			if loc.OnTempStack {
+				panic("should never happen")
+			}
+
+			if selected == nil || selected.OnFixedStack {
+				selected = loc
+			} else if len(loc.Registers) > 0 &&
+				selected.Registers[0].Index > loc.Registers[0].Index {
+
+				selected = loc
+			}
+		}
+
+		locationIn[def] = selected.Copy()
+	}
+	child.LocationIn = locationIn
+}
+
+// If the parent's value locations does not match the child's expected
+// LocationIn data locations, this inserts a transfer block between
 // the parent and child, and the transfer block will move the data to the
 // expected locations.
 //
 // This assumes that both parent are child are already processed.
+//
+// NOTE: This deconstructs SSA PHIs for the case where value locations are
+// constrained.
 func (allocator *Allocator) maybeInsertTransferBlock(
 	parent *BlockState,
 	child *BlockState,
@@ -307,32 +325,40 @@ func (allocator *Allocator) maybeInsertTransferBlock(
 	}
 	allocator.nextTransferBlockId++
 
-	outDefs := map[string]*ast.VariableDefinition{}
+	// TODO generate location constraints
+	defs := map[string]*ast.VariableDefinition{}
 	for def, _ := range child.LocationIn {
-		outDefs[def.Name] = def
+		defs[def.Name] = def
 	}
 
-	locationIn := LocationSet{}
-	for def, loc := range parent.LocationOut {
-		outDef, ok := outDefs[def.Name]
+	// This is the SSA deconstruction "copy" step.  Note that the data may be in
+	// in the wrong location.
+	locations := NewValueLocations(allocator.Platform, allocator.StackFrame)
+	for parentDef, locs := range parent.ValueLocations.Values {
+		def, ok := defs[parentDef.Name]
 		if !ok { // definition not used by this child
 			continue
 		}
 
-		// This is the SSA deconstruction "copy" step.  Note that the data may
-		// still be in the wrong location.
-		locationIn[outDef] = loc
+		for _, loc := range locs {
+			if loc.OnFixedStack {
+				locations.AllocateFixedStackLocation(def)
+			} else if loc.OnTempStack {
+				panic("should never happen")
+			} else {
+				locations.AllocateRegistersLocation(def, loc.Registers...)
+			}
+		}
 	}
 
-	// NOTE: LiveIn, LiveOut, LiveRanges, Constraints, and Preferences are not
-	// populated.
+	// NOTE: LiveIn, LiveOut, LiveRanges, LocationIn, Constraints, and
+	// Preferences are not populated.
 	transferState := &BlockState{
-		Platform:    allocator.Platform,
-		Block:       transferBlock,
-		StackFrame:  allocator.StackFrame,
-		DebugMode:   allocator.DebugMode,
-		LocationIn:  locationIn,
-		LocationOut: child.LocationIn,
+		Platform:       allocator.Platform,
+		Block:          transferBlock,
+		StackFrame:     allocator.StackFrame,
+		DebugMode:      allocator.DebugMode,
+		ValueLocations: locations,
 	}
 	transferState.InitializeValueLocations()
 

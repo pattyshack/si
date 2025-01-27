@@ -118,11 +118,6 @@ func (debugger *AllocatorDebugger) printDataLocations(
 		for _, loc := range blockState.LocationIn {
 			printf("      %s\n", loc)
 		}
-
-		printf("    LocationOut:\n")
-		for _, loc := range blockState.LocationOut {
-			printf("      %s\n", loc)
-		}
 	}
 }
 

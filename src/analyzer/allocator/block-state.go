@@ -70,19 +70,15 @@ type BlockState struct {
 	// Every entry maps one-to-one to the corresponding live in set.
 	LocationIn LocationSet
 
-	// Where data are located immediately after the block executed.
-	// Every entry maps one-to-one to the corresponding live in set.
-	LocationOut LocationSet
-
 	ValueLocations *ValueLocations
 
 	Operations []architecture.Operation
 }
 
-func (state *BlockState) GenerateConstraints(targetPlatform platform.Platform) {
+func (state *BlockState) GenerateConstraints() {
 	constraints := map[ast.Instruction]*architecture.InstructionConstraints{}
 	for _, inst := range state.Instructions {
-		constraints[inst] = targetPlatform.InstructionConstraints(inst)
+		constraints[inst] = state.InstructionConstraints(inst)
 	}
 
 	state.Constraints = constraints
@@ -325,34 +321,16 @@ func (state *BlockState) AdvanceLiveRangesAndPreferences(
 }
 
 func (state *BlockState) InitializeValueLocations() {
-	state.ValueLocations = NewValueLocations(
-		state.Platform,
-		state.StackFrame,
-		state.LocationIn)
-}
+	state.ValueLocations = NewValueLocations(state.Platform, state.StackFrame)
 
-func (state *BlockState) FinalizeLocationOut() {
-	state.LocationOut = LocationSet{}
-	for def, locs := range state.ValueLocations.Values {
-		var selected *architecture.DataLocation
-		for _, loc := range locs {
-			if loc.OnTempStack {
-				panic("should never happen")
-			}
-
-			// TODO select locations that best match predetermined children locations.
-			// For now, prefer register locations over fixed stack location
-			selected = loc
-			if !selected.OnFixedStack {
-				break
-			}
-		}
-
-		if selected == nil {
+	for def, loc := range state.LocationIn {
+		if loc.OnFixedStack {
+			state.ValueLocations.AllocateFixedStackLocation(def)
+		} else if loc.OnTempStack {
 			panic("should never happen")
+		} else {
+			state.ValueLocations.AllocateRegistersLocation(def, loc.Registers...)
 		}
-
-		state.LocationOut[def] = selected.Copy()
 	}
 }
 

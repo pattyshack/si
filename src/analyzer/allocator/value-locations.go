@@ -46,7 +46,6 @@ type ValueLocations struct {
 func NewValueLocations(
 	targetPlatform platform.Platform,
 	frame *architecture.StackFrame,
-	locationIn LocationSet,
 ) *ValueLocations {
 	locations := &ValueLocations{
 		StackFrame: frame,
@@ -62,16 +61,6 @@ func NewValueLocations(
 			&RegisterInfo{
 				Register: reg,
 			})
-	}
-
-	for def, loc := range locationIn {
-		if loc.OnFixedStack {
-			locations.AllocateFixedStackLocation(def)
-		} else if loc.OnTempStack {
-			panic("should never happen")
-		} else {
-			locations.AllocateRegistersLocation(def, loc.Registers...)
-		}
 	}
 
 	return locations
