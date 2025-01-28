@@ -226,12 +226,8 @@ func (allocator *Allocator) processBlock(block *BlockState) {
 
 	for idx, inst := range block.Instructions {
 		currentDist := idx + 1 // +1 for phi
-		scheduler := newOperationsScheduler(
-			block,
-			currentDist,
-			inst,
-			block.Constraints[inst])
-		scheduler.ScheduleOperations()
+		scheduler := newOperationsScheduler(block, currentDist)
+		scheduler.ScheduleInstructionOperations(inst, block.Constraints[inst])
 		block.AdvanceLiveRangesAndPreferences(currentDist)
 	}
 

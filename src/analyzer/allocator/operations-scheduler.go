@@ -89,9 +89,18 @@ type operationsScheduler struct {
 func newOperationsScheduler(
 	state *BlockState,
 	currentDist int,
+) *operationsScheduler {
+	return &operationsScheduler{
+		BlockState:       state,
+		RegisterSelector: NewRegisterSelector(state),
+		currentDist:      currentDist,
+	}
+}
+
+func (scheduler *operationsScheduler) initializeInstructionConstraints(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
-) *operationsScheduler {
+) {
 	srcValues := inst.Sources()
 	srcs := make([]*constrainedLocation, 0, len(srcValues))
 	for idx, value := range srcValues {
@@ -137,19 +146,19 @@ func newOperationsScheduler(
 		finalDest.constraint = constraints.Destination
 	}
 
-	return &operationsScheduler{
-		BlockState:       state,
-		RegisterSelector: NewRegisterSelector(state),
-		currentDist:      currentDist,
-		instruction:      inst,
-		constraints:      constraints,
-		srcs:             srcs,
-		tempDest:         tempDest,
-		finalDest:        finalDest,
-	}
+	scheduler.instruction = inst
+	scheduler.constraints = constraints
+	scheduler.srcs = srcs
+	scheduler.tempDest = tempDest
+	scheduler.finalDest = finalDest
 }
 
-func (scheduler *operationsScheduler) ScheduleOperations() {
+func (scheduler *operationsScheduler) ScheduleInstructionOperations(
+	instruction ast.Instruction,
+	constraints *arch.InstructionConstraints,
+) {
+	scheduler.initializeInstructionConstraints(instruction, constraints)
+
 	_, ok := scheduler.instruction.(*ast.CopyOperation)
 	if ok {
 		scheduler.scheduleCopy()
@@ -591,8 +600,6 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		if selectableChanged {
 			continue
 		}
-
-		// TODO: prefer to free unselected locations before force evication
 
 		// Evict a register used by a unselected location to make room for this
 		// constraint.
