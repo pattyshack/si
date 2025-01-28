@@ -321,7 +321,6 @@ func (allocator *Allocator) maybeInsertTransferBlock(
 	}
 	allocator.nextTransferBlockId++
 
-	// TODO generate location constraints
 	defs := map[string]*ast.VariableDefinition{}
 	for def, _ := range child.LocationIn {
 		defs[def.Name] = def
@@ -356,19 +355,23 @@ func (allocator *Allocator) maybeInsertTransferBlock(
 		DebugMode:      allocator.DebugMode,
 		ValueLocations: locations,
 	}
-	transferState.InitializeValueLocations()
 
-	// TODO move data to the correct locations
+	scheduler := newOperationsScheduler(transferState, 0)
+	scheduler.ScheduleTransferBlockOperations(child.LocationIn)
 
-	/*
-	  TODO uncomment once data move is implemented
+	hasRealOperations := false
+	for _, op := range transferState.Operations {
+		if op.Kind != architecture.FreeLocation {
+			hasRealOperations = true
+			break
+		}
+	}
 
-	  if len(transferState.Operations) == 0 {
-	    // All data are already in correct locations.  No need to insert a transfer
-	    // block.
-	    return
-	  }
-	*/
+	if !hasRealOperations {
+		// All data are already in correct locations.  No Need to insert a
+		// transfer block
+		return
+	}
 
 	// Insert the transfer block and update control flow graph edges
 

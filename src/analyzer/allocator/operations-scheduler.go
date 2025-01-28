@@ -97,6 +97,165 @@ func newOperationsScheduler(
 	}
 }
 
+func (scheduler *operationsScheduler) ScheduleTransferBlockOperations(
+	childLocationIn LocationSet,
+) {
+	allocs := scheduler.initializeTransferBlockConstraints(childLocationIn)
+
+	// Spill definition to fixed stack and free all extra register location
+	// copies.  Note that extra fixed stack location can be safely kept around;
+	// the child block will simply ignore the location.
+	for _, alloc := range allocs {
+		locs := scheduler.ValueLocations.Values[alloc.definition]
+		if alloc.numRequired == 0 {
+			if !alloc.hasFixedStackCopy {
+				src := scheduler.selectCopySourceLocation(alloc.definition)
+				dest := scheduler.AllocateFixedStackLocation(alloc.definition)
+				scheduler.CopyLocation(src, dest, nil)
+				alloc.hasFixedStackCopy = true
+			}
+
+			for _, loc := range locs {
+				if loc.OnFixedStack {
+					continue
+				}
+				scheduler.FreeLocation(loc)
+			}
+		} else if alloc.numActual > 1 {
+			constraints := alloc.constrained[0].constraint.Registers
+
+			bestNumMatches := -1
+			var bestLoc *arch.DataLocation
+			for _, loc := range locs {
+				if loc.OnFixedStack {
+					continue
+				}
+
+				numMatches := 0
+				for idx, reg := range loc.Registers {
+					if constraints[idx].SatisfyBy(reg) {
+						numMatches++
+					}
+				}
+
+				if numMatches > bestNumMatches {
+					bestNumMatches = numMatches
+					bestLoc = loc
+				}
+			}
+
+			for _, loc := range locs {
+				if loc != bestLoc {
+					scheduler.FreeLocation(loc)
+				}
+			}
+		}
+	}
+
+	scheduler.setUpRegisters(allocs, nil)
+}
+
+func (scheduler *operationsScheduler) initializeTransferBlockConstraints(
+	childLocationIn LocationSet,
+) []*defAlloc {
+	mappedAllocs := make(
+		map[*ast.VariableDefinition]*defAlloc,
+		len(childLocationIn))
+	for def, loc := range childLocationIn {
+		alloc := &defAlloc{
+			definition:   def,
+			numRegisters: arch.NumRegisters(def.Type),
+			nextUseDelta: 1,
+		}
+		mappedAllocs[def] = alloc
+
+		if loc.OnFixedStack {
+			// do nothing
+		} else if loc.OnTempStack {
+			panic("should never happen")
+		} else {
+			regConstraints := make([]*arch.RegisterConstraint, len(loc.Registers))
+			for idx, reg := range loc.Registers {
+				regConstraints[idx] = &arch.RegisterConstraint{
+					Require: reg,
+				}
+			}
+
+			alloc.constrained = []*constrainedLocation{
+				&constrainedLocation{
+					def: def,
+					constraint: &arch.LocationConstraint{
+						NumRegisters: alloc.numRegisters,
+						Registers:    regConstraints,
+					},
+				},
+			}
+			alloc.numPreferred = 1
+			alloc.numRequired = 1
+		}
+	}
+
+	for def, locs := range scheduler.ValueLocations.Values {
+		alloc := mappedAllocs[def]
+		for _, loc := range locs {
+			if loc.OnFixedStack {
+				alloc.hasFixedStackCopy = true
+			} else if loc.OnTempStack {
+				panic("should never happen")
+			} else {
+				alloc.numActual++
+			}
+		}
+	}
+
+	allocs := make([]*defAlloc, 0, len(mappedAllocs))
+	for _, alloc := range mappedAllocs {
+		allocs = append(allocs, alloc)
+	}
+	sort.Slice(
+		allocs,
+		func(i int, j int) bool {
+			return arch.CompareDefinitionNames(
+				allocs[i].definition.Name,
+				allocs[j].definition.Name) < 0
+		})
+
+	return allocs
+}
+
+func (scheduler *operationsScheduler) ScheduleInstructionOperations(
+	instruction ast.Instruction,
+	constraints *arch.InstructionConstraints,
+) {
+	scheduler.initializeInstructionConstraints(instruction, constraints)
+
+	_, ok := scheduler.instruction.(*ast.CopyOperation)
+	if ok {
+		scheduler.scheduleCopy()
+		return
+	}
+
+	scratchRegister := scheduler.SelectScratch()
+	scheduler.setUpTempStack(scratchRegister)
+
+	// Note: To maximize degrees of freedom / simplify accounting, register
+	// pressure is computed after setting up temp stack, which will likely free
+	// up some registers.
+	pressure, defAllocs, finalDestAlloc := scheduler.computeRegisterPressure()
+	scheduler.reduceRegisterPressure(pressure, defAllocs, scratchRegister)
+
+	// Release scratch register before register selection since it may be picked
+	// by the instruction.
+	scheduler.ReleaseScratch(scratchRegister)
+
+	scheduler.setUpRegisters(defAllocs, finalDestAlloc)
+
+	scheduler.executeInstruction()
+
+	copyTempDest := finalDestAlloc != nil && finalDestAlloc.nextUseDelta > 0
+	scheduler.tearDownInstruction(copyTempDest)
+}
+
 func (scheduler *operationsScheduler) initializeInstructionConstraints(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
@@ -151,39 +310,6 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 	scheduler.srcs = srcs
 	scheduler.tempDest = tempDest
 	scheduler.finalDest = finalDest
-}
-
-func (scheduler *operationsScheduler) ScheduleInstructionOperations(
-	instruction ast.Instruction,
-	constraints *arch.InstructionConstraints,
-) {
-	scheduler.initializeInstructionConstraints(instruction, constraints)
-
-	_, ok := scheduler.instruction.(*ast.CopyOperation)
-	if ok {
-		scheduler.scheduleCopy()
-		return
-	}
-
-	scratchRegister := scheduler.SelectScratch()
-	scheduler.setUpTempStack(scratchRegister)
-
-	// Note: To maximize degrees of freedom / simplify accounting, register
-	// pressure is computed after setting up temp stack, which will likely free
-	// up some registers.
-	pressure, defAllocs, finalDestAlloc := scheduler.computeRegisterPressure()
-	scheduler.reduceRegisterPressure(pressure, defAllocs, scratchRegister)
-
-	// Release scratch register before register selection since it may be picked
-	// by the instruction.
-	scheduler.ReleaseScratch(scratchRegister)
-
-	scheduler.setUpRegisters(defAllocs, finalDestAlloc)
-
-	scheduler.executeInstruction()
-
-	copyTempDest := finalDestAlloc != nil && finalDestAlloc.nextUseDelta > 0
-	scheduler.tearDownInstruction(copyTempDest)
 }
 
 func (scheduler *operationsScheduler) scheduleCopy() {
