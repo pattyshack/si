@@ -1,0 +1,21 @@
+// 1^2 + 2^2 + ... + n^2 = n * (n + 1) * (2 * n + 1) / 6
+//
+// func sum_of_square(n int) int {
+//   acc := 0
+//   for i := 1; i <= n; i++ {
+//     acc += i * i
+//   }
+//   return acc
+// }
+define func @sum_of_squares(%n I32) I32 {
+  %acc I32 = 0
+  %i I32 = 1
+  jlt :return, %n, %i
+:loop_body
+  %sq = mul %i, %i
+  %acc = add %acc, %sq
+  %i = add %i, 1
+  jge :loop_body, %n, %i
+:return
+  ret %acc
+}

@@ -9,7 +9,7 @@ import (
 type CallConventionName string
 
 const (
-	DefaultCallConvention = InternalCalleeSavedCallConvention
+	DefaultCallConvention = InternalCallConvention
 
 	// NOTE: Full C / System V ABI compatibility is not a priority.  It is
 	// needlessly complicated for our purpose (e.g., 128 int/float, aggregate
