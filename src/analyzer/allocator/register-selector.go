@@ -9,6 +9,10 @@ import (
 type RegisterSelector struct {
 	*BlockState
 
+	// Exact match registers are not selectable by AnyGeneral/AnyFloat
+	// constraint.
+	exactMatch map[*arch.Register]struct{}
+
 	// selectedSrc & selectedDest may overlap, scratch must be disjoint.
 
 	selectedSrc map[*arch.Register]*arch.RegisterConstraint
@@ -23,11 +27,16 @@ type RegisterSelector struct {
 func NewRegisterSelector(block *BlockState) *RegisterSelector {
 	return &RegisterSelector{
 		BlockState:   block,
+		exactMatch:   map[*arch.Register]struct{}{},
 		selectedSrc:  map[*arch.Register]*arch.RegisterConstraint{},
 		assignedSrc:  map[*arch.RegisterConstraint]*arch.Register{},
 		selectedDest: map[*arch.Register]*arch.RegisterConstraint{},
 		assignedDest: map[*arch.RegisterConstraint]*arch.Register{},
 	}
+}
+
+func (selector *RegisterSelector) ExactMatch(reg *arch.Register) {
+	selector.exactMatch[reg] = struct{}{}
 }
 
 func (selector *RegisterSelector) isSelected(register *arch.Register) bool {
@@ -109,6 +118,16 @@ func (selector *RegisterSelector) selectRegister(
 		panic("should never happen")
 	}
 
+	isCandidate := func(reg *arch.Register) bool {
+		if constraint.AnyGeneral || constraint.AnyFloat {
+			_, ok := selector.exactMatch[reg]
+			if ok {
+				return false
+			}
+		}
+		return constraint.SatisfyBy(reg)
+	}
+
 	var free *arch.Register
 	var candidate *arch.Register
 	for _, regInfo := range selector.ValueLocations.Registers {
@@ -118,13 +137,13 @@ func (selector *RegisterSelector) selectRegister(
 		}
 
 		if regInfo.UsedBy == nil {
-			if constraint.SatisfyBy(regInfo.Register) {
+			if isCandidate(regInfo.Register) {
 				reserve(regInfo.Register, constraint)
 				return regInfo.Register
 			}
 
 			free = regInfo.Register
-		} else if candidate == nil && constraint.SatisfyBy(regInfo.Register) {
+		} else if candidate == nil && isCandidate(regInfo.Register) {
 			candidate = regInfo.Register
 		}
 	}
@@ -143,7 +162,7 @@ func (selector *RegisterSelector) selectRegister(
 		free = selector.SelectScratch()
 		selector.ReleaseScratch(free)
 
-		if constraint.SatisfyBy(free) {
+		if isCandidate(free) {
 			reserve(free, constraint)
 			return free
 		}

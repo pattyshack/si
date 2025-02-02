@@ -176,6 +176,7 @@ func (scheduler *operationsScheduler) initializeTransferBlockConstraints(
 		} else {
 			regConstraints := make([]*arch.RegisterConstraint, len(loc.Registers))
 			for idx, reg := range loc.Registers {
+				scheduler.ExactMatch(reg)
 				regConstraints[idx] = &arch.RegisterConstraint{
 					Require: reg,
 				}
@@ -260,6 +261,9 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 	inst ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) {
+	// TODO create a pseduo constrainedLocation entry for clobbered registers
+	// that aren't part of src/dest constraints.  These registers must be evicted.
+
 	srcValues := inst.Sources()
 	srcs := make([]*constrainedLocation, 0, len(srcValues))
 	for idx, value := range srcValues {
@@ -303,6 +307,10 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 		}
 	} else {
 		finalDest.constraint = constraints.Destination
+	}
+
+	for reg, _ := range constraints.RequiredRegisters {
+		scheduler.ExactMatch(reg)
 	}
 
 	scheduler.instruction = inst
