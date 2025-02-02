@@ -67,9 +67,15 @@ func (p Platform) InstructionConstraints(
 		}
 	case *ast.BinaryOperation:
 		if ast.IsFloatSubType(inst.Dest.Type) {
-			return floatBinaryOpConstraints
+			return genericFloatBinaryOpConstraints
 		} else {
-			return intBinaryOpConstraints
+			if inst.Kind == ast.Div {
+				return divConstraints
+			} else if inst.Kind == ast.Rem {
+				return remConstraints
+			} else {
+				return genericIntBinaryOpConstraints
+			}
 		}
 	case *ast.Jump:
 		return jumpConstraints

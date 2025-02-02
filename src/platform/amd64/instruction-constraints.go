@@ -18,8 +18,11 @@ var (
 	floatToIntConstraints = newConversionUnaryOpConstraints(true)
 	intToFloatConstraints = newConversionUnaryOpConstraints(false)
 
-	intBinaryOpConstraints   = newBinaryOpConstraints(false)
-	floatBinaryOpConstraints = newBinaryOpConstraints(true)
+	genericIntBinaryOpConstraints   = newGenericBinaryOpConstraints(false)
+	genericFloatBinaryOpConstraints = newGenericBinaryOpConstraints(true)
+
+	divConstraints = newDivRemConstraints(false)
+	remConstraints = newDivRemConstraints(true)
 )
 
 // nil indicates the value should be in memory.  Otherwise, the return
@@ -115,7 +118,7 @@ func newConversionUnaryOpConstraints(
 	return constraints
 }
 
-func newBinaryOpConstraints(
+func newGenericBinaryOpConstraints(
 	isFloat bool,
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
@@ -131,6 +134,28 @@ func newBinaryOpConstraints(
 	constraints.AddRegisterSource(src1)
 	constraints.SetRegisterDestination(src1)
 	constraints.AddRegisterSource(selectAny(false))
+
+	return constraints
+}
+
+// x64's div/idiv is retarded
+func newDivRemConstraints(
+	isRem bool,
+) *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
+
+	// rdx:rax forms a double quad word
+	upper := constraints.Require(true, rdx)
+	lower := constraints.Require(true, rax)
+
+	constraints.AddRegisterSource(lower)
+	constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+
+	if isRem {
+		constraints.SetRegisterDestination(upper)
+	} else { // div
+		constraints.SetRegisterDestination(lower)
+	}
 
 	return constraints
 }
