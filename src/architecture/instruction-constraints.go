@@ -49,6 +49,11 @@ type LocationConstraint struct {
 	// The value is stored in an "array" formed by a list of registers.  The list
 	// could be empty to indicate a zero-sized type (e.g., empty struct)
 	Registers []*RegisterConstraint
+
+	// When true and the source value is an immediate (or a label reference),
+	// the source value could be encoded as part of the instruction if the value
+	// passes the Platform.CanEncodeImmediate check.
+	SupportEncodedImmediate bool
 }
 
 func (loc *LocationConstraint) ClobberedByInstruction() bool {
@@ -176,6 +181,7 @@ func (constraints *InstructionConstraints) Require(
 
 func (constraints *InstructionConstraints) registerLocation(
 	isDest bool,
+	supportEncodedImmediate bool,
 	list ...*RegisterConstraint,
 ) *LocationConstraint {
 	for _, entry := range list {
@@ -185,8 +191,9 @@ func (constraints *InstructionConstraints) registerLocation(
 	}
 
 	return &LocationConstraint{
-		NumRegisters: len(list),
-		Registers:    list,
+		NumRegisters:            len(list),
+		Registers:               list,
+		SupportEncodedImmediate: supportEncodedImmediate,
 	}
 }
 
@@ -205,11 +212,12 @@ func (constraints *InstructionConstraints) AddAnyCopySource(
 // The list could be empty if source value does not occupy any space,
 // e.g., empty struct)
 func (constraints *InstructionConstraints) AddRegisterSource(
+	supportEncodedImmediate bool,
 	registers ...*RegisterConstraint,
 ) {
 	constraints.Sources = append(
 		constraints.Sources,
-		constraints.registerLocation(false, registers...))
+		constraints.registerLocation(false, supportEncodedImmediate, registers...))
 }
 
 func (constraints *InstructionConstraints) AddStackSource(
@@ -238,7 +246,7 @@ func (constraints *InstructionConstraints) AddPseudoSource(
 ) {
 	constraints.PseudoSources = append(
 		constraints.PseudoSources,
-		constraints.registerLocation(false, registers...))
+		constraints.registerLocation(false, false, registers...))
 }
 
 // The list could be empty if the destination value does not occupy any
@@ -249,7 +257,7 @@ func (constraints *InstructionConstraints) SetRegisterDestination(
 	if constraints.Destination != nil {
 		panic("destination already set")
 	}
-	loc := constraints.registerLocation(true, registers...)
+	loc := constraints.registerLocation(true, false, registers...)
 	constraints.Destination = loc
 }
 
@@ -298,6 +306,7 @@ func NewCallConvention(
 	}
 
 	con.CallConstraints.AddRegisterSource(
+		false,
 		con.CallConstraints.Require(funcValueClobbered, funcValueRegister))
 	return con
 }
@@ -310,7 +319,7 @@ func (con *CallConvention) AddRegisterSource(
 	for _, reg := range registers {
 		callSrc = append(callSrc, con.CallConstraints.Require(clobbered, reg))
 	}
-	con.CallConstraints.AddRegisterSource(callSrc...)
+	con.CallConstraints.AddRegisterSource(false, callSrc...)
 
 	if !clobbered {
 		pseudoSrc := []*RegisterConstraint{}
@@ -347,7 +356,7 @@ func (con *CallConvention) SetRegisterDestination(
 		retSrc = append(retSrc, con.RetConstraints.Require(true, reg))
 	}
 	con.CallConstraints.SetRegisterDestination(callDest...)
-	con.RetConstraints.AddRegisterSource(retSrc...)
+	con.RetConstraints.AddRegisterSource(false, retSrc...)
 }
 
 func (con *CallConvention) SetStackDestination(

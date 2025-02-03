@@ -9,7 +9,7 @@ import (
 type CallConventionName string
 
 const (
-	DefaultCallConvention = InternalCallConvention
+	DefaultCallConvention = InternalCalleeSavedCallConvention
 
 	// NOTE: Full C / System V ABI compatibility is not a priority.  It is
 	// needlessly complicated for our purpose (e.g., 128 int/float, aggregate
@@ -18,8 +18,8 @@ const (
 	// is unstable.
 	InternalCallConvention = CallConventionName("internal")
 
-	// All except the first register are callee saved.  The return type is
-	// limited to the first register (and stack).  Mainly used for testing.
+	// All arguments and destination are pass via stack.  All registers are
+	// callee saved (the first register holds the frame pointer).
 	InternalCalleeSavedCallConvention = CallConventionName(
 		"internal-callee-saved")
 

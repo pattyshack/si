@@ -127,6 +127,7 @@ func (generator *funcDefTypeAndConstraintsGenerator) generatePseudoParameters(
 		convention.CallConstraints.AddPseudoSource(
 			convention.CallConstraints.Require(false, reg))
 		convention.RetConstraints.AddRegisterSource(
+			false,
 			convention.RetConstraints.Require(false, reg))
 
 		var regType ast.Type

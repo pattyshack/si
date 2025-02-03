@@ -2,6 +2,7 @@ package amd64
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
@@ -109,4 +110,36 @@ func (p Platform) InstructionConstraints(
 	}
 
 	panic(fmt.Sprintf("should never reach here: %s", in.Loc()))
+}
+
+func (p Platform) CanEncodeImmediate(value ast.Value) bool {
+	switch val := value.(type) {
+	case *ast.IntImmediate:
+		return p.canEncodeIntImmediate(val)
+	default:
+		// TODO handle label references / float immediate
+		return false
+	}
+}
+
+func (p Platform) canEncodeIntImmediate(imm *ast.IntImmediate) bool {
+	// NOTE: x64's immediate support is ad hoc at best, most support imm32, but
+	// mov supports imm64, and div/idiv don't support any immediate.
+	//
+	// TODO figure out all the corner cases ...
+
+	binary, ok := imm.ParentInstruction.(*ast.BinaryOperation)
+	if ok && (binary.Kind == ast.Div || binary.Kind == ast.Rem) {
+		return false
+	}
+
+	if ast.IsSignedIntSubType(imm.Type()) {
+		if imm.IsNegative {
+			return uint64(-math.MinInt32) >= imm.Value
+		} else {
+			return math.MaxInt32 >= imm.Value
+		}
+	} else {
+		return math.MaxUint32 >= imm.Value
+	}
 }

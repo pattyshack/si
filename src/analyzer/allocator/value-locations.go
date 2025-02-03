@@ -78,6 +78,10 @@ func (locations *ValueLocations) AssertNotAllocated(
 func (locations *ValueLocations) AssertAllocated(
 	loc *architecture.DataLocation,
 ) {
+	if loc.EncodedImmediate != nil {
+		return
+	}
+
 	_, ok := locations.allocated[loc]
 	if !ok {
 		panic("should never happen")

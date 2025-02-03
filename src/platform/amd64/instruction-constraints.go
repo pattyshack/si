@@ -74,11 +74,11 @@ func newConditionalJumpConstraints(
 	// Conditional jump compare two source registers without clobbering them.
 	// There's no destination register.
 	if isFloat {
-		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
-		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyFloat(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyFloat(false))
 	} else {
-		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
-		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyGeneral(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyGeneral(false))
 	}
 
 	return constraints
@@ -96,7 +96,9 @@ func newUnaryOpConstraints(
 	} else {
 		reg = constraints.SelectAnyGeneral(true)
 	}
-	constraints.AddRegisterSource(reg)
+
+	// TODO support encoded immediate?
+	constraints.AddRegisterSource(false, reg)
 	constraints.SetRegisterDestination(reg)
 
 	return constraints
@@ -107,11 +109,12 @@ func newConversionUnaryOpConstraints(
 ) *architecture.InstructionConstraints {
 	constraints := architecture.NewInstructionConstraints()
 
+	// TODO support encoded immediate?
 	if fromFloat {
-		constraints.AddRegisterSource(constraints.SelectAnyFloat(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyFloat(false))
 		constraints.SetRegisterDestination(constraints.SelectAnyGeneral(true))
 	} else {
-		constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+		constraints.AddRegisterSource(false, constraints.SelectAnyGeneral(false))
 		constraints.SetRegisterDestination(constraints.SelectAnyFloat(true))
 	}
 
@@ -131,9 +134,9 @@ func newGenericBinaryOpConstraints(
 	// Destination reuses the first source register, the second source register is
 	// not clobbered.
 	src1 := selectAny(true)
-	constraints.AddRegisterSource(src1)
+	constraints.AddRegisterSource(false, src1)
 	constraints.SetRegisterDestination(src1)
-	constraints.AddRegisterSource(selectAny(false))
+	constraints.AddRegisterSource(true, selectAny(false))
 
 	return constraints
 }
@@ -148,8 +151,8 @@ func newDivRemConstraints(
 	upper := constraints.Require(true, rdx)
 	lower := constraints.Require(true, rax)
 
-	constraints.AddRegisterSource(lower)
-	constraints.AddRegisterSource(constraints.SelectAnyGeneral(false))
+	constraints.AddRegisterSource(false, lower)
+	constraints.AddRegisterSource(false, constraints.SelectAnyGeneral(false))
 
 	if isRem {
 		constraints.SetRegisterDestination(upper)

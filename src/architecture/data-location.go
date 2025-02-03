@@ -28,6 +28,10 @@ type DataLocation struct {
 	//
 	// entry address = stack pointer address + offset
 	Offset int
+
+	// Immedidate (or label reference) that is encoded as part of the instruction
+	// and occupy no register / stack space.
+	EncodedImmediate ast.Value
 }
 
 func NewRegistersDataLocation(
@@ -81,13 +85,14 @@ func (loc *DataLocation) Copy() *DataLocation {
 	}
 
 	return &DataLocation{
-		Name:         loc.Name,
-		Type:         loc.Type,
-		Registers:    registers,
-		OnFixedStack: loc.OnFixedStack,
-		OnTempStack:  loc.OnTempStack,
-		AlignedSize:  loc.AlignedSize,
-		Offset:       loc.Offset,
+		Name:             loc.Name,
+		Type:             loc.Type,
+		Registers:        registers,
+		OnFixedStack:     loc.OnFixedStack,
+		OnTempStack:      loc.OnTempStack,
+		AlignedSize:      loc.AlignedSize,
+		Offset:           loc.Offset,
+		EncodedImmediate: loc.EncodedImmediate,
 	}
 }
 
@@ -98,11 +103,12 @@ func (loc *DataLocation) String() string {
 	}
 	return fmt.Sprintf(
 		"Name: %s Registers: %v OnFixedStack: %v OnTempStack: %v "+
-			"AlignedSize: %d Offset: %d Type: %s",
+			"EncodedImmediate: %v AlignedSize: %d Offset: %d Type: %s",
 		loc.Name,
 		registers,
 		loc.OnFixedStack,
 		loc.OnTempStack,
+		loc.EncodedImmediate,
 		loc.AlignedSize,
 		loc.Offset,
 		loc.Type)

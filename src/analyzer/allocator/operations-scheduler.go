@@ -267,8 +267,9 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 	srcValues := inst.Sources()
 	srcs := make([]*constrainedLocation, 0, len(srcValues))
 	for idx, value := range srcValues {
+		locConstraint := constraints.Sources[idx]
 		entry := &constrainedLocation{
-			constraint: constraints.Sources[idx],
+			constraint: locConstraint,
 		}
 		srcs = append(srcs, entry)
 
@@ -283,6 +284,17 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 				ParentInstruction: inst,
 			}
 			entry.immediate = value
+
+			if locConstraint.SupportEncodedImmediate &&
+				scheduler.CanEncodeImmediate(value) {
+
+				entry.loc = &arch.DataLocation{
+					Name:             entry.def.Name,
+					Type:             value.Type(),
+					EncodedImmediate: value,
+				}
+				entry.hasAllocated = true
+			}
 		}
 	}
 
@@ -529,6 +541,10 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 		if !ok {
 			if src.immediate == nil {
 				panic("should never happen")
+			}
+
+			if src.hasAllocated {
+				continue
 			}
 
 			candidate = &defAlloc{

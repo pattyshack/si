@@ -28,4 +28,6 @@ type Platform interface {
 	InstructionConstraints(
 		ast.Instruction,
 	) *architecture.InstructionConstraints
+
+	CanEncodeImmediate(ast.Value) bool
 }
