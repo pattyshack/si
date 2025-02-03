@@ -16,7 +16,7 @@ type constrainedLocation struct {
 	// NOTE: loc is fully allocated iff loc != nil and misplacedChunks is empty
 	loc *arch.DataLocation
 
-	pseudoDefVal ast.Value // global ref or immediate
+	immediate ast.Value // all immediates include label references
 
 	constraint      *arch.LocationConstraint
 	misplacedChunks []int
@@ -47,7 +47,7 @@ type defAlloc struct {
 	numActual         int
 	hasFixedStackCopy bool
 
-	isPseudoDefVal bool
+	isImmediate bool
 }
 
 func (alloc *defAlloc) RegisterLocations() []*constrainedLocation {
@@ -282,7 +282,7 @@ func (scheduler *operationsScheduler) initializeInstructionConstraints(
 				Type:              value.Type(),
 				ParentInstruction: inst,
 			}
-			entry.pseudoDefVal = value
+			entry.immediate = value
 		}
 	}
 
@@ -334,7 +334,7 @@ func (scheduler *operationsScheduler) scheduleCopy() {
 	}
 	src := scheduler.srcs[0]
 
-	if src.pseudoDefVal != nil {
+	if src.immediate != nil {
 		// We don't need to allocate space for global reference / immediate source,
 		// but we still need to allocate space for the destination.
 		scheduler.srcs = nil
@@ -398,8 +398,8 @@ func (scheduler *operationsScheduler) scheduleCopy() {
 		scratchRegister = scheduler.SelectScratch()
 	}
 
-	if src.pseudoDefVal != nil {
-		scheduler.SetConstantValue(src.pseudoDefVal, destLoc, scratchRegister)
+	if src.immediate != nil {
+		scheduler.SetConstantValue(src.immediate, destLoc, scratchRegister)
 	} else {
 		scheduler.CopyLocation(
 			scheduler.selectCopySourceLocation(src.def),
@@ -456,7 +456,7 @@ func (scheduler *operationsScheduler) setUpTempStack(
 		tempStackSrcs = append(tempStackSrcs, src)
 		srcDefs = append(srcDefs, src.def)
 
-		if src.pseudoDefVal == nil {
+		if src.immediate == nil {
 			copySrcs[src.def] = scheduler.selectCopySourceLocation(src.def)
 		}
 	}
@@ -467,8 +467,8 @@ func (scheduler *operationsScheduler) setUpTempStack(
 
 	for idx, src := range tempStackSrcs {
 		loc := stackSrcLocs[idx]
-		if src.pseudoDefVal != nil {
-			scheduler.SetConstantValue(src.pseudoDefVal, loc, scratchRegister)
+		if src.immediate != nil {
+			scheduler.SetConstantValue(src.immediate, loc, scratchRegister)
 		} else {
 			copySrc, ok := copySrcs[src.def]
 			if !ok {
@@ -527,14 +527,14 @@ func (scheduler *operationsScheduler) computeRegisterPressure() (
 	for _, src := range scheduler.srcs {
 		candidate, ok := mappedDefAllocs[src.def]
 		if !ok {
-			if src.pseudoDefVal == nil {
+			if src.immediate == nil {
 				panic("should never happen")
 			}
 
 			candidate = &defAlloc{
-				definition:     src.def,
-				numRegisters:   arch.NumRegisters(src.pseudoDefVal.Type()),
-				isPseudoDefVal: true,
+				definition:   src.def,
+				numRegisters: arch.NumRegisters(src.immediate.Type()),
+				isImmediate:  true,
 			}
 			mappedDefAllocs[src.def] = candidate
 		}
@@ -710,7 +710,7 @@ func (scheduler *operationsScheduler) setUpRegisters(
 	for _, alloc := range allocs {
 		if len(alloc.constrained) == 0 || alloc == finalDestAlloc {
 			continue
-		} else if alloc.isPseudoDefVal {
+		} else if alloc.isImmediate {
 			for _, loc := range alloc.RegisterLocations() {
 				scheduler.assignUnallocatedLocation(alloc, loc)
 				misplaced = append(misplaced, loc)
@@ -766,7 +766,7 @@ func (scheduler *operationsScheduler) setUpRegisters(
 	// NOTE: We must finalize destination before creating preferred copies since
 	// the destination may have specific register constraints.
 	for _, alloc := range allocs {
-		if alloc == finalDestAlloc || alloc.isPseudoDefVal {
+		if alloc == finalDestAlloc || alloc.isImmediate {
 			continue
 		}
 
@@ -1034,7 +1034,7 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 	}
 
 	var src *arch.DataLocation
-	if loc.pseudoDefVal == nil {
+	if loc.immediate == nil {
 		src = scheduler.selectCopySourceLocation(loc.def)
 	}
 
@@ -1042,10 +1042,10 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 		loc.def,
 		loc.loc.Registers...)
 
-	if loc.pseudoDefVal == nil {
+	if loc.immediate == nil {
 		scheduler.CopyLocation(src, loc.loc, nil)
 	} else {
-		scheduler.SetConstantValue(loc.pseudoDefVal, loc.loc, nil)
+		scheduler.SetConstantValue(loc.immediate, loc.loc, nil)
 	}
 	loc.hasAllocated = true
 }
