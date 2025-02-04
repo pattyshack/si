@@ -292,6 +292,19 @@ func (state *BlockState) maybeAddPreference(
 		})
 }
 
+func (state *BlockState) NextUseDelta(
+	currentDist int,
+	def *ast.VariableDefinition,
+) int {
+	delta := 0
+	liveRange, ok := state.LiveRanges[def]
+	if ok && len(liveRange.NextUses) > 0 {
+		delta = liveRange.NextUses[0] - currentDist
+	}
+
+	return delta
+}
+
 func (state *BlockState) AdvanceLiveRangesAndPreferences(
 	currentDist int,
 ) {
@@ -346,8 +359,8 @@ func (state *BlockState) ExecuteInstruction(
 ) {
 	srcLocs := make([]*architecture.DataLocation, 0, len(srcs))
 	for _, src := range srcs {
-		state.ValueLocations.AssertAllocated(src.loc)
-		srcLocs = append(srcLocs, src.loc)
+		state.ValueLocations.AssertAllocated(src.location)
+		srcLocs = append(srcLocs, src.location)
 	}
 
 	if dest == nil {

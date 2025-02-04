@@ -40,14 +40,19 @@ func (candidate *RegisterConstraint) SatisfyBy(register *Register) bool {
 type LocationConstraint struct {
 	NumRegisters int // size in number of registers
 
-	// When true, the data could be on either stack or registers
+	// When true, the data could be on either stack or registers. For copy
+	// operation and internal use only.
 	AnyLocation bool
 
 	// When true, the data must be on stack
 	RequireOnStack bool
 
 	// The value is stored in an "array" formed by a list of registers.  The list
-	// could be empty to indicate a zero-sized type (e.g., empty struct)
+	// could be empty to indicate a zero-sized type (e.g., empty struct).
+	//
+	// NOTE: This assumes all register constraints in the list must either be
+	// exact match (Require) or wildcard match (AnyGeneral/AnyFloat), but not
+	// both at the same time.
 	Registers []*RegisterConstraint
 
 	// When true and the source value is an immediate (or a label reference),
