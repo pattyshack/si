@@ -195,16 +195,15 @@ func (selector *RegisterSelector) SelectDestinationRegister(
 	constraint *arch.RegisterConstraint,
 ) *arch.Register {
 	register, ok := selector.assignedSrc[constraint]
-	if ok {
-		selector.reserveDestination(register, constraint)
-		return register
+	if !ok {
+		if constraint.Require == nil {
+			panic("should never happen")
+		}
+		register = constraint.Require
 	}
 
-	return selector.selectRegister(
-		constraint,
-		false,
-		selector.selectedDest,
-		selector.reserveDestination)
+	selector.reserveDestination(register, constraint)
+	return register
 }
 
 func (selector *RegisterSelector) getFreeRegister() *arch.Register {

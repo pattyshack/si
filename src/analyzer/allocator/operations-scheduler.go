@@ -11,11 +11,9 @@ import (
 )
 
 type constrainedLocation struct {
-	def *ast.VariableDefinition
+	*allocation
 
 	location *arch.DataLocation
-
-	immediate ast.Value // all immediates including label references
 
 	constraint      *arch.LocationConstraint
 	misplacedChunks []int
@@ -43,10 +41,14 @@ type allocation struct {
 	numRequired  int
 	numClobbered int
 
+	requireOnTempStack bool
+
 	numActual         int
 	hasFixedStackCopy bool
 
-	isImmediate bool
+	immediate ast.Value // all immediates including label references
+
+	evictOnly bool
 }
 
 func (alloc *allocation) RegisterLocations() []*constrainedLocation {
@@ -73,16 +75,11 @@ type operationsScheduler struct {
 	srcs []*constrainedLocation
 
 	// A temp stack destination allocated during the set up phase.
-	tempDest constrainedLocation
-
-	// Scratch register used for copying to fixed stack finalDest.
-	// Note that this register must be selected at the same time as final
-	// destination since final destination is defer allocated.
-	destScratchRegister *arch.Register
+	tempDest *constrainedLocation
 
 	// Note: the set up phase will create a placeholder destination location
 	// entry which won't be allocated until the tear down phase.
-	finalDest constrainedLocation
+	finalDest *constrainedLocation
 }
 
 func newOperationsScheduler(
@@ -151,7 +148,7 @@ func (scheduler *operationsScheduler) ScheduleTransferBlockOperations(
 		}
 	}
 
-	scheduler.setUpRegisters(allocs, nil)
+	scheduler.setUpRegisters(allocs)
 }
 
 func (scheduler *operationsScheduler) getValueLocationAllocs(
@@ -224,7 +221,7 @@ func (scheduler *operationsScheduler) initializeTransferBlockConstraints(
 
 			alloc.constrained = []*constrainedLocation{
 				&constrainedLocation{
-					def: def,
+					allocation: alloc,
 					constraint: &arch.LocationConstraint{
 						NumRegisters: alloc.numRegisters,
 						Registers:    regConstraints,
@@ -243,11 +240,13 @@ func (scheduler *operationsScheduler) ScheduleInstructionOperations(
 	instruction ast.Instruction,
 	constraints *arch.InstructionConstraints,
 ) {
-	scheduler.initializeInstructionConstraints(instruction, constraints)
+	pressure, allocations := scheduler.initializeInstructionConstraints(
+		instruction,
+		constraints)
 
 	_, ok := scheduler.instruction.(*ast.CopyOperation)
 	if ok {
-		scheduler.scheduleCopy()
+		scheduler.scheduleCopy(pressure, allocations)
 		return
 	}
 
@@ -257,19 +256,18 @@ func (scheduler *operationsScheduler) ScheduleInstructionOperations(
 	// Note: To maximize degrees of freedom / simplify accounting, register
 	// pressure is computed after setting up temp stack, which will likely free
 	// up some registers.
-	pressure, allocations, finalDestAlloc := scheduler.computeRegisterPressure()
 	scheduler.reduceRegisterPressure(pressure, allocations, scratchRegister)
 
 	// Release scratch register before register selection since it may be picked
 	// by the instruction.
 	scheduler.ReleaseScratch(scratchRegister)
 
-	scheduler.setUpRegisters(allocations, finalDestAlloc)
+	scheduler.setUpRegisters(allocations)
 
 	scheduler.executeInstruction()
 
-	copyTempDest := finalDestAlloc != nil && finalDestAlloc.nextUseDelta > 0
-	scheduler.tearDownInstruction(copyTempDest)
+	scheduler.freeDeadSources()
+	scheduler.tearDownInstruction()
 }
 
 func (scheduler *operationsScheduler) nextUseDelta(
@@ -279,286 +277,501 @@ func (scheduler *operationsScheduler) nextUseDelta(
 }
 
 func (scheduler *operationsScheduler) initializeInstructionConstraints(
-	inst ast.Instruction,
+	instruction ast.Instruction,
 	constraints *arch.InstructionConstraints,
+) (
+	int,
+	[]*allocation,
 ) {
-	// TODO create a pseduo constrainedLocation entry for clobbered registers
-	// that aren't part of src/dest constraints.  These registers must be evicted.
+	mappedSrcAllocs := scheduler.getValueLocationAllocs(scheduler.nextUseDelta)
+	srcs := scheduler.generateConstrainedSources(
+		mappedSrcAllocs,
+		instruction,
+		constraints)
+	scheduler.combineConstrainedSources(mappedSrcAllocs, srcs)
 
-	srcValues := inst.Sources()
+	scheduler.instruction = instruction
+	scheduler.constraints = constraints
+	scheduler.srcs = srcs
+
+	nonSrcExacts, overlappedWildcards, overlappableWildcards := scheduler.
+		collectRegisterConstraintStats(srcs, constraints)
+
+	scheduler.generateConstrainedPseudoExactSource(
+		mappedSrcAllocs,
+		instruction,
+		nonSrcExacts)
+
+	if constraints.Destination == nil {
+		// do nothing
+	} else {
+		destDef := instruction.Destination()
+		finalDestAlloc := &allocation{
+			definition:   destDef,
+			numRegisters: constraints.Destination.NumRegisters,
+			nextUseDelta: scheduler.nextUseDelta(destDef),
+		}
+
+		scheduler.finalDest = &constrainedLocation{
+			allocation: finalDestAlloc,
+			constraint: constraints.Destination,
+		}
+		finalDestAlloc.constrained = append(
+			finalDestAlloc.constrained,
+			scheduler.finalDest)
+
+		if constraints.Destination.AnyLocation {
+			// already correctly setup
+		} else if constraints.Destination.RequireOnStack {
+			scheduler.setUpConstrainedStackDestination()
+		} else { // register location
+			nonSrcWildcards := scheduler.setUpConstrainedRegisterDestination(
+				overlappedWildcards,
+				overlappableWildcards)
+			scheduler.generateConstrainedPseudoWildcardSource(
+				mappedSrcAllocs,
+				instruction,
+				nonSrcWildcards)
+		}
+	}
+
+	registerPressure := 0
+	for _, alloc := range mappedSrcAllocs {
+		for _, loc := range alloc.constrained {
+			if loc.constraint.AnyLocation { // only copy op uses AnyLocation for src
+				loc.numPreferred++
+			} else if loc.constraint.RequireOnStack {
+				loc.requireOnTempStack = true
+			} else {
+				loc.numPreferred++
+				loc.numRequired++
+
+				if loc.constraint.ClobberedByInstruction() {
+					loc.numClobbered++
+				}
+			}
+		}
+
+		// If the destination out lives the instruction, ensure at least one copy
+		// of the source definition survive.
+		if alloc.nextUseDelta > 0 &&
+			alloc.numPreferred == alloc.numRequired &&
+			alloc.numRequired == alloc.numClobbered {
+
+			// Ensure we don't eagerly load value back onto register if the value
+			// only exist on stack and is not used by the instruction.
+			if !alloc.hasFixedStackCopy ||
+				alloc.numActual > 0 ||
+				alloc.numRequired > 0 ||
+				alloc.requireOnTempStack {
+
+				alloc.numPreferred++
+			}
+		}
+
+		numCopies := alloc.numActual
+		if alloc.numPreferred > alloc.numActual {
+			numCopies = alloc.numPreferred
+		}
+
+		registerPressure += numCopies * alloc.numRegisters
+	}
+
+	return registerPressure, scheduler.sortedAllocs(mappedSrcAllocs)
+}
+
+func (scheduler *operationsScheduler) generateConstrainedSources(
+	mappedSrcAllocs map[*ast.VariableDefinition]*allocation,
+	instruction ast.Instruction,
+	constraints *arch.InstructionConstraints,
+) []*constrainedLocation {
+	srcValues := instruction.Sources()
 	srcs := make([]*constrainedLocation, 0, len(srcValues))
 	for idx, value := range srcValues {
-		locConstraint := constraints.Sources[idx]
-		entry := &constrainedLocation{
-			constraint: locConstraint,
+		loc := &constrainedLocation{
+			constraint: constraints.Sources[idx],
 		}
-		srcs = append(srcs, entry)
 
+		var alloc *allocation
 		ref, ok := value.(*ast.VariableReference)
 		if ok {
-			entry.def = ref.UseDef
-		} else {
-			entry.def = &ast.VariableDefinition{
+			alloc, ok = mappedSrcAllocs[ref.UseDef]
+			if !ok {
+				panic("should never happen")
+			}
+		} else { // immediates
+			def := &ast.VariableDefinition{
 				StartEndPos:       value.StartEnd(),
 				Name:              fmt.Sprintf("%%constant-source-%d", idx),
 				Type:              value.Type(),
-				ParentInstruction: inst,
+				ParentInstruction: instruction,
 			}
-			entry.immediate = value
 
-			if locConstraint.SupportEncodedImmediate &&
+			alloc = &allocation{
+				definition: def,
+				immediate:  value,
+			}
+			mappedSrcAllocs[def] = alloc
+
+			if loc.constraint.SupportEncodedImmediate &&
 				scheduler.CanEncodeImmediate(value) {
 
-				entry.location = &arch.DataLocation{
-					Name:             entry.def.Name,
-					Type:             value.Type(),
+				if loc.constraint.ClobberedByInstruction() { // sanity check
+					panic("should never happen")
+				}
+
+				loc.location = &arch.DataLocation{
+					Name:             def.Name,
+					Type:             def.Type,
 					EncodedImmediate: value,
 				}
-				entry.hasAllocated = true
+				loc.hasAllocated = true
+			} else {
+				alloc.numRegisters = arch.NumRegisters(def.Type)
 			}
 		}
+
+		loc.allocation = alloc
+		srcs = append(srcs, loc)
+		alloc.constrained = append(alloc.constrained, loc)
 	}
 
-	destDef := inst.Destination()
-	tempDest := constrainedLocation{}
-	finalDest := constrainedLocation{
-		def: destDef,
-	}
-
-	if constraints.Destination != nil && constraints.Destination.RequireOnStack {
-		tempDest.def = &ast.VariableDefinition{
-			StartEndPos:       destDef.StartEnd(),
-			Name:              "%temp-destination",
-			Type:              destDef.Type,
-			ParentInstruction: inst,
-		}
-		tempDest.constraint = constraints.Destination
-
-		finalDest.constraint = &arch.LocationConstraint{
-			NumRegisters: constraints.Destination.NumRegisters,
-			AnyLocation:  true,
-		}
-	} else {
-		finalDest.constraint = constraints.Destination
-	}
-
-	for reg, _ := range constraints.RequiredRegisters {
-		scheduler.ExactMatch(reg)
-	}
-
-	scheduler.instruction = inst
-	scheduler.constraints = constraints
-	scheduler.srcs = srcs
-	scheduler.tempDest = tempDest
-	scheduler.finalDest = finalDest
+	return srcs
 }
 
-func (scheduler *operationsScheduler) computeRegisterPressure() (
-	int,
-	[]*allocation,
-	*allocation,
+func (scheduler *operationsScheduler) combineConstrainedSources(
+	mappedAllocs map[*ast.VariableDefinition]*allocation,
+	srcs []*constrainedLocation,
 ) {
-	newDefAlloc := func(def *ast.VariableDefinition) *allocation {
-		return &allocation{
-			definition:   def,
-			numRegisters: arch.NumRegisters(def.Type),
-			nextUseDelta: scheduler.nextUseDelta(def),
+	substitution := map[*constrainedLocation]*constrainedLocation{}
+	for _, alloc := range mappedAllocs {
+		if len(alloc.constrained) < 2 { // nothing to merge
+			continue
 		}
-	}
 
-	mappedDefAllocs := map[*ast.VariableDefinition]*allocation{}
-	for def, locs := range scheduler.ValueLocations.Values {
-		candidate := newDefAlloc(def)
-		mappedDefAllocs[def] = candidate
+		// Non-clobbered wildcard location constraints are mergable candidates.
+		// All other location constraints are unmergable.
+		selected := make([]*constrainedLocation, 0, len(alloc.constrained))
+		candidates := make([]*constrainedLocation, 0, len(alloc.constrained))
+		for _, loc := range alloc.constrained {
+			if len(loc.constraint.Registers) == 0 ||
+				loc.constraint.Registers[0].Require != nil ||
+				loc.constraint.Registers[0].Clobbered {
 
-		for _, loc := range locs {
-			if loc.OnFixedStack {
-				candidate.hasFixedStackCopy = true
-			} else if loc.OnTempStack {
-				// Do nothing.
+				selected = append(selected, loc)
 			} else {
-				candidate.numActual++
+				candidates = append(candidates, loc)
 			}
+		}
+
+		for _, candidate := range candidates {
+			var replacement *constrainedLocation
+			for _, loc := range selected {
+				if len(loc.constraint.Registers) == 0 {
+					continue // stack location or unit data type
+				}
+
+				mergable := true
+				for idx, locReg := range loc.constraint.Registers {
+					candidateReg := candidate.constraint.Registers[idx]
+					if locReg.Require != nil {
+						if !candidateReg.SatisfyBy(locReg.Require) {
+							mergable = false
+							break
+						}
+					} else if !(candidateReg.AnyGeneral == locReg.AnyGeneral &&
+						candidateReg.AnyFloat == locReg.AnyFloat) {
+						// Only allow identical wildcard conditions to merge
+						mergable = false
+						break
+					}
+				}
+
+				if mergable {
+					replacement = loc
+					break
+				}
+			}
+
+			if replacement != nil {
+				substitution[candidate] = replacement
+			} else {
+				selected = append(selected, candidate)
+			}
+		}
+
+		alloc.constrained = selected
+	}
+
+	for idx, src := range srcs {
+		replacement, ok := substitution[src]
+		if ok {
+			srcs[idx] = replacement
+		}
+	}
+}
+
+func (scheduler *operationsScheduler) collectRegisterConstraintStats(
+	srcs []*constrainedLocation,
+	constraints *arch.InstructionConstraints,
+) (
+	map[*arch.Register]struct{}, // non source clobbered registers
+	map[*arch.RegisterConstraint]struct{}, // overlapped wildcard
+	[]*arch.RegisterConstraint, // overlappable wildcard candidate
+) {
+	nonSrcExacts := map[*arch.Register]struct{}{}
+	for reg, clobbered := range constraints.RequiredRegisters {
+		if clobbered {
+			nonSrcExacts[reg] = struct{}{}
 		}
 	}
 
-	registerConstraints := map[*arch.RegisterConstraint]struct{}{}
-	for _, src := range scheduler.srcs {
-		candidate, ok := mappedDefAllocs[src.def]
-		if !ok {
-			if src.immediate == nil {
-				panic("should never happen")
-			}
+	destRegs := map[*arch.RegisterConstraint]struct{}{}
+	if constraints.Destination != nil {
+		for _, reg := range constraints.Destination.Registers {
+			destRegs[reg] = struct{}{}
+		}
+	}
 
-			if src.hasAllocated {
+	srcRegs := map[*arch.RegisterConstraint]struct{}{}
+	overlappedWildcards := map[*arch.RegisterConstraint]struct{}{}
+	overlappableWildcards := []*arch.RegisterConstraint{}
+	for _, src := range srcs {
+		for _, reg := range src.constraint.Registers {
+			_, ok := srcRegs[reg]
+			if ok { // location reused by multiple src values
+				continue
+			}
+			srcRegs[reg] = struct{}{}
+
+			if reg.Require != nil {
+				delete(nonSrcExacts, reg.Require)
 				continue
 			}
 
-			candidate = &allocation{
-				definition:   src.def,
-				numRegisters: arch.NumRegisters(src.immediate.Type()),
-				isImmediate:  true,
-			}
-			mappedDefAllocs[src.def] = candidate
-		}
-
-		if src.constraint.AnyLocation || src.constraint.RequireOnStack {
-			if candidate.numRequired == candidate.numPreferred {
-				candidate.numPreferred++
-			}
-		} else {
-			for _, reg := range src.constraint.Registers {
-				registerConstraints[reg] = struct{}{}
-			}
-
-			candidate.constrained = append(candidate.constrained, src)
-			candidate.numPreferred++
-			candidate.numRequired++
-
-			if src.constraint.ClobberedByInstruction() {
-				candidate.numClobbered++
+			// reg is a wildcard match
+			_, ok = destRegs[reg]
+			if ok { // already overlapped
+				overlappedWildcards[reg] = struct{}{}
+			} else if reg.Clobbered || src.nextUseDelta == 0 {
+				overlappableWildcards = append(overlappableWildcards, reg)
 			}
 		}
 	}
 
-	var finalDestAlloc *allocation
-	registerPressure := 0
-	if scheduler.constraints.Destination != nil {
-		constraint := scheduler.constraints.Destination
-		if constraint.AnyLocation || constraint.RequireOnStack {
-			// Note: If numPreferred is 0 after pressure reduction, the final
-			// destination is on fixed stack (we can skip copying to final
-			// destination if nextUseDelta is also 0)
-			finalDestAlloc = newDefAlloc(scheduler.finalDest.def)
-			mappedDefAllocs[scheduler.finalDest.def] = finalDestAlloc
-		} else {
-			// Account for destination registers that do not overlap with source
-			// registers
-			for _, reg := range constraint.Registers {
-				_, ok := registerConstraints[reg]
-				if !ok {
-					registerPressure++
-				}
-			}
-		}
-	}
-
-	for _, candidate := range mappedDefAllocs {
-		numCopies := candidate.numActual
-
-		// If the definition out lives the instruction, ensure at least one copy of
-		// the source definition survive.
-		if candidate.nextUseDelta > 0 &&
-			candidate.numRequired == candidate.numClobbered &&
-			candidate.numPreferred == candidate.numRequired {
-
-			// Ensure we don't eagerly load value back onto registers if the value
-			// only exist on stack and is not used by the instruction.
-			if !candidate.hasFixedStackCopy ||
-				candidate.numActual > 0 ||
-				candidate.numRequired > 0 {
-
-				candidate.numPreferred++
-			}
-		}
-
-		// For now, assume there's enough room to keep everything on registers.
-		if candidate.numPreferred > numCopies {
-			numCopies = candidate.numPreferred
-		}
-		registerPressure += numCopies * candidate.numRegisters
-	}
-
-	allocations := scheduler.sortedAllocs(mappedDefAllocs)
-
-	return registerPressure, allocations, finalDestAlloc
+	return nonSrcExacts, overlappedWildcards, overlappableWildcards
 }
 
-func (scheduler *operationsScheduler) scheduleCopy() {
-	defer func() {
-		// Only invoke tear down to remove source definition (if it's dead).
-		scheduler.srcs = nil
-		scheduler.tempDest = constrainedLocation{}
-		scheduler.finalDest = constrainedLocation{}
-		scheduler.tearDownInstruction(false)
-	}()
+// Create a pseudo allocation source entry for exact match clobbered registers
+// that aren't part of src constraints (i.e., scratch registers and
+// non-overlapped destination registers).  These registers must be evicted
+// before instruction execution.
+func (scheduler *operationsScheduler) generateConstrainedPseudoExactSource(
+	mappedSrcAllocs map[*ast.VariableDefinition]*allocation,
+	instruction ast.Instruction,
+	nonSrcExacts map[*arch.Register]struct{},
+) {
+	if len(nonSrcExacts) == 0 {
+		return
+	}
+
+	def := &ast.VariableDefinition{
+		StartEndPos:       instruction.StartEnd(),
+		Name:              "%exact-non-source",
+		ParentInstruction: instruction,
+	}
+
+	alloc := &allocation{
+		definition:   def,
+		numRegisters: len(nonSrcExacts),
+		evictOnly:    true,
+	}
+	mappedSrcAllocs[def] = alloc
+
+	registers := []*arch.RegisterConstraint{}
+	for _, regInfo := range scheduler.ValueLocations.Registers {
+		_, ok := nonSrcExacts[regInfo.Register]
+		if !ok {
+			continue
+		}
+
+		registers = append(
+			registers,
+			&arch.RegisterConstraint{
+				Require:   regInfo.Register,
+				Clobbered: true,
+			})
+	}
+
+	loc := &constrainedLocation{
+		allocation: alloc,
+		constraint: &arch.LocationConstraint{
+			NumRegisters: len(nonSrcExacts),
+			Registers:    registers,
+		},
+	}
+	alloc.constrained = []*constrainedLocation{loc}
+}
+
+// Create a pseudo allocation source entry for wildcard match clobbered
+// registers that	aren't part of src constraints. These registers must be
+// evicted before instruction execution.
+func (scheduler *operationsScheduler) generateConstrainedPseudoWildcardSource(
+	mappedSrcAllocs map[*ast.VariableDefinition]*allocation,
+	instruction ast.Instruction,
+	nonSrcWildcards []*arch.RegisterConstraint,
+) {
+	if len(nonSrcWildcards) == 0 {
+		return
+	}
+
+	def := &ast.VariableDefinition{
+		StartEndPos:       instruction.StartEnd(),
+		Name:              "%wildcard-non-source",
+		ParentInstruction: instruction,
+	}
+
+	alloc := &allocation{
+		definition:   def,
+		numRegisters: len(nonSrcWildcards),
+		evictOnly:    true,
+	}
+	mappedSrcAllocs[def] = alloc
+
+	loc := &constrainedLocation{
+		allocation: alloc,
+		constraint: &arch.LocationConstraint{
+			NumRegisters: len(nonSrcWildcards),
+			Registers:    nonSrcWildcards,
+		},
+	}
+	alloc.constrained = []*constrainedLocation{loc}
+}
+
+func (scheduler *operationsScheduler) setUpConstrainedStackDestination() {
+	tempDestDef := &ast.VariableDefinition{
+		StartEndPos:       scheduler.finalDest.definition.StartEnd(),
+		Name:              "%temp-destination",
+		Type:              scheduler.finalDest.definition.Type,
+		ParentInstruction: scheduler.finalDest.definition.ParentInstruction,
+	}
+
+	tempDestAlloc := &allocation{
+		definition:   tempDestDef,
+		numRegisters: scheduler.finalDest.numRegisters,
+	}
+
+	scheduler.tempDest = &constrainedLocation{
+		allocation: tempDestAlloc,
+		constraint: scheduler.finalDest.constraint,
+	}
+	tempDestAlloc.constrained = append(
+		tempDestAlloc.constrained,
+		scheduler.tempDest)
+
+	scheduler.finalDest.constraint = &arch.LocationConstraint{
+		NumRegisters: scheduler.finalDest.numRegisters,
+		AnyLocation:  true,
+	}
+}
+
+func (scheduler *operationsScheduler) setUpConstrainedRegisterDestination(
+	overlappedWildcards map[*arch.RegisterConstraint]struct{},
+	overlappableWildcards []*arch.RegisterConstraint,
+) []*arch.RegisterConstraint {
+	unmodifiedConstraint := scheduler.finalDest.constraint
+	registers := []*arch.RegisterConstraint{}
+	nonSrcWildcards := []*arch.RegisterConstraint{}
+	for _, reg := range unmodifiedConstraint.Registers {
+		if reg.Require != nil {
+			registers = append(registers, reg)
+			continue
+		}
+
+		_, ok := overlappedWildcards[reg]
+		if ok {
+			registers = append(registers, reg)
+			continue
+		}
+
+		foundOverlap := false
+		for idx, candidate := range overlappableWildcards {
+			if candidate == nil {
+				continue
+			}
+
+			if candidate.AnyGeneral == reg.AnyGeneral &&
+				candidate.AnyFloat == reg.AnyFloat {
+
+				foundOverlap = true
+				registers = append(registers, candidate)
+				overlappableWildcards[idx] = nil
+				break
+			}
+		}
+
+		if !foundOverlap {
+			registers = append(registers, reg)
+			nonSrcWildcards = append(nonSrcWildcards, reg)
+		}
+	}
+
+	scheduler.finalDest.constraint = &arch.LocationConstraint{
+		NumRegisters: unmodifiedConstraint.NumRegisters,
+		Registers:    registers,
+	}
+
+	return nonSrcWildcards
+}
+
+func (scheduler *operationsScheduler) scheduleCopy(
+	pressure int,
+	allocations []*allocation,
+) {
+	defer scheduler.freeDeadSources()
 
 	if len(scheduler.srcs) != 1 {
 		panic("should never happen")
 	}
 	src := scheduler.srcs[0]
-
-	if src.immediate != nil {
-		// We don't need to allocate space for global reference / immediate source,
-		// but we still need to allocate space for the destination.
-		scheduler.srcs = nil
-	}
-
-	pressure, allocations, finalDestAlloc := scheduler.computeRegisterPressure()
+	scheduler.srcs = nil // ignore srcs during register clean up
 
 	// If the dest defintion is never used, we only need to clean up dead
 	// source definition
-	if finalDestAlloc.nextUseDelta == 0 {
+	if scheduler.finalDest.nextUseDelta == 0 {
 		return
 	}
 
-	var srcAlloc *allocation
-	for _, alloc := range allocations {
-		if alloc.definition == src.def {
-			srcAlloc = alloc
-			break
+	srcDef := src.definition
+	destDef := scheduler.finalDest.definition
+	if src.nextUseDelta == 0 {
+		// Src is dead after this instruction.  When possible, transfer all
+		// available
+		if srcDef.Name == destDef.Name || src.numActual > 0 {
+			scheduler.transferLocations(srcDef, destDef, false)
+			return
+		}
+	} else {
+		// Src remains alive after this instruction, but there are multiple register
+		// copies of src. Just transfer one of the register copies to dest.
+		if src.numActual > 1 {
+			scheduler.transferLocations(srcDef, destDef, true)
+			return
 		}
 	}
 
-	destDef := finalDestAlloc.definition
-
-	// Src remains alive after this instruction, but there are multiple register
-	// copies of src. Just transfer one of the register copies to dest.
-	if srcAlloc != nil && srcAlloc.nextUseDelta > 0 && srcAlloc.numActual > 1 {
-		scheduler.transferLocations(src.def, destDef, true)
-		return
-	}
-
-	// Src and dest shares the same name, and src is dead after this instruction.
-	// Transfer all locations from src to dest.
-	if srcAlloc != nil && src.def.Name == destDef.Name {
-		scheduler.transferLocations(src.def, destDef, false)
-		return
-	}
-
-	// Src has register locations and is dead after this instruction.  Transfer
-	// all register locations from src to dest.
-	if srcAlloc != nil && srcAlloc.nextUseDelta == 0 && srcAlloc.numActual > 0 {
-		scheduler.transferLocations(src.def, destDef, false)
-		return
-	}
-
-	scratchRegister := scheduler.SelectScratch()
-	scheduler.reduceRegisterPressure(pressure, allocations, scratchRegister)
-	scheduler.ReleaseScratch(scratchRegister)
-
-	scheduler.setUpFinalDestination(finalDestAlloc)
-	destLoc := scheduler.finalDest.location
-	if destLoc == nil || destLoc.OnTempStack {
-		panic("should never happen")
-	} else if destLoc.OnFixedStack {
-		destLoc = scheduler.AllocateFixedStackLocation(destDef)
-	} else {
-		destLoc = scheduler.AllocateRegistersLocation(destDef, destLoc.Registers...)
-	}
-
-	scratchRegister = scheduler.destScratchRegister
-	if scratchRegister == nil {
-		scratchRegister = scheduler.SelectScratch()
-	}
+	scratch := scheduler.allocateAnyDestination()
 
 	if src.immediate != nil {
-		scheduler.SetConstantValue(src.immediate, destLoc, scratchRegister)
+		scheduler.SetConstantValue(
+			src.immediate,
+			scheduler.finalDest.location,
+			scratch)
 	} else {
 		scheduler.CopyLocation(
-			scheduler.selectCopySourceLocation(src.def),
-			destLoc,
-			scratchRegister)
+			scheduler.selectCopySourceLocation(srcDef),
+			scheduler.finalDest.location,
+			scratch)
 	}
 }
 
@@ -607,24 +820,30 @@ func (scheduler *operationsScheduler) setUpTempStack(
 			continue
 		}
 
+		srcDef := src.definition
 		tempStackSrcs = append(tempStackSrcs, src)
-		srcDefs = append(srcDefs, src.def)
+		srcDefs = append(srcDefs, srcDef)
 
 		if src.immediate == nil {
-			copySrcs[src.def] = scheduler.selectCopySourceLocation(src.def)
+			copySrcs[srcDef] = scheduler.selectCopySourceLocation(srcDef)
 		}
+	}
+
+	var tempDestDef *ast.VariableDefinition
+	if scheduler.tempDest != nil {
+		tempDestDef = scheduler.tempDest.definition
 	}
 
 	stackSrcLocs, tempDestLoc := scheduler.AllocateTempStackLocations(
 		srcDefs,
-		scheduler.tempDest.def)
+		tempDestDef)
 
 	for idx, src := range tempStackSrcs {
 		loc := stackSrcLocs[idx]
 		if src.immediate != nil {
 			scheduler.SetConstantValue(src.immediate, loc, scratchRegister)
 		} else {
-			copySrc, ok := copySrcs[src.def]
+			copySrc, ok := copySrcs[src.definition]
 			if !ok {
 				panic("should never happen")
 			}
@@ -635,8 +854,8 @@ func (scheduler *operationsScheduler) setUpTempStack(
 		src.hasAllocated = true
 	}
 
-	scheduler.tempDest.location = tempDestLoc
 	if tempDestLoc != nil {
+		scheduler.tempDest.location = tempDestLoc
 		scheduler.InitializeZeros(tempDestLoc, scratchRegister)
 		scheduler.tempDest.hasAllocated = true
 	}
@@ -661,6 +880,11 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 		candidates = append(candidates, alloc)
 	}
 
+	var finalDestDef *ast.VariableDefinition
+	if scheduler.finalDest != nil {
+		finalDestDef = scheduler.finalDest.definition
+	}
+
 	threshold := len(scheduler.ValueLocations.Registers) - 1
 	for pressure > threshold {
 		idx, candidate := scheduler.selectFreeDefCandidate(candidates)
@@ -675,7 +899,7 @@ func (scheduler *operationsScheduler) reduceRegisterPressure(
 
 			// Note: if candidate is finalDest, the destination's value is copy to
 			// fixed stack during instruction tear down.
-			if candidate.definition != scheduler.finalDest.def {
+			if candidate.definition != finalDestDef {
 				shouldSpill = true
 			}
 		}
@@ -725,15 +949,18 @@ func (scheduler *operationsScheduler) initUnitLocations(
 
 func (scheduler *operationsScheduler) setUpRegisters(
 	allocs []*allocation,
-	finalDestAlloc *allocation,
 ) {
 	// TODO setup frame pointer for calls
 	misplaced := make([]*constrainedLocation, 0, len(scheduler.srcs))
 	for _, alloc := range allocs {
-		if len(alloc.constrained) == 0 || alloc == finalDestAlloc {
+		if len(alloc.constrained) == 0 {
 			continue
-		} else if alloc.isImmediate {
+		} else if alloc.immediate != nil || alloc.evictOnly {
 			for _, loc := range alloc.RegisterLocations() {
+				if loc.hasAllocated {
+					continue
+				}
+
 				scheduler.assignUnallocatedLocation(alloc, loc)
 				misplaced = append(misplaced, loc)
 			}
@@ -778,17 +1005,13 @@ func (scheduler *operationsScheduler) setUpRegisters(
 		}
 	}
 
-	if scheduler.finalDest.def != nil {
-		scheduler.setUpFinalDestination(finalDestAlloc)
-	}
-
 	// Create unconstrained preferred copies that only serve to keep definitions
 	// alive.
 	//
 	// NOTE: We must finalize destination before creating preferred copies since
 	// the destination may have specific register constraints.
 	for _, alloc := range allocs {
-		if alloc == finalDestAlloc || alloc.isImmediate {
+		if alloc.immediate != nil || alloc.evictOnly {
 			continue
 		}
 
@@ -868,7 +1091,7 @@ func (scheduler *operationsScheduler) initSourceRegisterLocations(
 ) []*constrainedLocation {
 	constrained := alloc.RegisterLocations()
 	if len(constrained) == 0 { // no required register locations
-		return nil
+		return misplaced
 	}
 
 	constrained, candidates, numAssigned, misplaced := scheduler.initCompatible(
@@ -1055,13 +1278,18 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 		return
 	}
 
+	if loc.evictOnly {
+		loc.hasAllocated = true
+		return
+	}
+
 	var src *arch.DataLocation
 	if loc.immediate == nil {
-		src = scheduler.selectCopySourceLocation(loc.def)
+		src = scheduler.selectCopySourceLocation(loc.definition)
 	}
 
 	loc.location = scheduler.AllocateRegistersLocation(
-		loc.def,
+		loc.definition,
 		loc.location.Registers...)
 
 	if loc.immediate == nil {
@@ -1072,35 +1300,12 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 	loc.hasAllocated = true
 }
 
-func (scheduler *operationsScheduler) setUpFinalDestination(alloc *allocation) {
-	finalDestLoc := &arch.DataLocation{}
-	scheduler.finalDest.location = finalDestLoc
-
-	destLocConst := scheduler.constraints.Destination
-	if destLocConst.AnyLocation || destLocConst.RequireOnStack {
-		if alloc.numPreferred == 0 {
-			finalDestLoc.OnFixedStack = true
-			scheduler.destScratchRegister = scheduler.SelectScratch()
-		} else {
-			for i := 0; i < alloc.numRegisters; i++ {
-				finalDestLoc.Registers = append(
-					finalDestLoc.Registers,
-					scheduler.SelectFreeRegister())
-			}
-		}
-	} else {
-		for _, regConst := range destLocConst.Registers {
-			finalDestLoc.Registers = append(
-				finalDestLoc.Registers,
-				scheduler.SelectDestinationRegister(regConst))
-		}
-	}
-}
-
 func (scheduler *operationsScheduler) executeInstruction() {
-	destLoc := scheduler.finalDest.location
-	if scheduler.tempDest.location != nil {
+	var destLoc *arch.DataLocation
+	if scheduler.tempDest != nil {
 		destLoc = scheduler.tempDest.location
+	} else if scheduler.finalDest != nil {
+		destLoc = scheduler.finalDest.location
 	}
 
 	scheduler.BlockState.ExecuteInstruction(
@@ -1109,11 +1314,16 @@ func (scheduler *operationsScheduler) executeInstruction() {
 		destLoc)
 }
 
-func (scheduler *operationsScheduler) tearDownInstruction(
-	mustCopyTempDest bool,
-) {
+func (scheduler *operationsScheduler) freeDeadSources() {
 	// Free all clobbered source locations
+	processed := map[*constrainedLocation]struct{}{}
 	for _, src := range scheduler.srcs {
+		_, ok := processed[src]
+		if ok {
+			continue
+		}
+		processed[src] = struct{}{}
+
 		if src.constraint.ClobberedByInstruction() {
 			scheduler.FreeLocation(src.location)
 		}
@@ -1121,7 +1331,7 @@ func (scheduler *operationsScheduler) tearDownInstruction(
 
 	// Free all dead definitions.
 	for def, locs := range scheduler.ValueLocations.Values {
-		if def == scheduler.tempDest.def {
+		if scheduler.tempDest != nil && def == scheduler.tempDest.definition {
 			// We need to copy the value to final destination before freeing.
 			continue
 		}
@@ -1135,51 +1345,76 @@ func (scheduler *operationsScheduler) tearDownInstruction(
 			scheduler.FreeLocation(loc)
 		}
 	}
+}
 
-	if scheduler.finalDest.def == nil {
+func (scheduler *operationsScheduler) allocateAnyDestination() *arch.Register {
+	numFreeRegisters := 0
+	for _, regInfo := range scheduler.ValueLocations.Registers {
+		if regInfo.UsedBy == nil {
+			numFreeRegisters++
+		}
+	}
+
+	if numFreeRegisters >= scheduler.finalDest.numRegisters+1 {
+		// reset selector
+		scheduler.RegisterSelector = NewRegisterSelector(scheduler.BlockState)
+
+		registers := []*arch.Register{}
+		for i := 0; i < scheduler.finalDest.numRegisters; i++ {
+			registers = append(registers, scheduler.SelectFreeRegister())
+		}
+
+		scheduler.finalDest.location = scheduler.AllocateRegistersLocation(
+			scheduler.finalDest.definition,
+			registers...)
+
+		return nil
+	}
+
+	scheduler.finalDest.location = scheduler.AllocateFixedStackLocation(
+		scheduler.finalDest.definition)
+	return scheduler.SelectScratch()
+}
+
+func (scheduler *operationsScheduler) tearDownInstruction() {
+	if scheduler.finalDest == nil {
 		return
 	}
 
-	if ast.IsTerminal(scheduler.instruction) {
-		if scheduler.tempDest.location != nil {
+	if ast.IsTerminal(scheduler.instruction) ||
+		scheduler.finalDest.nextUseDelta == 0 {
+
+		if scheduler.tempDest != nil {
 			scheduler.FreeLocation(scheduler.tempDest.location)
 		}
 
 		return
 	}
 
-	if scheduler.finalDest.location == nil {
-		// If the destination definition is not used, finalDest could be nil (but
-		// only if the value is on temp stack).
-		if scheduler.tempDest.location == nil {
-			panic("should never happen")
-		}
-	} else if scheduler.finalDest.location.OnTempStack {
+	if scheduler.finalDest.constraint.RequireOnStack {
 		panic("should never happen")
-	} else if scheduler.finalDest.location.OnFixedStack {
-		// value must be on temp stack
-		if scheduler.tempDest.location == nil {
+	} else if scheduler.finalDest.constraint.AnyLocation {
+		if scheduler.tempDest == nil {
 			panic("should never happen")
 		}
 
-		scheduler.finalDest.location = scheduler.AllocateFixedStackLocation(
-			scheduler.finalDest.def)
-	} else {
-		// Since sources and destination may share registers, register destination
-		// must be allocated after all clobbered sources are freed.
-		scheduler.finalDest.location = scheduler.AllocateRegistersLocation(
-			scheduler.finalDest.def,
-			scheduler.finalDest.location.Registers...)
-	}
-
-	if scheduler.tempDest.location != nil {
-		if mustCopyTempDest {
-			scheduler.CopyLocation(
-				scheduler.tempDest.location,
-				scheduler.finalDest.location,
-				scheduler.destScratchRegister)
-		}
+		scratch := scheduler.allocateAnyDestination()
+		scheduler.CopyLocation(
+			scheduler.tempDest.location,
+			scheduler.finalDest.location,
+			scratch)
 		scheduler.FreeLocation(scheduler.tempDest.location)
+	} else {
+		registers := []*arch.Register{}
+		for _, regConst := range scheduler.finalDest.constraint.Registers {
+			registers = append(
+				registers,
+				scheduler.SelectDestinationRegister(regConst))
+		}
+
+		scheduler.finalDest.location = scheduler.AllocateRegistersLocation(
+			scheduler.finalDest.definition,
+			registers...)
 	}
 }
 
@@ -1286,6 +1521,10 @@ func (scheduler *operationsScheduler) selectFreeLocation(
 
 		match := 0
 		for _, src := range candidate.constrained {
+			if src.hasAllocated { // encoded immediate or temp stack location
+				continue
+			}
+
 			numSatisfied := 0
 			for idx, reg := range loc.Registers {
 				if src.constraint.Registers[idx].SatisfyBy(reg) {

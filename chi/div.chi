@@ -1,0 +1,9 @@
+define func @div(%i I32, %j I32) I32 {
+  %k = div %i, %j
+  ret %k
+}
+
+define func @rem(%i I32, %j I32) I32 {
+  %k = rem %i, %j
+  ret %k
+}
