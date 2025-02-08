@@ -39,7 +39,8 @@ func NewRegistersDataLocation(
 	valType ast.Type,
 	registers []*Register,
 ) *DataLocation {
-	if len(registers) != NumRegisters(valType) {
+	// TODO: remove valType non-nil check
+	if valType != nil && len(registers) != NumRegisters(valType) {
 		panic("should never happen")
 	}
 

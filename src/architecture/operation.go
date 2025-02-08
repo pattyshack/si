@@ -16,9 +16,10 @@ const (
 	PushStackFrame = OperationKind("PushStackFrame")
 	PopStackFrame  = OperationKind("PopStackFrame")
 
-	MoveRegister     = OperationKind("MoveRegister")
-	CopyLocation     = OperationKind("CopyLocation")
-	SetConstantValue = OperationKind("SetConstantValue")
+	MoveRegister           = OperationKind("MoveRegister")
+	CopyLocation           = OperationKind("CopyLocation")
+	SetConstantValue       = OperationKind("SetConstantValue")
+	SetFramePointerAddress = OperationKind("SetFramePointerAddress")
 	// Only used for zero-ing temp stack destination
 	InitializeZeros = OperationKind("InitializeZeros")
 
@@ -48,7 +49,7 @@ type Operation struct {
 	// Used by SetConstantValue
 	ast.Value
 
-	// Used by PushStackFrame / PopStackFrame
+	// Used by PushStackFrame, PopStackFrame, and SetFramePointerAddress.
 	*StackFrame
 
 	// Used by MoveRegister
@@ -126,6 +127,17 @@ func NewSetConstantValueOp(
 		Destination:  dest.Copy(),
 		Value:        value,
 		DestRegister: temp,
+	}
+}
+
+func NewSetFramePointerAddressOp(
+	frame *StackFrame,
+	dest *DataLocation,
+) Operation {
+	return Operation{
+		Kind:        SetFramePointerAddress,
+		Destination: dest.Copy(),
+		StackFrame:  frame,
 	}
 }
 

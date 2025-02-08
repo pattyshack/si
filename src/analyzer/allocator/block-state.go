@@ -445,6 +445,14 @@ func (state *BlockState) SetConstantValue(
 		architecture.NewSetConstantValueOp(value, dest, scratch))
 }
 
+func (state *BlockState) SetFramePointerAddress(
+	dest *architecture.DataLocation,
+) {
+	state.Operations = append(
+		state.Operations,
+		architecture.NewSetFramePointerAddressOp(state.StackFrame, dest))
+}
+
 // Note: dest must be allocated/tracked by ValueLocations. scratch register must
 // not be in use.
 func (state *BlockState) InitializeZeros(

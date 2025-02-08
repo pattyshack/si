@@ -3,6 +3,7 @@ package architecture
 const (
 	// Internal labels for various stack/register data locations
 	PreviousFramePointer = "%previous-frame-pointer"
+	CurrentFramePointer  = "%current-frame-pointer"
 	ReturnAddress        = "%return-address"
 	StackDestination     = "%stack-destination"
 )

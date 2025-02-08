@@ -48,7 +48,8 @@ type allocation struct {
 
 	immediate ast.Value // all immediates including label references
 
-	evictOnly bool
+	setFramePointer bool
+	evictOnly       bool
 }
 
 func (alloc *allocation) RegisterLocations() []*constrainedLocation {
@@ -434,6 +435,34 @@ func (scheduler *operationsScheduler) generateConstrainedSources(
 		loc.allocation = alloc
 		srcs = append(srcs, loc)
 		alloc.constrained = append(alloc.constrained, loc)
+	}
+
+	if constraints.FramePointerRegister != nil {
+		def := &ast.VariableDefinition{
+			StartEndPos:       instruction.StartEnd(),
+			Name:              arch.CurrentFramePointer,
+			ParentInstruction: instruction,
+		}
+
+		alloc := &allocation{
+			definition:      def,
+			numRegisters:    1,
+			setFramePointer: true,
+		}
+		mappedSrcAllocs[def] = alloc
+
+		loc := &constrainedLocation{
+			allocation: alloc,
+			constraint: &arch.LocationConstraint{
+				NumRegisters: 1,
+				Registers: []*arch.RegisterConstraint{
+					&arch.RegisterConstraint{
+						Require: constraints.FramePointerRegister,
+					},
+				},
+			},
+		}
+		alloc.constrained = []*constrainedLocation{loc}
 	}
 
 	return srcs
@@ -950,12 +979,14 @@ func (scheduler *operationsScheduler) initUnitLocations(
 func (scheduler *operationsScheduler) setUpRegisters(
 	allocs []*allocation,
 ) {
-	// TODO setup frame pointer for calls
 	misplaced := make([]*constrainedLocation, 0, len(scheduler.srcs))
 	for _, alloc := range allocs {
 		if len(alloc.constrained) == 0 {
 			continue
-		} else if alloc.immediate != nil || alloc.evictOnly {
+		} else if alloc.immediate != nil ||
+			alloc.evictOnly ||
+			alloc.setFramePointer {
+
 			for _, loc := range alloc.RegisterLocations() {
 				if loc.hasAllocated {
 					continue
@@ -1011,7 +1042,7 @@ func (scheduler *operationsScheduler) setUpRegisters(
 	// NOTE: We must finalize destination before creating preferred copies since
 	// the destination may have specific register constraints.
 	for _, alloc := range allocs {
-		if alloc.immediate != nil || alloc.evictOnly {
+		if alloc.immediate != nil || alloc.evictOnly || alloc.setFramePointer {
 			continue
 		}
 
@@ -1278,13 +1309,8 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 		return
 	}
 
-	if loc.evictOnly {
-		loc.hasAllocated = true
-		return
-	}
-
 	var src *arch.DataLocation
-	if loc.immediate == nil {
+	if loc.immediate == nil && !loc.setFramePointer && !loc.evictOnly {
 		src = scheduler.selectCopySourceLocation(loc.definition)
 	}
 
@@ -1292,11 +1318,16 @@ func (scheduler *operationsScheduler) finalizeSourceRegistersLocation(
 		loc.definition,
 		loc.location.Registers...)
 
-	if loc.immediate == nil {
-		scheduler.CopyLocation(src, loc.location, nil)
-	} else {
+	if loc.immediate != nil {
 		scheduler.SetConstantValue(loc.immediate, loc.location, nil)
+	} else if loc.setFramePointer {
+		scheduler.SetFramePointerAddress(loc.location)
+	} else if loc.evictOnly {
+		// do nothing
+	} else {
+		scheduler.CopyLocation(src, loc.location, nil)
 	}
+
 	loc.hasAllocated = true
 }
 
