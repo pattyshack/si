@@ -438,6 +438,7 @@ func (scheduler *operationsScheduler) generateConstrainedSources(
 	}
 
 	if constraints.FramePointerRegister != nil {
+		// TODO: populate type
 		def := &ast.VariableDefinition{
 			StartEndPos:       instruction.StartEnd(),
 			Name:              arch.CurrentFramePointer,
@@ -604,6 +605,7 @@ func (scheduler *operationsScheduler) generateConstrainedPseudoExactSource(
 		return
 	}
 
+	// TODO: populate type
 	def := &ast.VariableDefinition{
 		StartEndPos:       instruction.StartEnd(),
 		Name:              "%exact-non-source",
@@ -654,6 +656,7 @@ func (scheduler *operationsScheduler) generateConstrainedPseudoWildcardSource(
 		return
 	}
 
+	// TODO: populate type
 	def := &ast.VariableDefinition{
 		StartEndPos:       instruction.StartEnd(),
 		Name:              "%wildcard-non-source",

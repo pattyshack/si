@@ -8,6 +8,7 @@ const (
 	StackDestination     = "%stack-destination"
 )
 
+// TODO rethink register size.  don't assume homogeneous size
 type Register struct {
 	Name string
 

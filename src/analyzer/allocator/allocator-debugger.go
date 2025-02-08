@@ -169,7 +169,7 @@ func (debugger *AllocatorDebugger) printOperations(
 				printf("      Value: %s\n", op.Value)
 			}
 			if op.StackFrame != nil {
-				printf("      StackFrame: %p\n", op.StackFrame)
+				printf("      StackFrame: Size: %d\n", op.StackFrame.TotalFrameSize)
 			}
 			if op.SrcRegister != nil {
 				printf("      SrcRegister: %s\n", op.SrcRegister.Name)

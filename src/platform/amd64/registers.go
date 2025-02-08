@@ -23,6 +23,9 @@ var (
 	r14 = architecture.NewGeneralRegister("r14", false)
 	r15 = architecture.NewGeneralRegister("r15", false)
 
+	// TODO: rethink register size
+	// NOTE: For now, we'll pretend xmm registers are 64 bits and only use the
+	// lower half of the register.
 	xmm0  = architecture.NewFloatRegister("xmm0")
 	xmm1  = architecture.NewFloatRegister("xmm1")
 	xmm2  = architecture.NewFloatRegister("xmm2")
