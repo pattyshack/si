@@ -10,11 +10,11 @@ import (
 	"github.com/pattyshack/chickadee/ast"
 	"github.com/pattyshack/chickadee/parser"
 	"github.com/pattyshack/chickadee/platform"
-	"github.com/pattyshack/chickadee/platform/amd64"
+	"github.com/pattyshack/chickadee/platform/x64"
 )
 
 func main() {
-	targetPlatform := amd64.NewPlatform(platform.Linux)
+	targetPlatform := x64.NewPlatform(platform.Linux)
 
 	for _, fileName := range os.Args[1:] {
 		fmt.Println("=====================")

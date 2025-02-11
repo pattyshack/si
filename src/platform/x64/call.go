@@ -1,4 +1,4 @@
-package amd64
+package x64
 
 import (
 	"sort"
