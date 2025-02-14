@@ -174,6 +174,43 @@ func subIntImmediate(
 		immediate)
 }
 
+// <int/uint dest> *= <int/uint src>
+//
+// https://www.felixcloutier.com/x86/imul (REX.W + 0F AF /r)
+//
+// NOTE: Unlike most other binary operations which uses MR operand encoding
+// (dest before src), imul uses RM operand encoding (dest before src) since MR
+// operand encoding is not available.
+func mulIntRegister(
+	dest *arch.Register,
+	src *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0x0f, 0xaf},
+		xRegMapping[dest],
+		xRegMapping[src],
+		nil)
+}
+
+// <int/uint dest> *= <int/uint immediate>
+//
+// https://www.felixcloutier.com/x86/mul (REX.W + 69 /r id)
+//
+// NOTE: Even though imul's 3-operand form supports separate src/dest registers,
+// i.e., <dest> = <src> * <imm>, for consistency/simplicity, we'll restrict
+// dest to reuse the src register.
+func mulIntImmediate(
+	dest *arch.Register,
+	immediate int32, // sign-extended to 64-bit
+) []byte {
+	xReg := xRegMapping[dest]
+	return directAddressInstruction(
+		[]byte{0x69},
+		xReg,
+		xReg,
+		immediate)
+}
+
 // <int/uint dest> ^= <int/uint src>
 //
 // https://www.felixcloutier.com/x86/xor (REX.W + 31 /r)
