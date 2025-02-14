@@ -1,9 +1,19 @@
-define func @shl(%i I32, %j U8) I32 {
+define func @signed_shift_left(%i I32, %j U8) I32 {
   %k = shl %i, %j
   ret %k
 }
 
-define func @shr(%i I32, %j U8) I32 {
+define func @signed_shift_right(%i I32, %j U8) I32 {
+  %k = shr %i, %j
+  ret %k
+}
+
+define func @unsigned_shift_left(%i U32, %j U8) U32 {
+  %k = shl %i, %j
+  ret %k
+}
+
+define func @unsigned_shift_right(%i U32, %j U8) U32 {
   %k = shr %i, %j
   ret %k
 }

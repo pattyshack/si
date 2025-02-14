@@ -104,6 +104,8 @@ func directAddressInstruction(
 
 // <int/uint dest> += <int/uint src>
 //
+// https://www.felixcloutier.com/x86/add (REX.W + 01 /r)
+//
 // NOTE: For now, we'll only use 2-address code ADD (0x01) for adding.
 //
 // TODO: test 3-address code form via LEA (0x8d).
@@ -119,6 +121,8 @@ func addIntRegister(
 }
 
 // <int/uint dest> += <int/uint immediate>
+//
+// https://www.felixcloutier.com/x86/add (REX.W + 81 /0 id)
 //
 // NOTE: For now, we'll only use 2-address code ADD (0x81 /0) for adding.
 //
@@ -136,6 +140,8 @@ func addIntImmediate(
 
 // <int/uint dest> -= <int/uint src>
 //
+// https://www.felixcloutier.com/x86/sub (REX.W + 29 /r)
+//
 // NOTE: For now, we'll only use 2-address code SUB (0x29) for subtracting.
 //
 // TODO: test 3-address code form via LEA (0x8d).
@@ -152,6 +158,8 @@ func subIntRegister(
 
 // <int/uint dest> -= <int/uint immediate>
 //
+// https://www.felixcloutier.com/x86/sub (REX.W + 81 /5 id)
+//
 // NOTE: For now, we'll only use 2-address code SUB (0x81 /5) for subtracting.
 //
 // TODO: test 3-address code form via LEA (0x8d).
@@ -167,6 +175,8 @@ func subIntImmediate(
 }
 
 // <int/uint dest> ^= <int/uint src>
+//
+// https://www.felixcloutier.com/x86/xor (REX.W + 31 /r)
 func xorIntRegister(
 	dest *arch.Register,
 	src *arch.Register,
@@ -179,6 +189,8 @@ func xorIntRegister(
 }
 
 // <int/uint dest> ^= <int/uint immediate>
+//
+// https://www.felixcloutier.com/x86/xor (REX.W + 81 /6 id)
 func xorIntImmediate(
 	dest *arch.Register,
 	immediate int32, // sign-extended to 64-bit
@@ -191,6 +203,8 @@ func xorIntImmediate(
 }
 
 // <int/uint dest> |= <int/uint src>
+//
+// https://www.felixcloutier.com/x86/or (REX.W + 09 /r)
 func orIntRegister(
 	dest *arch.Register,
 	src *arch.Register,
@@ -203,6 +217,8 @@ func orIntRegister(
 }
 
 // <int/uint dest> |= <int/uint immediate>
+//
+// https://www.felixcloutier.com/x86/or (REX.W + 81 /1 id)
 func orIntImmediate(
 	dest *arch.Register,
 	immediate int32, // sign-extended to 64-bit
@@ -215,6 +231,8 @@ func orIntImmediate(
 }
 
 // <int/uint dest> &= <int/uint src>
+//
+// https://www.felixcloutier.com/x86/and (REX.W + 21 /r)
 func andIntRegister(
 	dest *arch.Register,
 	src *arch.Register,
@@ -227,6 +245,8 @@ func andIntRegister(
 }
 
 // <int/uint dest> &= <int/uint immediate>
+//
+// https://www.felixcloutier.com/x86/and (REX.W + 81 /4 id)
 func andIntImmediate(
 	dest *arch.Register,
 	immediate int32, // sign-extended to 64-bit
@@ -238,4 +258,85 @@ func andIntImmediate(
 		immediate)
 }
 
-// TODO MUL / DIV / REM / SHL / SHR
+// <int/uint dest> <<= <uint8 RCX>
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + D3 /4)
+func shiftLeftIntRegister(
+	dest *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xd3},
+		4,
+		xRegMapping[dest],
+		nil)
+}
+
+// <int/uint dest> <<= <uint8 immediate>
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + C1 /4 ib)
+func shiftLeftIntImmediate(
+	dest *arch.Register,
+	immediate uint8,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xc1},
+		4,
+		xRegMapping[dest],
+		immediate)
+}
+
+// <int dest> <<= <uint8 RCX> (aka sar)
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + D3 /7)
+func shiftRightSignedIntRegister(
+	dest *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xd3},
+		7,
+		xRegMapping[dest],
+		nil)
+}
+
+// <int dest> <<= <uint8 immediate> (aka sar)
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + C1 /7 ib)
+func shiftRightSignedIntImmediate(
+	dest *arch.Register,
+	immediate uint8,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xc1},
+		7,
+		xRegMapping[dest],
+		immediate)
+}
+
+// <uint dest> <<= <uint8 RCX> (aka shl)
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + D3 /5)
+func shiftRightUnsignedIntRegister(
+	dest *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xd3},
+		5,
+		xRegMapping[dest],
+		nil)
+}
+
+// <int dest> <<= <uint8 immediate> (aka shl)
+//
+// https://www.felixcloutier.com/x86/sal:sar:shl:shr (REX.W + C1 /5 ib)
+func shiftRightUnsignedIntImmediate(
+	dest *arch.Register,
+	immediate uint8,
+) []byte {
+	return directAddressInstruction(
+		[]byte{0xc1},
+		5,
+		xRegMapping[dest],
+		immediate)
+}
+
+// TODO MUL / DIV / REM
