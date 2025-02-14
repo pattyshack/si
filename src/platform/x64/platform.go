@@ -124,22 +124,35 @@ func (p Platform) CanEncodeImmediate(value ast.Value) bool {
 
 func (p Platform) canEncodeIntImmediate(imm *ast.IntImmediate) bool {
 	// NOTE: x64's immediate support is ad hoc at best, most support imm32, but
-	// mov supports imm64, and div/idiv don't support any immediate.
+	// mov supports imm64, shift supports imm8, and div/idiv don't support any
+	// immediate.
 	//
 	// TODO figure out all the corner cases ...
 
 	binary, ok := imm.ParentInstruction.(*ast.BinaryOperation)
-	if ok && (binary.Kind == ast.Div || binary.Kind == ast.Rem) {
+	if !ok {
 		return false
 	}
 
-	if ast.IsSignedIntSubType(imm.Type()) {
-		if imm.IsNegative {
-			return uint64(-math.MinInt32) >= imm.Value
-		} else {
-			return math.MaxInt32 >= imm.Value
+	switch binary.Kind {
+	case ast.Div, ast.Rem: // does not support immediate
+		return false
+	case ast.Shl, ast.Shr: // only support uint imm8
+		// All immediates should be valid due to type checking enforcement
+		if imm.IsNegative || imm.Value > math.MaxUint8 {
+			panic("should never happen")
 		}
-	} else {
-		return math.MaxUint32 >= imm.Value
+
+		return true
+	default: // imm32
+		if ast.IsSignedIntSubType(imm.Type()) {
+			if imm.IsNegative {
+				return uint64(-math.MinInt32) >= imm.Value
+			} else {
+				return math.MaxInt32 >= imm.Value
+			}
+		} else {
+			return math.MaxUint32 >= imm.Value
+		}
 	}
 }

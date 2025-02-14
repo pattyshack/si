@@ -1,0 +1,9 @@
+define func @shl(%i I32, %j U8) I32 {
+  %k = shl %i, %j
+  ret %k
+}
+
+define func @shr(%i I32, %j U8) I32 {
+  %k = shr %i, %j
+  ret %k
+}

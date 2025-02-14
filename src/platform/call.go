@@ -32,7 +32,7 @@ func (InternalCallTypeSpec) IsValidArgType(ast.Type) bool    { return true }
 func (InternalCallTypeSpec) IsValidReturnType(ast.Type) bool { return true }
 
 func isPrimitiveType(t ast.Type) bool {
-	if ast.IsIntSubType(t) || ast.IsFloatSubType(t) {
+	if ast.IsNumberSubType(t) {
 		return true
 	}
 

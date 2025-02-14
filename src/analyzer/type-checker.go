@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/pattyshack/gt/parseutil"
 
@@ -55,11 +56,84 @@ func (checker *typeChecker) bindImmediateToType(
 	switch imm := value.(type) {
 	case *ast.IntImmediate:
 		if imm.BindedType == nil {
+			switch intType := realType.(type) {
+			case *ast.SignedIntType:
+				maxInt := uint64(math.MaxInt64)
+				minInt := uint64(-math.MinInt64)
+				switch intType.Kind {
+				case ast.I8:
+					maxInt = uint64(math.MaxInt8)
+					minInt = uint64(-math.MinInt8)
+				case ast.I16:
+					maxInt = uint64(math.MaxInt16)
+					minInt = uint64(-math.MinInt16)
+				case ast.I32:
+					maxInt = uint64(math.MaxInt32)
+					minInt = uint64(-math.MinInt32)
+				case ast.I64:
+				default:
+					panic("should never happen")
+				}
+
+				if imm.IsNegative {
+					if imm.Value > minInt {
+						checker.Emit(
+							value.Loc(),
+							"literal value is smaller than the minimum %s value (-%d < -%d)",
+							realType,
+							imm.Value,
+							minInt)
+					}
+				} else {
+					if imm.Value > maxInt {
+						checker.Emit(
+							value.Loc(),
+							"literal value is larger than the maximum %s value (%d > %d)",
+							realType,
+							imm.Value,
+							maxInt)
+					}
+				}
+			case *ast.UnsignedIntType:
+				if imm.IsNegative {
+					panic("should never happen")
+				}
+
+				maxInt := uint64(math.MaxUint64)
+				switch intType.Kind {
+				case ast.U8:
+					maxInt = math.MaxUint8
+				case ast.U16:
+					maxInt = math.MaxUint16
+				case ast.U32:
+					maxInt = math.MaxUint32
+				case ast.U64:
+				default:
+					panic("should never happen")
+				}
+
+				if imm.Value > maxInt {
+					checker.Emit(
+						value.Loc(),
+						"literal value is larger than the maximum %s value (%d > %d)",
+						realType,
+						imm.Value,
+						maxInt)
+				}
+			default:
+				panic("should never happen")
+			}
 			imm.BindedType = realType
 		}
 	case *ast.FloatImmediate:
 		if imm.BindedType == nil {
-			imm.BindedType = realType
+			floatType, ok := realType.(*ast.FloatType)
+			if !ok {
+				panic("should never happen")
+			}
+
+			// TODO range check
+			imm.BindedType = floatType
 		}
 	}
 }
@@ -236,28 +310,50 @@ func (checker *typeChecker) evaluateBinaryOperation(
 	}
 
 	var opType ast.Type
-	if type1.IsSubTypeOf(type2) {
-		opType = type2
-	} else if type2.IsSubTypeOf(type1) {
-		opType = type1
-	} else {
-		checker.Emit(
-			inst.Loc(),
-			"binary operation cannot operate on different types: %s vs %s",
-			type1,
-			type2)
-		return ast.NewErrorType(type1.StartEnd())
+	allowFloat := false
+	switch inst.Kind {
+	case ast.Shl, ast.Shr:
+		hasError := false
+		if !ast.IsIntSubType(type1) {
+			checker.Emit(type1.Loc(), "shift value must be an integer")
+			hasError = true
+		}
+
+		if !ast.IsU8SubType(type2) {
+			checker.Emit(type2.Loc(), "shift count must be an U8 integer")
+			hasError = true
+		} else {
+			checker.bindImmediateToType(inst.Src2, ast.NewU8(type2.StartEnd()))
+		}
+
+		if hasError {
+			return ast.NewErrorType(type1.StartEnd())
+		}
+		return type1
+	case ast.Add, ast.Sub, ast.Mul, ast.Div:
+		allowFloat = true
+		fallthrough
+	default:
+		if type1.IsSubTypeOf(type2) {
+			opType = type2
+		} else if type2.IsSubTypeOf(type1) {
+			opType = type1
+		} else {
+			checker.Emit(
+				inst.Loc(),
+				"binary operation cannot operate on different types: %s vs %s",
+				type1,
+				type2)
+			return ast.NewErrorType(type1.StartEnd())
+		}
 	}
 
 	if ast.IsIntSubType(opType) {
 		return opType
 	}
 
-	if ast.IsFloatSubType(opType) {
-		switch inst.Kind {
-		case ast.Add, ast.Sub, ast.Mul, ast.Div:
-			return opType
-		}
+	if ast.IsFloatSubType(opType) && allowFloat {
+		return opType
 	}
 
 	checker.Emit(

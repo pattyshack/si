@@ -26,6 +26,17 @@ func IsErrorType(t Type) bool {
 	return ok
 }
 
+func IsU8SubType(t Type) bool {
+	switch ut := t.(type) {
+	case *PositiveIntLiteralType:
+		return true
+	case *UnsignedIntType:
+		return ut.Kind == U8
+	default:
+		return false
+	}
+}
+
 func IsSignedIntSubType(t Type) bool {
 	switch t.(type) {
 	case *PositiveIntLiteralType:
