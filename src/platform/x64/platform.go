@@ -70,11 +70,14 @@ func (p Platform) InstructionConstraints(
 		if ast.IsFloatSubType(inst.Dest.Type) {
 			return genericFloatBinaryOpConstraints
 		} else {
-			if inst.Kind == ast.Div {
+			switch inst.Kind {
+			case ast.Shl, ast.Shr:
+				return shiftConstraints
+			case ast.Div:
 				return divConstraints
-			} else if inst.Kind == ast.Rem {
+			case ast.Rem:
 				return remConstraints
-			} else {
+			default:
 				return genericIntBinaryOpConstraints
 			}
 		}

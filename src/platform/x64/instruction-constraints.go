@@ -21,8 +21,9 @@ var (
 	genericIntBinaryOpConstraints   = newGenericBinaryOpConstraints(false)
 	genericFloatBinaryOpConstraints = newGenericBinaryOpConstraints(true)
 
-	divConstraints = newDivRemConstraints(false)
-	remConstraints = newDivRemConstraints(true)
+	shiftConstraints = newShiftConstraints()
+	divConstraints   = newDivRemConstraints(false)
+	remConstraints   = newDivRemConstraints(true)
 )
 
 // nil indicates the value should be in memory.  Otherwise, the return
@@ -141,7 +142,21 @@ func newGenericBinaryOpConstraints(
 	return constraints
 }
 
-// x64's div/idiv is retarded
+// x64's shifts (sar/shr/shl) behaves like a quasi-call convention
+func newShiftConstraints() *architecture.InstructionConstraints {
+	constraints := architecture.NewInstructionConstraints()
+
+	// Destination reuses the first source register, the second source register
+	// rcx/cl is not clobbered.
+	srcDest := constraints.SelectAnyGeneral(true)
+	constraints.AddRegisterSource(false, srcDest)
+	constraints.SetRegisterDestination(srcDest)
+	constraints.AddRegisterSource(true, constraints.Require(false, rcx))
+
+	return constraints
+}
+
+// x64's div/idiv behaves like a quasi-call convention
 func newDivRemConstraints(
 	isRem bool,
 ) *architecture.InstructionConstraints {
