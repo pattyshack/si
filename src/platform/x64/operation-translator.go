@@ -151,6 +151,154 @@ func immediate(operandSize int, val uint64, allow64 bool) interface{} {
 	return imm
 }
 
+// <int dest> = -<int dest>
+//
+// https://www.felixcloutier.com/x86/neg
+//
+// (Not sign extension sensitive)
+//
+// 8/16/32-bit: F7 /3
+// 64-bit:      REX.W + F7 /3
+func negSignedInt(
+	operandSize int,
+	dest *arch.Register,
+) []byte {
+	if operandSize != 64 {
+		operandSize = 32
+	}
+
+	return directAddressInstruction(
+		operandSize,
+		[]byte{0xf7},
+		3,
+		xRegMapping[dest],
+		nil)
+}
+
+// <uint/int dest> = ~<uint/int dest>
+//
+// https://www.felixcloutier.com/x86/not
+//
+// (Not sign extension sensitive)
+//
+// 8/16/32-bit: F7 /2
+// 64-bit:      REX.W + F7 /2
+func bitwiseNotInt(
+	operandSize int,
+	dest *arch.Register,
+) []byte {
+	if operandSize != 64 {
+		operandSize = 32
+	}
+
+	return directAddressInstruction(
+		operandSize,
+		[]byte{0xf7},
+		2,
+		xRegMapping[dest],
+		nil)
+}
+
+// <sign-extended int dest> = <int src>
+//
+// https://www.felixcloutier.com/x86/movsx
+//
+// 8-bit src operand:  (REX.W +) 0F BE /r
+// 16-bit src operand: (REX.W +) 0F BF /r
+// 32-bit src operand: REX.W + 63 /r
+func extendSignedInt(
+	destOperandSize int,
+	dest *arch.Register,
+	srcOperandSize int,
+	src *arch.Register,
+) []byte {
+	if destOperandSize <= srcOperandSize {
+		panic("should never happen")
+	}
+
+	if destOperandSize != 64 {
+		destOperandSize = 32
+	}
+
+	switch srcOperandSize {
+	case 8:
+		return directAddressInstruction(
+			destOperandSize,
+			[]byte{0x0f, 0xbe},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	case 16:
+		return directAddressInstruction(
+			destOperandSize,
+			[]byte{0x0f, 0xbf},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	case 32:
+		return directAddressInstruction(
+			destOperandSize,
+			[]byte{0x63},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	default:
+		panic("should never happen")
+	}
+}
+
+// <zero-extended uint dest> = <uint src>
+//
+// https://www.felixcloutier.com/x86/movzx
+// https://www.felixcloutier.com/x86/mov (for uint32 -> uint64)
+//
+// 8-bit src operand:
+//
+//	movzx r32, r/m8: 0F B6 /r
+//
+// 16-bit src operand:
+//
+//	movzx r32, r/m16: 0F B7 /r
+//
+// 32-bit src operand:
+//
+//	mov r32, r/m32: 8B /r
+//
+// NOTE: the upper 32 bits are automatically zero-ed when a 32-bit operand
+// instruction is used (see Intel manual, Volume 1, Section 3.4.1.1
+// General-Purpose Registers in 64-Bit Mode).
+func extendUnsignedInt(
+	dest *arch.Register,
+	srcOperandSize int,
+	src *arch.Register,
+) []byte {
+	switch srcOperandSize {
+	case 8:
+		return directAddressInstruction(
+			32,
+			[]byte{0x0f, 0xb6},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	case 16:
+		return directAddressInstruction(
+			32,
+			[]byte{0x0f, 0xb7},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	case 32:
+		return directAddressInstruction(
+			32,
+			[]byte{0x8b},
+			xRegMapping[dest],
+			xRegMapping[src],
+			nil)
+	default:
+		panic("should never happen")
+	}
+}
+
 // <int/uint dest> += <int/uint src>
 //
 // https://www.felixcloutier.com/x86/add
@@ -322,58 +470,6 @@ func mulIntImmediate(
 		immediate(operandSize, value, false))
 }
 
-// <zero-extended uint dest> = <uint src>
-//
-// https://www.felixcloutier.com/x86/movzx
-// https://www.felixcloutier.com/x86/mov (for uint32 -> uint64)
-//
-// 8-bit src operand:
-//
-//	movzx r32, r/m8: 0F B6 /r
-//
-// 16-bit src operand:
-//
-//	movzx r32, r/m16: 0F B7 /r
-//
-// 32-bit src operand:
-//
-//	mov r32, r/m32: 8B /r
-//
-// NOTE: the upper 32 bits are automatically zero-ed when a 32-bit operand
-// instruction is used (see Intel manual, Volume 1, Section 3.4.1.1
-// General-Purpose Registers in 64-Bit Mode).
-func extendUnsignedInt(
-	dest *arch.Register,
-	srcOperandSize int,
-	src *arch.Register,
-) []byte {
-	switch srcOperandSize {
-	case 8:
-		return directAddressInstruction(
-			32,
-			[]byte{0x0f, 0xb6},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	case 16:
-		return directAddressInstruction(
-			32,
-			[]byte{0x0f, 0xb7},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	case 32:
-		return directAddressInstruction(
-			32,
-			[]byte{0x8b},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	default:
-		panic("should never happen")
-	}
-}
-
 // (<uint quotient RAX>, <uint remainder RDX>) =
 //
 //	<uint upper RDX>:<uint lower RAX> / <uint divisor>
@@ -425,7 +521,7 @@ func divRemUnsignedInt(
 		}
 	}
 
-	instructions = append(instructions, xorInt(operandSize, rdx, rdx)...)
+	instructions = append(instructions, bitwiseXorInt(operandSize, rdx, rdx)...)
 
 	instructions = append(
 		instructions,
@@ -437,54 +533,6 @@ func divRemUnsignedInt(
 			nil)...)
 
 	return instructions
-}
-
-// <sign-extended int dest> = <int src>
-//
-// https://www.felixcloutier.com/x86/movsx
-//
-// 8-bit src operand:  (REX.W +) 0F BE /r
-// 16-bit src operand: (REX.W +) 0F BF /r
-// 32-bit src operand: REX.W + 63 /r
-func extendSignedInt(
-	destOperandSize int,
-	dest *arch.Register,
-	srcOperandSize int,
-	src *arch.Register,
-) []byte {
-	if destOperandSize <= srcOperandSize {
-		panic("should never happen")
-	}
-
-	if destOperandSize != 64 {
-		destOperandSize = 32
-	}
-
-	switch srcOperandSize {
-	case 8:
-		return directAddressInstruction(
-			destOperandSize,
-			[]byte{0x0f, 0xbe},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	case 16:
-		return directAddressInstruction(
-			destOperandSize,
-			[]byte{0x0f, 0xbf},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	case 32:
-		return directAddressInstruction(
-			destOperandSize,
-			[]byte{0x63},
-			xRegMapping[dest],
-			xRegMapping[src],
-			nil)
-	default:
-		panic("should never happen")
-	}
 }
 
 // (<uint quotient RAX>, <uint remainder RDX>) =
@@ -570,7 +618,7 @@ func divRemSignedInt(
 //
 // 8/16/32-bit: 33 /r
 // 64-bit:      REX.W + 33 /r
-func xorInt(
+func bitwiseXorInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
@@ -595,7 +643,7 @@ func xorInt(
 //
 // 8/16/32-bit: 81 /6 ib
 // 64-bit:      REX.W + 81 /6 id
-func xorIntImmediate(
+func bitwiseXorIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
@@ -620,7 +668,7 @@ func xorIntImmediate(
 //
 // 8/16/32-bit: 0B /r
 // 64-bit:      REX.W + 0B /r
-func orIntRegister(
+func bitwiseOrIntRegister(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
@@ -645,7 +693,7 @@ func orIntRegister(
 //
 // 8/16/32-bit: 81 /1 id
 // 64-bit:      REX.W + 81 /1 id
-func orIntImmediate(
+func bitwiseOrIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
@@ -670,7 +718,7 @@ func orIntImmediate(
 //
 // 8/16/32-bit: 23 /r
 // 64-bit:      REX.W + 23 /r
-func andInt(
+func bitwiseAndInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
@@ -695,7 +743,7 @@ func andInt(
 //
 // 8/16/32-bit: 81 /4 id
 // 64-bit:      REX.W + 81 /4 id
-func andIntImmediate(
+func bitwiseAndIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
