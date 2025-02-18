@@ -57,7 +57,54 @@ var (
 		xmm14: 14,
 		xmm15: 15,
 	}
+
+	// https://www.felixcloutier.com/x86/syscall
+	syscall = []byte{0x0f, 0x05}
+
+	// https://www.felixcloutier.com/x86/ret
+	ret = []byte{0xc3}
 )
+
+// https://www.felixcloutier.com/x86/nop
+func nop(length int) []byte {
+	remaining := length
+	result := make([]byte, 0, length)
+	for remaining > 0 {
+		switch remaining {
+		case 1:
+			result = append(result, 0x90)
+			return result
+		case 2:
+			result = append(result, 0x66, 0x90)
+			return result
+		case 3:
+			result = append(result, 0x0f, 0x1f, 0x00)
+			return result
+		case 4:
+			result = append(result, 0x0f, 0x1f, 0x40, 0x00)
+			return result
+		case 5:
+			result = append(result, 0x0f, 0x1f, 0x44, 0x00, 0x00)
+			return result
+		case 6:
+			result = append(result, 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00)
+			return result
+		case 7:
+			result = append(result, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00)
+			return result
+		case 8:
+			result = append(result, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00)
+			return result
+		default: // 9 or longer
+			result = append(
+				result,
+				0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00)
+			remaining -= 9
+		}
+	}
+
+	return result
+}
 
 func directAddressInstruction(
 	operandSize int,
