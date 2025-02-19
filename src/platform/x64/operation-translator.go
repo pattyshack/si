@@ -198,6 +198,48 @@ func immediate(operandSize int, val uint64, allow64 bool) interface{} {
 	return imm
 }
 
+// call/jmp/jcc <rel32>
+//
+// https://www.felixcloutier.com/x86/call
+// https://www.felixcloutier.com/x86/jmp
+// https://www.felixcloutier.com/x86/jcc
+//
+// procedure call:     E8 cd
+// unconditional jump: E9 cd
+// uint/int jeq (je):  0F 84 cd
+// uint/int jne (jne): 0F 85 cd
+// uint jlt (jb):      0F 82 cd
+// uint jge (jae):     0F 83 cd
+// int jlt (jl):       0F 8C cd
+// int jge (jge):      0F 8D cd
+//
+// NOTE: For simplicity (and fast code layout computation), we'll ignore the
+// rel8 jump variants.
+func rel32Instruction(
+	opCode []byte,
+	jumpLocation int, // relative to the beginning of the current function
+	currentLocation int, // relative to the beginning of the current function
+) []byte {
+	// jump is relative to the next instruction's location
+	instructionLength := len(opCode) + 4
+	nextLocation := currentLocation + instructionLength
+	rel32 := int32(jumpLocation - nextLocation)
+
+	result := make([]byte, instructionLength)
+	copy(result, opCode)
+
+	size, err := binary.Encode(result[len(opCode):], binary.LittleEndian, rel32)
+	if err != nil {
+		panic("cannot encode immediate: " + err.Error())
+	}
+
+	if size != 4 {
+		panic("should never happen")
+	}
+
+	return result
+}
+
 // <int dest> = -<int dest>
 //
 // https://www.felixcloutier.com/x86/neg
@@ -944,4 +986,162 @@ func shiftRightUnsignedIntImmediate(
 		5,
 		xRegMapping[dest],
 		immediate)
+}
+
+// cmp <src1>, <src2>
+//
+// https://www.felixcloutier.com/x86/cmp
+//
+// (Sign extension sensitive)
+//
+// 8-bit:  REX + 3A /r
+// 16-bit: 3B /r
+// 32-bit: 3B /r
+// 64-bit: REX.W + 3B /r
+func cmpInt(
+	operandSize int,
+	src1 *arch.Register,
+	src2 *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		operandSize,
+		opCode(operandSize, []byte{0x3b}, []byte{0x3a}),
+		xRegMapping[src1],
+		xRegMapping[src2],
+		nil)
+}
+
+// cmp <src>, <imm>
+//
+// https://www.felixcloutier.com/x86/cmp
+//
+// (Sign extension sensitive)
+//
+// 8-bit:  REX + 80 /7 ib
+// 16-bit: 81 /7 iw
+// 32-bit: 81 /7 id
+// 64-bit: REX.W + 81 /7 id
+func cmpIntImmediate(
+	operandSize int,
+	src *arch.Register,
+	value uint64,
+) []byte {
+	return directAddressInstruction(
+		operandSize,
+		opCode(operandSize, []byte{0x81}, []byte{0x80}),
+		7,
+		xRegMapping[src],
+		immediate(operandSize, value, false))
+}
+
+// call <address in register>
+//
+// https://www.felixcloutier.com/x86/call
+//
+// procedure call: FF /2
+func callAbs(
+	address *arch.Register,
+) []byte {
+	return directAddressInstruction(
+		32, // NOTE: using 32-bit operand to disable REX.W bit
+		[]byte{0xff},
+		2,
+		xRegMapping[address],
+		nil)
+}
+
+// call <rel32>
+//
+// https://www.felixcloutier.com/x86/call
+//
+// procedure call: E8 cd
+func callRel(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0xe8}, jumpLocation, currentLocation)
+}
+
+// jmp <rel32>
+//
+// https://www.felixcloutier.com/x86/jmp
+//
+// unconditional jump: E9 cd
+func jmp(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0xe9}, jumpLocation, currentLocation)
+}
+
+// je <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// uint/int jeq: 0F 84 cd
+func je(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x84}, jumpLocation, currentLocation)
+}
+
+// jne <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// uint/int jne: 0F 85 cd
+func jne(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x85}, jumpLocation, currentLocation)
+}
+
+// jb <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// uint jlt: 0F 82 cd
+func jb(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x82}, jumpLocation, currentLocation)
+}
+
+// jae <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// uint jge: 0F 83 cd
+func jae(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x83}, jumpLocation, currentLocation)
+}
+
+// jl <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// int jlt: 0F 8C cd
+func jl(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x8c}, jumpLocation, currentLocation)
+}
+
+// jge <rel32>
+//
+// https://www.felixcloutier.com/x86/jcc
+//
+// int jge: 0F 8D cd
+func jge(
+	jumpLocation int,
+	currentLocation int,
+) []byte {
+	return rel32Instruction([]byte{0x0f, 0x8d}, jumpLocation, currentLocation)
 }
