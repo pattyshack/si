@@ -2,6 +2,7 @@ package x64
 
 import (
 	"encoding/binary"
+	"math"
 
 	arch "github.com/pattyshack/chickadee/architecture"
 )
@@ -16,6 +17,11 @@ const (
 	prefix16BitOperand = byte(0x66)
 	rexPrefix          = byte(0x40)
 	rexWBit            = byte(0x08)
+
+	modRMDirectAddressing     = 0xc0
+	modRMIndirectAddressing0  = 0x00
+	modRMIndirectAddressing8  = 0x40
+	modRMIndirectAddressing32 = 0x80
 )
 
 var (
@@ -106,23 +112,20 @@ func nop(length int) []byte {
 	return result
 }
 
-func directAddressInstruction(
+func modRMInstruction(
 	operandSize int,
 	opCode []byte,
+	addressingModePrefix int,
 	regXReg int, // could also be op code extension
 	rmXReg int,
-	immediate interface{}, // int/uint
+	sib *byte, // could be nil
+	immediate interface{}, // or displacement; int/uint
 ) []byte {
-	immMaxBytes := 0
-	if immediate != nil {
-		immMaxBytes = 8 // mov can support imm64
-	}
-
-	result := make([]byte, 3+len(opCode)+immMaxBytes)
+	// [0x66] [rex] [op code] [mod rm] [sib] [immediate]
+	result := make([]byte, 12+len(opCode))
 	idx := 0
 
 	rex := rexPrefix
-
 	switch operandSize {
 	case 8:
 	case 16:
@@ -151,14 +154,16 @@ func directAddressInstruction(
 		idx++
 	}
 
-	for _, opByte := range opCode {
-		result[idx] = opByte
+	copy(result[idx:], opCode)
+	idx += len(opCode)
+
+	result[idx] = byte(addressingModePrefix | modRMReg | modRMRm)
+	idx++
+
+	if sib != nil {
+		result[idx] = *sib
 		idx++
 	}
-
-	modRMPrefix := 0xc0 // Register-direct addressing mode
-	result[idx] = byte(modRMPrefix | modRMReg | modRMRm)
-	idx++
 
 	if immediate != nil {
 		size, err := binary.Encode(result[idx:], binary.LittleEndian, immediate)
@@ -169,6 +174,81 @@ func directAddressInstruction(
 	}
 
 	return result[:idx]
+}
+
+func directAddressInstruction(
+	operandSize int,
+	opCode []byte,
+	regXReg int, // could also be op code extension
+	rmXReg int,
+	immediate interface{}, // int/uint
+) []byte {
+	return modRMInstruction(
+		operandSize,
+		opCode,
+		modRMDirectAddressing,
+		regXReg,
+		rmXReg,
+		nil,
+		immediate)
+}
+
+// Operations of the forms:
+//
+//	<opCode> <reg>, [<rm> + <displacement>]  ; RM operand-encoding
+//	<opCode> [<rm> + <displacement>], <reg>  ; MR operand-encoding
+//
+// XXX: maybe support SIB's (scale * index)?
+func indirectAddressInstruction(
+	operandSize int,
+	opCode []byte,
+	reg *arch.Register,
+	rm *arch.Register,
+	displacement int32,
+) []byte {
+	addressingMode := modRMIndirectAddressing0
+	var sib *byte
+	var immediate interface{} = displacement
+	if displacement == 0 {
+		immediate = nil
+
+		// NOTE: We must use an alternative encoding for rbp/r13 since the default
+		// encoding refers to [RIP + disp32].
+		if rm == rbp || rm == r13 {
+			addressingMode = modRMIndirectAddressing8 // [<rm> + 0x0]
+			immediate = int8(0)
+		}
+	} else if math.MinInt8 <= displacement && displacement <= math.MaxInt8 {
+		addressingMode = modRMIndirectAddressing8
+		immediate = int8(displacement)
+	} else {
+		addressingMode = modRMIndirectAddressing32
+	}
+
+	// NOTE: rsp and r12 require SIB byte to encode [<rsp/r12> + <disp>]
+	if rm == rsp || rm == r12 {
+		// sibByte = (SIB.scale, SIB.index, SIB.base) where
+		//
+		// SIB.scale = 00 (factor s = 1)
+		//  - We can use any scale factor since it's ignored.
+		//
+		// SIB.index = 0.100 (rsp)
+		//  - rsp address computation mode ignores index and scale
+		//
+		// SIB.base = ?.100 (either rsp or r12)
+		//  - the upper bit is in REX.B
+		sibByte := byte(0x24)
+		sib = &sibByte
+	}
+
+	return modRMInstruction(
+		operandSize,
+		opCode,
+		addressingMode,
+		xRegMapping[reg],
+		xRegMapping[rm],
+		sib,
+		immediate)
 }
 
 func opCode(operandSize int, opCode []byte, opCode8Bit []byte) []byte {
@@ -986,6 +1066,73 @@ func shiftRightUnsignedIntImmediate(
 		5,
 		xRegMapping[dest],
 		immediate)
+}
+
+// <dest> = <src>
+//
+// https://www.felixcloutier.com/x86/mov
+//
+// 8/16/32-bit: 8B /r
+// 64-bit:      REX.W + 8B /r
+func copyInt(
+	operandSize int,
+	dest *arch.Register,
+	src *arch.Register,
+) []byte {
+	if operandSize != 64 {
+		operandSize = 32
+	}
+
+	return directAddressInstruction(
+		operandSize,
+		[]byte{0x8b},
+		xRegMapping[dest],
+		xRegMapping[src],
+		nil)
+}
+
+// [<address> + <displacement>] = <src>
+//
+// https://www.felixcloutier.com/x86/mov
+//
+// 8-bit:  REX + 88 /r
+// 16-bit: 89 /r
+// 32-bit: 89 /r
+// 64-bit: REX.W + 89 /r
+func storeInt(
+	operandSize int,
+	address *arch.Register,
+	displacement int32,
+	src *arch.Register,
+) []byte {
+	return indirectAddressInstruction(
+		operandSize,
+		opCode(operandSize, []byte{0x89}, []byte{0x88}),
+		src,
+		address,
+		displacement)
+}
+
+// <dest> = [<address> + <displacement>]
+//
+// https://www.felixcloutier.com/x86/mov
+//
+// 8-bit:  REX + 8A /r
+// 16-bit: 8B /r
+// 32-bit: 8B /r
+// 64-bit: REX.W + 8B /r
+func loadInt(
+	operandSize int,
+	dest *arch.Register,
+	address *arch.Register,
+	displacement int32,
+) []byte {
+	return indirectAddressInstruction(
+		operandSize,
+		opCode(operandSize, []byte{0x8b}, []byte{0x8a}),
+		dest,
+		address,
+		displacement)
 }
 
 // cmp <src1>, <src2>
