@@ -112,6 +112,57 @@ func nop(length int) []byte {
 	return result
 }
 
+// Non-modRM instruction of the form
+//
+//	[rex] [opcode + rb/rw/rd/ro] [ib/iw/id/io]
+//
+// where the register is encoded as part of the opcode.
+func registerEncodedOpCodeInstruction(
+	operandSize int,
+	baseOpCode byte,
+	register *arch.Register,
+	immediate interface{},
+) []byte {
+	result := make([]byte, 10)
+	idx := 0
+
+	rex := rexPrefix
+	switch operandSize {
+	case 8:
+	case 16:
+		result[0] = prefix16BitOperand
+		idx = 1
+	case 32:
+	case 64:
+		rex |= rexWBit
+	default:
+		panic("should never happen")
+	}
+
+	xReg := xRegMapping[register]
+	rex |= byte((xReg & 0x08) >> 3) // REX.B bit
+
+	// NOTE: rex makes AH / CH / DH / BH inaccessible for 8-bit operand
+	if operandSize == 8 || rex != rexPrefix {
+		result[idx] = rex
+		idx++
+	}
+
+	opCode := baseOpCode | byte(xReg&0x07)
+	result[idx] = opCode
+	idx++
+
+	if immediate != nil {
+		size, err := binary.Encode(result[idx:], binary.LittleEndian, immediate)
+		if err != nil {
+			panic("cannot encode immediate: " + err.Error())
+		}
+		idx += size
+	}
+
+	return result[:idx]
+}
+
 func modRMInstruction(
 	operandSize int,
 	extendedOpCode bool, // When true, prefix with 0x0F
@@ -714,7 +765,7 @@ func divRemUnsignedInt(
 		}
 	}
 
-	instructions = append(instructions, bitwiseXorInt(operandSize, rdx, rdx)...)
+	instructions = append(instructions, setIntImmediate(operandSize, rdx, 0)...)
 
 	instructions = append(
 		instructions,
@@ -1128,6 +1179,30 @@ func copyInt(
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
+}
+
+// <dest> = <immediate>
+//
+// https://www.felixcloutier.com/x86/mov
+//
+// 8-bit:  REX + B0 + rb ib
+// 16-bit: B8 + rw iw
+// 32-bit: B8 + rd id
+// 64-bit: REX.W + B8 + rd io
+func setIntImmediate(
+	operandSize int,
+	dest *arch.Register,
+	value uint64,
+) []byte {
+	if value == 0 {
+		return bitwiseXorInt(operandSize, dest, dest)
+	}
+
+	return registerEncodedOpCodeInstruction(
+		operandSize,
+		opCode(operandSize, 0xb8, 0xb0),
+		dest,
+		immediate(operandSize, value, true))
 }
 
 // [<address> + <displacement>] = <src>
