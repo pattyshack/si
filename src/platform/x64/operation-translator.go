@@ -114,7 +114,8 @@ func nop(length int) []byte {
 
 func modRMInstruction(
 	operandSize int,
-	opCode []byte,
+	extendedOpCode bool, // When true, prefix with 0x0F
+	opCode byte,
 	addressingModePrefix int,
 	regXReg int, // could also be op code extension
 	rmXReg int,
@@ -122,7 +123,7 @@ func modRMInstruction(
 	immediate interface{}, // or displacement; int/uint
 ) []byte {
 	// [0x66] [rex] [op code] [mod rm] [sib] [immediate]
-	result := make([]byte, 12+len(opCode))
+	result := make([]byte, 14)
 	idx := 0
 
 	rex := rexPrefix
@@ -154,8 +155,13 @@ func modRMInstruction(
 		idx++
 	}
 
-	copy(result[idx:], opCode)
-	idx += len(opCode)
+	if extendedOpCode {
+		result[idx] = 0x0f
+		idx++
+	}
+
+	result[idx] = opCode
+	idx++
 
 	result[idx] = byte(addressingModePrefix | modRMReg | modRMRm)
 	idx++
@@ -178,13 +184,15 @@ func modRMInstruction(
 
 func directAddressInstruction(
 	operandSize int,
-	opCode []byte,
+	extendedOpCode bool,
+	opCode byte,
 	regXReg int, // could also be op code extension
 	rmXReg int,
 	immediate interface{}, // int/uint
 ) []byte {
 	return modRMInstruction(
 		operandSize,
+		extendedOpCode,
 		opCode,
 		modRMDirectAddressing,
 		regXReg,
@@ -201,7 +209,8 @@ func directAddressInstruction(
 // XXX: maybe support SIB's (scale * index)?
 func indirectAddressInstruction(
 	operandSize int,
-	opCode []byte,
+	extendedOpCode bool,
+	opCode byte,
 	reg *arch.Register,
 	rm *arch.Register,
 	displacement int32,
@@ -243,6 +252,7 @@ func indirectAddressInstruction(
 
 	return modRMInstruction(
 		operandSize,
+		extendedOpCode,
 		opCode,
 		addressingMode,
 		xRegMapping[reg],
@@ -251,7 +261,7 @@ func indirectAddressInstruction(
 		immediate)
 }
 
-func opCode(operandSize int, opCode []byte, opCode8Bit []byte) []byte {
+func opCode(operandSize int, opCode byte, opCode8Bit byte) byte {
 	if operandSize == 8 {
 		return opCode8Bit
 	}
@@ -338,7 +348,8 @@ func negSignedInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0xf7},
+		false,
+		0xf7,
 		3,
 		xRegMapping[dest],
 		nil)
@@ -362,7 +373,8 @@ func bitwiseNotInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0xf7},
+		false,
+		0xf7,
 		2,
 		xRegMapping[dest],
 		nil)
@@ -393,21 +405,24 @@ func extendSignedInt(
 	case 8:
 		return directAddressInstruction(
 			destOperandSize,
-			[]byte{0x0f, 0xbe},
+			true,
+			0xbe,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
 	case 16:
 		return directAddressInstruction(
 			destOperandSize,
-			[]byte{0x0f, 0xbf},
+			true,
+			0xbf,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
 	case 32:
 		return directAddressInstruction(
 			destOperandSize,
-			[]byte{0x63},
+			false,
+			0x63,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
@@ -445,21 +460,24 @@ func extendUnsignedInt(
 	case 8:
 		return directAddressInstruction(
 			32,
-			[]byte{0x0f, 0xb6},
+			true,
+			0xb6,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
 	case 16:
 		return directAddressInstruction(
 			32,
-			[]byte{0x0f, 0xb7},
+			true,
+			0xb7,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
 	case 32:
 		return directAddressInstruction(
 			32,
-			[]byte{0x8b},
+			false,
+			0x8b,
 			xRegMapping[dest],
 			xRegMapping[src],
 			nil)
@@ -491,7 +509,8 @@ func addInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x03},
+		false,
+		0x03,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -520,7 +539,8 @@ func addIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x81},
+		false,
+		0x81,
 		0,
 		xRegMapping[dest],
 		immediate(operandSize, value, false))
@@ -549,7 +569,8 @@ func subInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x2b},
+		false,
+		0x2b,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -578,7 +599,8 @@ func subIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x81},
+		false,
+		0x81,
 		5,
 		xRegMapping[dest],
 		immediate(operandSize, value, false))
@@ -603,7 +625,8 @@ func mulInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x0f, 0xaf},
+		true,
+		0xaf,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -633,7 +656,8 @@ func mulIntImmediate(
 	xReg := xRegMapping[dest]
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x69},
+		false,
+		0x69,
 		xReg,
 		xReg,
 		immediate(operandSize, value, false))
@@ -696,7 +720,8 @@ func divRemUnsignedInt(
 		instructions,
 		directAddressInstruction(
 			operandSize,
-			[]byte{0xf7},
+			false,
+			0xf7,
 			6,
 			xRegMapping[divisor],
 			nil)...)
@@ -771,7 +796,8 @@ func divRemSignedInt(
 		instructions,
 		directAddressInstruction(
 			operandSize,
-			[]byte{0xf7},
+			false,
+			0xf7,
 			7,
 			xRegMapping[divisor],
 			nil)...)
@@ -798,7 +824,8 @@ func bitwiseXorInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x33},
+		false,
+		0x33,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -823,7 +850,8 @@ func bitwiseXorIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x81},
+		false,
+		0x81,
 		6,
 		xRegMapping[dest],
 		immediate(operandSize, value, false))
@@ -848,7 +876,8 @@ func bitwiseOrIntRegister(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x0b},
+		false,
+		0x0b,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -873,7 +902,8 @@ func bitwiseOrIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x81},
+		false,
+		0x81,
 		1,
 		xRegMapping[dest],
 		immediate(operandSize, value, false))
@@ -898,7 +928,8 @@ func bitwiseAndInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x23},
+		false,
+		0x23,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -923,7 +954,8 @@ func bitwiseAndIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x81},
+		false,
+		0x81,
 		4,
 		xRegMapping[dest],
 		immediate(operandSize, value, false))
@@ -947,7 +979,8 @@ func shiftLeftInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0xd3},
+		false,
+		0xd3,
 		4,
 		xRegMapping[dest],
 		nil)
@@ -972,7 +1005,8 @@ func shiftLeftIntImmediate(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0xc1},
+		false,
+		0xc1,
 		4,
 		xRegMapping[dest],
 		immediate)
@@ -994,7 +1028,8 @@ func shiftRightSignedInt(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0xd3}, []byte{0xd2}),
+		false,
+		opCode(operandSize, 0xd3, 0xd2),
 		7,
 		xRegMapping[dest],
 		nil)
@@ -1017,7 +1052,8 @@ func shiftRightSignedIntImmediate(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0xc1}, []byte{0xc0}),
+		false,
+		opCode(operandSize, 0xc1, 0xc0),
 		7,
 		xRegMapping[dest],
 		immediate)
@@ -1039,7 +1075,8 @@ func shiftRightUnsignedInt(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0xd3}, []byte{0xd2}),
+		false,
+		opCode(operandSize, 0xd3, 0xd2),
 		5,
 		xRegMapping[dest],
 		nil)
@@ -1062,7 +1099,8 @@ func shiftRightUnsignedIntImmediate(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0xc1}, []byte{0xc0}),
+		false,
+		opCode(operandSize, 0xc1, 0xc0),
 		5,
 		xRegMapping[dest],
 		immediate)
@@ -1085,7 +1123,8 @@ func copyInt(
 
 	return directAddressInstruction(
 		operandSize,
-		[]byte{0x8b},
+		false,
+		0x8b,
 		xRegMapping[dest],
 		xRegMapping[src],
 		nil)
@@ -1107,7 +1146,8 @@ func storeInt(
 ) []byte {
 	return indirectAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0x89}, []byte{0x88}),
+		false,
+		opCode(operandSize, 0x89, 0x88),
 		src,
 		address,
 		displacement)
@@ -1129,7 +1169,8 @@ func loadInt(
 ) []byte {
 	return indirectAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0x8b}, []byte{0x8a}),
+		false,
+		opCode(operandSize, 0x8b, 0x8a),
 		dest,
 		address,
 		displacement)
@@ -1152,7 +1193,8 @@ func cmpInt(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0x3b}, []byte{0x3a}),
+		false,
+		opCode(operandSize, 0x3b, 0x3a),
 		xRegMapping[src1],
 		xRegMapping[src2],
 		nil)
@@ -1175,7 +1217,8 @@ func cmpIntImmediate(
 ) []byte {
 	return directAddressInstruction(
 		operandSize,
-		opCode(operandSize, []byte{0x81}, []byte{0x80}),
+		false,
+		opCode(operandSize, 0x81, 0x80),
 		7,
 		xRegMapping[src],
 		immediate(operandSize, value, false))
@@ -1191,7 +1234,8 @@ func callAbs(
 ) []byte {
 	return directAddressInstruction(
 		32, // NOTE: using 32-bit operand to disable REX.W bit
-		[]byte{0xff},
+		false,
+		0xff,
 		2,
 		xRegMapping[address],
 		nil)
