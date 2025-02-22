@@ -18,11 +18,21 @@ const (
 	Abs64Relocation = RelocationKind("abs64")
 )
 
+type SegmentLabel struct {
+	Name    string
+	IsLocal bool // true for block label
+}
+
 type Relocation struct {
 	Kind RelocationKind
 
-	Offset int
+	Offset int // relative to the beginning of the segment
 
-	Label        string
-	IsLocalLabel bool
+	Label SegmentLabel
+}
+
+// A continuous segment of instruction bytes.
+type Segment struct {
+	Bytes       []byte
+	Relocations []Relocation
 }
