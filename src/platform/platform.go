@@ -1,6 +1,8 @@
 package platform
 
 import (
+	"encoding/binary"
+
 	"github.com/pattyshack/chickadee/architecture"
 	"github.com/pattyshack/chickadee/ast"
 )
@@ -17,6 +19,8 @@ const (
 type Platform interface {
 	ArchitectureName() ArchitectureName
 	OperatingSystemName() OperatingSystemName
+
+	ByteOrder() binary.ByteOrder
 
 	CallSpec(ast.CallConventionName) CallSpec
 	CallConvention(*ast.FunctionType) *architecture.CallConvention

@@ -1,6 +1,7 @@
 package x64
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -30,6 +31,10 @@ func (Platform) ArchitectureName() platform.ArchitectureName {
 
 func (p Platform) OperatingSystemName() platform.OperatingSystemName {
 	return p.os
+}
+
+func (Platform) ByteOrder() binary.ByteOrder {
+	return binary.LittleEndian
 }
 
 func (p Platform) SysCallSpec() platform.SysCallSpec {
