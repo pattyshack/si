@@ -1,4 +1,4 @@
-package platform
+package executable
 
 type RelocationKind string
 

@@ -5,7 +5,7 @@ import (
 	"math"
 
 	arch "github.com/pattyshack/chickadee/architecture"
-	"github.com/pattyshack/chickadee/platform"
+	"github.com/pattyshack/chickadee/platform/executable"
 )
 
 // Resources:
@@ -123,7 +123,7 @@ func registerEncodedOpCodeInstruction(
 	baseOpCode byte,
 	register *arch.Register,
 	immediate interface{},
-) platform.Segment {
+) executable.Segment {
 	result := make([]byte, 10)
 	idx := 0
 
@@ -161,7 +161,7 @@ func registerEncodedOpCodeInstruction(
 		idx += size
 	}
 
-	return platform.Segment{
+	return executable.Segment{
 		Bytes: result[:idx],
 	}
 }
@@ -175,7 +175,7 @@ func modRMInstruction(
 	rmXReg int,
 	sib *byte, // could be nil
 	immediate interface{}, // or displacement; int/uint
-) platform.Segment {
+) executable.Segment {
 	// [0x66] [rex] [op code] [mod rm] [sib] [immediate]
 	result := make([]byte, 14)
 	idx := 0
@@ -233,7 +233,7 @@ func modRMInstruction(
 		idx += size
 	}
 
-	return platform.Segment{
+	return executable.Segment{
 		Bytes: result[:idx],
 	}
 }
@@ -245,7 +245,7 @@ func directAddressInstruction(
 	regXReg int, // could also be op code extension
 	rmXReg int,
 	immediate interface{}, // int/uint
-) platform.Segment {
+) executable.Segment {
 	return modRMInstruction(
 		operandSize,
 		extendedOpCode,
@@ -270,7 +270,7 @@ func indirectAddressInstruction(
 	reg *arch.Register,
 	rm *arch.Register,
 	displacement int32,
-) platform.Segment {
+) executable.Segment {
 	addressingMode := modRMIndirectAddressing0
 	var sib *byte
 	var immediate interface{} = displacement
@@ -366,10 +366,10 @@ func rel32Instruction(
 	opCode byte,
 	label string,
 	isLocalLabel bool,
-) platform.Segment {
-	reloc := platform.Relocation{
-		Kind: platform.Rel32Relocation,
-		Label: platform.SegmentLabel{
+) executable.Segment {
+	reloc := executable.Relocation{
+		Kind: executable.Rel32Relocation,
+		Label: executable.SegmentLabel{
 			Name:    label,
 			IsLocal: isLocalLabel,
 		},
@@ -381,9 +381,9 @@ func rel32Instruction(
 		result[1] = opCode
 
 		reloc.Offset = 2
-		return platform.Segment{
+		return executable.Segment{
 			Bytes:       result,
-			Relocations: []platform.Relocation{reloc},
+			Relocations: []executable.Relocation{reloc},
 		}
 	}
 
@@ -391,9 +391,9 @@ func rel32Instruction(
 	result[0] = opCode
 
 	reloc.Offset = 1
-	return platform.Segment{
+	return executable.Segment{
 		Bytes:       result,
-		Relocations: []platform.Relocation{reloc},
+		Relocations: []executable.Relocation{reloc},
 	}
 }
 
@@ -408,7 +408,7 @@ func rel32Instruction(
 func negSignedInt(
 	operandSize int,
 	dest *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -433,7 +433,7 @@ func negSignedInt(
 func bitwiseNotInt(
 	operandSize int,
 	dest *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -459,7 +459,7 @@ func extendSignedInt(
 	dest *arch.Register,
 	srcOperandSize int,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if destOperandSize <= srcOperandSize {
 		panic("should never happen")
 	}
@@ -522,7 +522,7 @@ func extendUnsignedInt(
 	dest *arch.Register,
 	srcOperandSize int,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	switch srcOperandSize {
 	case 8:
 		return directAddressInstruction(
@@ -569,7 +569,7 @@ func addInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -599,7 +599,7 @@ func addIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -629,7 +629,7 @@ func subInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -659,7 +659,7 @@ func subIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -685,7 +685,7 @@ func mulInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -715,7 +715,7 @@ func mulIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -764,8 +764,8 @@ func mulIntImmediate(
 func divRemUnsignedInt(
 	operandSize int,
 	divisor *arch.Register,
-) []platform.Segment {
-	instructions := make([]platform.Segment, 0, 4)
+) []executable.Segment {
+	instructions := make([]executable.Segment, 0, 4)
 
 	if operandSize == 8 {
 		operandSize = 32
@@ -828,8 +828,8 @@ func divRemUnsignedInt(
 func divRemSignedInt(
 	operandSize int,
 	divisor *arch.Register,
-) []platform.Segment {
-	instructions := make([]platform.Segment, 0, 4)
+) []executable.Segment {
+	instructions := make([]executable.Segment, 0, 4)
 
 	if operandSize == 8 {
 		operandSize = 32
@@ -848,19 +848,19 @@ func divRemSignedInt(
 	case 16:
 		instructions = append(
 			instructions,
-			platform.Segment{
+			executable.Segment{
 				Bytes: []byte{prefix16BitOperand, 0x99},
 			})
 	case 32:
 		instructions = append(
 			instructions,
-			platform.Segment{
+			executable.Segment{
 				Bytes: []byte{0x99},
 			})
 	case 64:
 		instructions = append(
 			instructions,
-			platform.Segment{
+			executable.Segment{
 				Bytes: []byte{rexPrefix | rexWBit, 0x99},
 			})
 	default:
@@ -892,7 +892,7 @@ func bitwiseXorInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -918,7 +918,7 @@ func bitwiseXorIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -944,7 +944,7 @@ func bitwiseOrIntRegister(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -970,7 +970,7 @@ func bitwiseOrIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -996,7 +996,7 @@ func bitwiseAndInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -1022,7 +1022,7 @@ func bitwiseAndIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64, // sign-extended to 64-bit
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -1047,7 +1047,7 @@ func bitwiseAndIntImmediate(
 func shiftLeftInt(
 	operandSize int,
 	dest *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -1073,7 +1073,7 @@ func shiftLeftIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	immediate uint8,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -1100,7 +1100,7 @@ func shiftLeftIntImmediate(
 func shiftRightSignedInt(
 	operandSize int,
 	dest *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1124,7 +1124,7 @@ func shiftRightSignedIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	immediate uint8,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1147,7 +1147,7 @@ func shiftRightSignedIntImmediate(
 func shiftRightUnsignedInt(
 	operandSize int,
 	dest *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1171,7 +1171,7 @@ func shiftRightUnsignedIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	immediate uint8,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1191,7 +1191,7 @@ func copyInt(
 	operandSize int,
 	dest *arch.Register,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	if operandSize != 64 {
 		operandSize = 32
 	}
@@ -1217,7 +1217,7 @@ func setIntImmediate(
 	operandSize int,
 	dest *arch.Register,
 	value uint64,
-) platform.Segment {
+) executable.Segment {
 	if value == 0 {
 		return bitwiseXorInt(operandSize, dest, dest)
 	}
@@ -1242,7 +1242,7 @@ func storeInt(
 	address *arch.Register,
 	displacement int32,
 	src *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	return indirectAddressInstruction(
 		operandSize,
 		false,
@@ -1265,7 +1265,7 @@ func loadInt(
 	dest *arch.Register,
 	address *arch.Register,
 	displacement int32,
-) platform.Segment {
+) executable.Segment {
 	return indirectAddressInstruction(
 		operandSize,
 		false,
@@ -1289,7 +1289,7 @@ func cmpInt(
 	operandSize int,
 	src1 *arch.Register,
 	src2 *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1313,7 +1313,7 @@ func cmpIntImmediate(
 	operandSize int,
 	src *arch.Register,
 	value uint64,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		operandSize,
 		false,
@@ -1330,7 +1330,7 @@ func cmpIntImmediate(
 // procedure call: FF /2
 func callAbs(
 	address *arch.Register,
-) platform.Segment {
+) executable.Segment {
 	return directAddressInstruction(
 		32, // NOTE: using 32-bit operand to disable REX.W bit
 		false,
@@ -1345,7 +1345,7 @@ func callAbs(
 // https://www.felixcloutier.com/x86/call
 //
 // procedure call: E8 cd
-func callRel(functionLabel string) platform.Segment {
+func callRel(functionLabel string) executable.Segment {
 	return rel32Instruction(false, 0xe8, functionLabel, false)
 }
 
@@ -1354,7 +1354,7 @@ func callRel(functionLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jmp
 //
 // unconditional jump: E9 cd
-func jmp(blockLabel string) platform.Segment {
+func jmp(blockLabel string) executable.Segment {
 	return rel32Instruction(false, 0xe9, blockLabel, true)
 }
 
@@ -1363,7 +1363,7 @@ func jmp(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint/int jeq: 0F 84 cd
-func je(blockLabel string) platform.Segment {
+func je(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x84, blockLabel, true)
 }
 
@@ -1372,7 +1372,7 @@ func je(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint/int jne: 0F 85 cd
-func jne(blockLabel string) platform.Segment {
+func jne(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x85, blockLabel, true)
 }
 
@@ -1381,7 +1381,7 @@ func jne(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint jlt: 0F 82 cd
-func jb(blockLabel string) platform.Segment {
+func jb(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x82, blockLabel, true)
 }
 
@@ -1390,7 +1390,7 @@ func jb(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint jge: 0F 83 cd
-func jae(blockLabel string) platform.Segment {
+func jae(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x83, blockLabel, true)
 }
 
@@ -1399,7 +1399,7 @@ func jae(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // int jlt: 0F 8C cd
-func jl(blockLabel string) platform.Segment {
+func jl(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x8c, blockLabel, true)
 }
 
@@ -1408,6 +1408,6 @@ func jl(blockLabel string) platform.Segment {
 // https://www.felixcloutier.com/x86/jcc
 //
 // int jge: 0F 8D cd
-func jge(blockLabel string) platform.Segment {
+func jge(blockLabel string) executable.Segment {
 	return rel32Instruction(true, 0x8d, blockLabel, true)
 }
