@@ -5,6 +5,7 @@ import (
 	"math"
 
 	arch "github.com/pattyshack/chickadee/architecture"
+	"github.com/pattyshack/chickadee/platform"
 )
 
 // Resources:
@@ -357,28 +358,34 @@ func immediate(operandSize int, val uint64, allow64 bool) interface{} {
 // NOTE: For simplicity (and fast code layout computation), we'll ignore the
 // rel8 jump variants.
 func rel32Instruction(
-	opCode []byte,
-	jumpLocation int, // relative to the beginning of the current function
-	currentLocation int, // relative to the beginning of the current function
-) []byte {
-	// jump is relative to the next instruction's location
-	instructionLength := len(opCode) + 4
-	nextLocation := currentLocation + instructionLength
-	rel32 := int32(jumpLocation - nextLocation)
-
-	result := make([]byte, instructionLength)
-	copy(result, opCode)
-
-	size, err := binary.Encode(result[len(opCode):], binary.LittleEndian, rel32)
-	if err != nil {
-		panic("cannot encode immediate: " + err.Error())
+	extendedOpCode bool,
+	opCode byte,
+	label string,
+	isLocalLabel bool,
+) (
+	[]byte,
+	platform.Relocation,
+) {
+	reloc := platform.Relocation{
+		Kind:         platform.Rel32Relocation,
+		Label:        label,
+		IsLocalLabel: isLocalLabel,
 	}
 
-	if size != 4 {
-		panic("should never happen")
+	if extendedOpCode {
+		result := make([]byte, 6)
+		result[0] = 0x0f
+		result[1] = opCode
+
+		reloc.Offset = 2
+		return result, reloc
 	}
 
-	return result
+	result := make([]byte, 5)
+	result[0] = opCode
+
+	reloc.Offset = 1
+	return result, reloc
 }
 
 // <int dest> = -<int dest>
@@ -1321,11 +1328,8 @@ func callAbs(
 // https://www.felixcloutier.com/x86/call
 //
 // procedure call: E8 cd
-func callRel(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0xe8}, jumpLocation, currentLocation)
+func callRel(functionLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(false, 0xe8, functionLabel, false)
 }
 
 // jmp <rel32>
@@ -1333,11 +1337,8 @@ func callRel(
 // https://www.felixcloutier.com/x86/jmp
 //
 // unconditional jump: E9 cd
-func jmp(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0xe9}, jumpLocation, currentLocation)
+func jmp(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(false, 0xe9, blockLabel, true)
 }
 
 // je <rel32>
@@ -1345,11 +1346,8 @@ func jmp(
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint/int jeq: 0F 84 cd
-func je(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x84}, jumpLocation, currentLocation)
+func je(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x84, blockLabel, true)
 }
 
 // jne <rel32>
@@ -1357,11 +1355,8 @@ func je(
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint/int jne: 0F 85 cd
-func jne(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x85}, jumpLocation, currentLocation)
+func jne(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x85, blockLabel, true)
 }
 
 // jb <rel32>
@@ -1369,11 +1364,8 @@ func jne(
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint jlt: 0F 82 cd
-func jb(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x82}, jumpLocation, currentLocation)
+func jb(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x82, blockLabel, true)
 }
 
 // jae <rel32>
@@ -1381,11 +1373,8 @@ func jb(
 // https://www.felixcloutier.com/x86/jcc
 //
 // uint jge: 0F 83 cd
-func jae(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x83}, jumpLocation, currentLocation)
+func jae(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x83, blockLabel, true)
 }
 
 // jl <rel32>
@@ -1393,11 +1382,8 @@ func jae(
 // https://www.felixcloutier.com/x86/jcc
 //
 // int jlt: 0F 8C cd
-func jl(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x8c}, jumpLocation, currentLocation)
+func jl(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x8c, blockLabel, true)
 }
 
 // jge <rel32>
@@ -1405,9 +1391,6 @@ func jl(
 // https://www.felixcloutier.com/x86/jcc
 //
 // int jge: 0F 8D cd
-func jge(
-	jumpLocation int,
-	currentLocation int,
-) []byte {
-	return rel32Instruction([]byte{0x0f, 0x8d}, jumpLocation, currentLocation)
+func jge(blockLabel string) ([]byte, platform.Relocation) {
+	return rel32Instruction(true, 0x8d, blockLabel, true)
 }
